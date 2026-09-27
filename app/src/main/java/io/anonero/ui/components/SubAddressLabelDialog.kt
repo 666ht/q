@@ -115,7 +115,7 @@ fun SubAddressLabelDialog(label: String, onSave: (String) -> Unit, onCancel: () 
                 isError = labelString.text.isEmpty(),
                 supportingText = {
                     if (labelString.text.isEmpty()) {
-                        Text("Label cannot be empty")
+                        Text(stringResource(R.string.label_cannot_be_empty))
                     }
                 },
                 minLines = 1,
@@ -160,7 +160,7 @@ fun SubAddressLabelDialog(label: String, onSave: (String) -> Unit, onCancel: () 
                     } else {
                         onSave(labelString.text)
                     }
-                }) { Text("Update") }
+                }) { Text(stringResource(R.string.update)) }
         },
         dismissButton = {
             Button(
@@ -177,7 +177,7 @@ fun SubAddressLabelDialog(label: String, onSave: (String) -> Unit, onCancel: () 
                 )
             ) {
                 Text(
-                    "Dismiss",
+                    stringResource(R.string.dismiss),
                     style = MaterialTheme.typography.bodyMedium.copy(
                         color = MaterialTheme.colorScheme.onSecondary.copy(
                             alpha = 0.8f
