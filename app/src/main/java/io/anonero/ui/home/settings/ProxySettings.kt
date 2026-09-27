@@ -146,11 +146,11 @@ class ProxySettingsViewModel(
         return viewModelScope.launch(Dispatchers.IO) {
             try {
                 if (!isNumericAddress(proxy)) {
-                    addressValidationError.postValue("Invalid proxy address")
+                    addressValidationError.postValue(AnonConfig.context?.getString(R.string.invalid_proxy_address) ?: "")
                     return@launch
                 }
                 if (port > 65535) {
-                    addressValidationError.postValue("Invalid port")
+                    addressValidationError.postValue(AnonConfig.context?.getString(R.string.invalid_port) ?: "")
                     return@launch
                 }
                 anonWalletHandler.setProxy(proxy = proxy, port = port)
