@@ -130,7 +130,7 @@
     <string name="settings_export_backup">导出备份</string>
     <string name="settings_secure_wipe">安全擦除数据</string>
     <string name="settings_logs">日志</string>
-    <string name="settings_app_version">%1$s %2$s (%3$d)</string>
+    <string name="settings_app_version">%1$s %2$s</string>
     <string name="total">总计</string>
     <string name="finish">完成</string>
     <string name="broadcast_tx">广播交易</string>
