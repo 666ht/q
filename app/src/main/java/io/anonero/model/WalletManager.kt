@@ -44,7 +44,7 @@ class WalletManager {
         this.wallet = wallet
     }
 
-    private fun unmanageWallet(wallet: Wallet?) {
+    internal fun unmanageWallet(wallet: Wallet?) {
         requireNotNull(wallet) { "Cannot unmanage null!" }
         checkNotNull(this.wallet) { "No wallet under management!" }
         check(this.wallet === wallet) { wallet.name + " not under management!" }
