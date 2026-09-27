@@ -187,6 +187,13 @@ fun SecureWipe(
             requestClearScreen.invoke(false)
     }
 
+    LaunchedEffect(animatedProgress) {
+        if (wipeProgress >= 1f && animatedProgress >= 1f) {
+            view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
+            goToHome()
+        }
+    }
+
     fun clearWallet() {
         scope.launch(Dispatchers.IO) {
             val hash = prefs.getString(PREFS_PASSPHRASE_HASH, "")
@@ -199,13 +206,7 @@ fun SecureWipe(
                 activity?.let { currentActivity ->
                     secureWipeViewModel.wipe(passPhrase, currentActivity)
                         .invokeOnCompletion {
-                            if (it == null) {
-                                view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
-                                scope.launch(Dispatchers.Main) {
-                                    delay(350)
-                                    goToHome()
-                                }
-                            } else {
+                            if (it != null) {
                                 Timber.tag(TAG).e(it)
                                 error = it.message
                                 requestClearScreen(false)
