@@ -258,6 +258,7 @@ fun TransactionDetailScreen(
                             showTime = true,
                             timePattern = "yyyy/MM/dd\nHH:mm",
                             timeZone = ZoneId.of("Asia/Shanghai"),
+                            upstreamLayout = true,
                             modifier = Modifier
                                 .clickable {
 
