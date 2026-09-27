@@ -795,7 +795,6 @@ fun TransactionItem(tx: TransactionInfo, hideAmounts: Boolean = false, modifier:
             Spacer(modifier = Modifier.size(12.dp))
         }
     }
-}
 
 @Composable
 fun LockButton(onLock: () -> Unit, loading: Boolean = false) {
