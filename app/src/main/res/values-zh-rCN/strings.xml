@@ -206,4 +206,6 @@
     <string name="signed_tx">已签名交易</string>
     <string name="unsigned_tx">未签名交易</string>
     <string name="scan_signed_tx">扫描已签名交易</string>
+    <string name="pin_changed_successfully">PIN 修改成功</string>
+    <string name="error_changing_pin">修改 PIN 失败，请查看日志了解详情</string>
 </resources>
