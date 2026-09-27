@@ -139,4 +139,15 @@
     <string name="importing_key_images">Importing key images</string>
     <string name="importing_signed_transaction">Importing signed transaction</string>
     <string name="importing_unsigned_transaction">Importing unsigned transaction</string>
+
+    <string name="nodes">Nodes</string>
+    <string name="add_node">Add Node</string>
+    <string name="available_nodes">Available Nodes</string>
+    <string name="disconnect">Disconnect</string>
+    <string name="remove">Remove</string>
+    <string name="daemon_height">Daemon Height : %1$s</string>
+    <string name="error_prefix">Error : %1$s</string>
+    <string name="error_connecting_server">Error connecting to server :%1$s</string>
+    <string name="url_cannot_be_empty">URL cannot be empty</string>
+    <string name="invalid_url">Invalid URL</string>
 </resources>
