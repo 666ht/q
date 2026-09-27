@@ -111,7 +111,7 @@
     <string name="securely_wipe_title">安全擦除</string>
     <string name="securely_wipe_warning">此操作将使用安全删除方法永久抹除所有钱包数据和加密密钥。此过程无法撤销。</string>
     <string name="securely_wipe_passphrase_prompt">请输入短语密码以继续</string>
-    <string name="wipe">擦除</string>
+    <string name="wipe">删除</string>
     <string name="nero_keys">[ИΞR0] 密钥</string>
     <string name="view">查看</string>
     <string name="legacy_seed">传统助记词 (Legacy Seed)</string>
@@ -162,13 +162,13 @@
     <string name="backup_created">备份已创建：%1$s</string>
     <string name="invalid_proxy_address">代理地址无效</string>
     <string name="invalid_port">端口无效</string>
-    <string name="wiping_wallet">正在擦除钱包</string>
+    <string name="wiping_wallet">正在删除钱包</string>
     <string name="wallet_cleared">钱包已清除</string>
     <string name="clearing_preferences">正在清除偏好设置</string>
     <string name="clearing_nodes">正在清除节点</string>
     <string name="clearing_logs">正在清除日志</string>
     <string name="logs_cleared">日志已清除</string>
-    <string name="wallet_wiped_successfully">钱包已成功擦除</string>
+    <string name="wallet_wiped_successfully">钱包已成功删除</string>
     <string name="pending_transaction_no_txid">待处理交易没有交易 ID</string>
     <string name="wallet_available">钱包可用</string>
     <string name="failed_to_send_transaction">交易发送失败</string>
