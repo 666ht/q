@@ -21,6 +21,7 @@
     <string name="settings">Settings</string>
     <string name="set_subaddress_label">设置子地址标签</string>
     <string name="node_connection">NODE CONNECTION</string>
+    <string name="clear">Clear</string>
     <string name="node">Node</string>
     <string name="onion_address_example">http://address.onion:port</string>
     <string name="username">Username</string>
