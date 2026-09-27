@@ -146,7 +146,7 @@ class NodeSettingsViewModel(
     fun validate(rpcUrl: String, rpcUsername: String, rpcPassPhrase: String): Node? {
         uriValidationError.postValue(null)
         if( rpcUrl.isBlank()) {
-            uriValidationError.postValue(stringResource(R.string.url_cannot_be_empty))
+            uriValidationError.postValue("URL cannot be empty")
             return null
         }
         try {
@@ -162,7 +162,7 @@ class NodeSettingsViewModel(
             }
             val validatedUrl = urlForParsing.toUri()
             if (validatedUrl.host == null) {
-                uriValidationError.postValue(stringResource(R.string.invalid_url))
+                uriValidationError.postValue("Invalid URL")
                 return null
             }
             val nodeJson = JSONObject()
@@ -360,7 +360,7 @@ fun NodeSettings(onBackPress: () -> Unit = {}) {
                                 showMenu = !showMenu
                             }
                         ) {
-                            Icon(Icons.Default.MoreVert, contentDescription = "More")
+                            Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.more))
                             DropdownMenu(
                                 expanded = showMenu,
                                 containerColor = MaterialTheme.colorScheme.background,
