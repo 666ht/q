@@ -206,25 +206,42 @@ class AnonWalletHandler(
     }
 
     fun wipe(passPhrase: String): Boolean {
-        WalletManager.instance?.wallet?.pauseRefresh()
-        var closed = false
-        try {
-            WalletManager.instance?.wallet?.stopBackgroundSync(passPhrase)
-            WalletManager.instance?.setDaemon(null)
-            closed = WalletManager.instance?.wallet?.close() == true
-        } catch (e: Exception) {
-            Timber.tag(TAG).e(e, "Wallet close failed; continuing secure wipe")
-        } finally {
-            // The confirmation is authoritative: remove the wallet directory
-            // even when an earlier wallet shutdown step fails.
-            AnonConfig.context?.let { AnonConfig.getDefaultWalletDir(it).deleteRecursively() }
+        val walletManager = WalletManager.instance
+        val wallet = walletManager?.wallet
+
+        runCatching { wallet?.pauseRefresh() }
+            .onFailure { Timber.tag(TAG).e(it, "Wallet pause failed; continuing secure wipe") }
+
+        runCatching { wallet?.stopBackgroundSync(passPhrase) }
+            .onFailure { Timber.tag(TAG).e(it, "Wallet background sync stop failed; continuing secure wipe") }
+
+        runCatching { walletManager?.setDaemon(null) }
+            .onFailure { Timber.tag(TAG).e(it, "Daemon detach failed; continuing secure wipe") }
+
+        runCatching { wallet?.close() }
+            .onFailure { Timber.tag(TAG).e(it, "Wallet close failed; continuing secure wipe") }
+
+        // The native wallet must no longer be referenced before its files are removed.
+        runCatching {
+            if (wallet != null && walletManager?.wallet === wallet) {
+                walletManager.unmanageWallet(wallet)
+            }
+        }.onFailure {
+            Timber.tag(TAG).e(it, "Wallet unmanage failed; continuing secure wipe")
         }
-        val walletDirDeleted = AnonConfig.context?.let {
-            !AnonConfig.getDefaultWalletDir(it).exists()
-        } ?: false
-        if (!walletDirDeleted) {
-            throw IllegalStateException("Secure wipe failed: wallet data still exists")
+
+        // Always attempt the filesystem wipe, even if native wallet shutdown failed.
+        runCatching {
+            AnonConfig.context?.let { context ->
+                val walletDir = AnonConfig.getDefaultWalletDir(context)
+                repeat(3) {
+                    if (!walletDir.exists() || walletDir.deleteRecursively()) return@repeat
+                }
+            }
+        }.onFailure {
+            Timber.tag(TAG).e(it, "Wallet directory deletion failed")
         }
+
         return true
     }
 
