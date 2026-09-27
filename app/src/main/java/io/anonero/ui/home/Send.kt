@@ -295,7 +295,7 @@ fun SendScreen(
                 addressField = it.address
             if (it.amount != 0.0)
                 amountField =
-                    Wallet.getDisplayAmount(Wallet.getAmountFromString(it.amount.toString()))
+                    Formats.getDisplayAmount(Wallet.getAmountFromString(it.amount.toString()))
         }
     }
 
@@ -305,7 +305,7 @@ fun SendScreen(
                 addressField = it.address
             if (it.amount != 0.0)
                 amountField =
-                    Wallet.getDisplayAmount(Wallet.getAmountFromString(it.amount.toString()))
+                    Formats.getDisplayAmount(Wallet.getAmountFromString(it.amount.toString()))
         }
     }
     val sweep = spendType == SpendType.SWEEP
