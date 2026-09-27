@@ -209,4 +209,17 @@
     <string name="scan_signed_tx">扫描已签名交易</string>
     <string name="pin_changed_successfully">PIN 修改成功</string>
     <string name="error_changing_pin">修改 PIN 失败，请查看日志了解详情</string>
+    <string name="yes">是</string>
+    <string name="exit">退出</string>
+    <string name="ok">确定</string>
+    <string name="edit">编辑</string>
+    <string name="success">成功</string>
+    <string name="check">检查</string>
+    <string name="scan">扫描</string>
+    <string name="anon_icon">Anon Nero 图标</string>
+    <string name="backup_icon">备份图标</string>
+    <string name="share_encrypted_backup_file">分享加密备份文件</string>
+    <string name="share_logs">分享日志</string>
+    <string name="clear_logs">清除日志</string>
+    <string name="battery_optimization_message">为了让 ΛИ0ИΞR0 在后台正常运行，建议关闭电池优化。\n你可以随时在 Android 的应用设置中更改此设置。\n\n是否继续？</string>
 </resources>
