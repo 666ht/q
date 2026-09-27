@@ -1,10 +1,6 @@
-name: Build APK with XMR cache
+name: Build APK from upstream instructions
 
 on:
-  push:
-    branches: ["build/xmr-cache-apk"]
-  pull_request:
-    branches: ["main"]
   workflow_dispatch:
 
 permissions:
@@ -14,30 +10,11 @@ jobs:
   build:
     runs-on: ubuntu-24.04
     steps:
-      - name: Checkout q and XMR
+      - name: Checkout q with submodules
         uses: actions/checkout@v4
         with:
           submodules: recursive
           fetch-depth: 1
-
-      - name: Read XMR revision
-        id: xmr
-        run: echo "sha=$(git -C external-libs/monero rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-
-      - name: Cache native libraries
-        id: native-cache
-        uses: actions/cache@v4
-        with:
-          path: |
-            external-libs/arm64-v8a
-            external-libs/armeabi-v7a
-            external-libs/include
-            external-libs/VERSION
-          key: anonero-native-${{ runner.os }}-${{ steps.xmr.outputs.sha }}-${{ hashFiles('external-libs/build.sh', 'external-libs/Containerfile', 'external-libs/Makefile') }}
-
-      - name: Build native libraries on cache miss
-        if: steps.native-cache.outputs.cache-hit != 'true'
-        run: make -C external-libs android NPROC=2
 
       - name: Set up Java 17
         uses: actions/setup-java@v4
@@ -51,10 +28,14 @@ jobs:
       - name: Install Android SDK components
         run: sdkmanager "platforms;android-35" "build-tools;36.0.0" "platform-tools"
 
+      - name: Build native libraries
+        working-directory: external-libs
+        run: make android NPROC=2
+
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Build ANON release APK
+      - name: Build APK
         run: ./gradlew --no-daemon assembleAnonRelease
 
       - name: Upload APK
