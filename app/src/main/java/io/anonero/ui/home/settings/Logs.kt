@@ -32,6 +32,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -42,6 +43,7 @@ import androidx.core.content.FileProvider
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.anonero.AnonConfig
+import io.anonero.R
 import io.anonero.icons.AnonIcons
 import io.anonero.store.AnonLog
 import io.anonero.store.LogRepository
@@ -185,7 +187,7 @@ fun LogViewer(
                                         context.startActivity(
                                             Intent.createChooser(
                                                 shareIntent,
-                                                stringResource(R.string.share_encrypted_backup_file)
+                                                context.getString(R.string.share_encrypted_backup_file)
                                             )
                                         )
                                     }
