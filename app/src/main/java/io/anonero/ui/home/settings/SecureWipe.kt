@@ -101,7 +101,7 @@ class SecureWipeViewModel(
         return viewModelScope.launch(Dispatchers.IO) {
             _wipeProgress.postValue(.1f)
             _wipeProgressMessage.postValue(
-                AnonConfig.context?.getString(R.string.wiping_wallet) ?: "Wiping wallet"
+                AnonConfig.context?.getString(R.string.wiping_wallet) ?: "正在擦除钱包"
             )
             runCatching { activity?.stopNotificationService() }
                 .onFailure {
@@ -116,10 +116,10 @@ class SecureWipeViewModel(
                 }
             delay(1000)
             _wipeProgress.postValue(.5f)
-            _wipeProgressMessage.postValue(AnonConfig.context?.getString(R.string.wallet_cleared) ?: "Wallet cleared")
+            _wipeProgressMessage.postValue(AnonConfig.context?.getString(R.string.wallet_cleared) ?: "钱包已清除")
             delay(1200)
             _wipeProgress.postValue(.6f)
-            _wipeProgressMessage.postValue(AnonConfig.context?.getString(R.string.clearing_preferences) ?: "Clearing preferences")
+            _wipeProgressMessage.postValue(AnonConfig.context?.getString(R.string.clearing_preferences) ?: "正在清除偏好设置")
             runCatching { sharedPreferences.edit { clear() } }
                 .onFailure {
                     wipeFailure = wipeFailure ?: it
@@ -127,14 +127,14 @@ class SecureWipeViewModel(
                 }
             delay(800)
             _wipeProgress.postValue(.7f)
-            _wipeProgressMessage.postValue(AnonConfig.context?.getString(R.string.clearing_nodes) ?: "Clearing nodes")
+            _wipeProgressMessage.postValue(AnonConfig.context?.getString(R.string.clearing_nodes) ?: "正在清除节点")
             runCatching { nodesRepository.clearAll() }
                 .onFailure {
                     wipeFailure = wipeFailure ?: it
                     Timber.tag(TAG).e(it, "Secure wipe nodes step failed")
                 }
             delay(1200)
-            _wipeProgressMessage.postValue(AnonConfig.context?.getString(R.string.clearing_logs) ?: "Clearing logs")
+            _wipeProgressMessage.postValue(AnonConfig.context?.getString(R.string.clearing_logs) ?: "正在清除日志")
             delay(1000)
             runCatching { logRepository.clear() }
                 .onFailure {
@@ -152,10 +152,10 @@ class SecureWipeViewModel(
                     Timber.tag(TAG).e(it, "Secure wipe state disposal step failed")
                 }
             _wipeProgress.postValue(.8f)
-            _wipeProgressMessage.postValue(AnonConfig.context?.getString(R.string.logs_cleared) ?: "Logs cleared")
+            _wipeProgressMessage.postValue(AnonConfig.context?.getString(R.string.logs_cleared) ?: "日志已清除")
             delay(1200)
             _wipeProgress.postValue(1f)
-            _wipeProgressMessage.postValue(AnonConfig.context?.getString(R.string.wallet_wiped_successfully) ?: "Wallet wiped successfully")
+            _wipeProgressMessage.postValue(AnonConfig.context?.getString(R.string.wallet_wiped_successfully) ?: "钱包已成功擦除")
         }
     }
 
