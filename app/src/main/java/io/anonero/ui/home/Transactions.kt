@@ -738,7 +738,7 @@ fun TransactionScreen(
 
 
 @Composable
-fun TransactionItem(tx: TransactionInfo, hideAmounts: Boolean = false, modifier: Modifier = Modifier) {
+fun TransactionItem(tx: TransactionInfo, hideAmounts: Boolean = false, modifier: Modifier = Modifier, rightAlignAmount: Boolean = true) {
     val isIncoming = tx.direction == TransactionInfo.Direction.Direction_In
     val amount = if (isIncoming) tx.amount else tx.amount
     val confirmations = tx.confirmations
@@ -763,8 +763,10 @@ fun TransactionItem(tx: TransactionInfo, hideAmounts: Boolean = false, modifier:
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Spacer(modifier = Modifier.weight(1f))
-            Box(modifier = Modifier.padding(top = 2.dp)) {
+        if (rightAlignAmount) {
+            Spacer(modifier = Modifier.weight(1f))
+        }
+        Box(modifier = Modifier.padding(top = 2.dp)) {
                 if (confirmations >= 10)
                     Icon(
                         if (isIncoming) AnonIcons.ArrowDownLeft else AnonIcons.ArrowUpRight,
@@ -786,14 +788,17 @@ fun TransactionItem(tx: TransactionInfo, hideAmounts: Boolean = false, modifier:
                         )
                     }
             }
+        Spacer(modifier = Modifier.size(12.dp))
+        Text(
+            if (hideAmounts) Formats.maskAmount(amount)
+            else Formats.getDisplayAmount(amount),
+            textAlign = if (rightAlignAmount) TextAlign.End else TextAlign.Center,
+            style = MaterialTheme.typography.titleLarge
+        )
+        if (!rightAlignAmount) {
             Spacer(modifier = Modifier.size(12.dp))
-            Text(
-                if (hideAmounts) Formats.maskAmount(amount)
-                else Formats.getDisplayAmount(amount),
-                textAlign = TextAlign.End,
-                style = MaterialTheme.typography.titleLarge
-            )
         }
+    }
     }
 
 @Composable
