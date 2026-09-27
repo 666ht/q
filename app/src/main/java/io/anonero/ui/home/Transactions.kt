@@ -13,15 +13,12 @@
                     )
                 }
         }
+        Spacer(modifier = Modifier.size(12.dp))
         Text(
             if (hideAmounts) Formats.maskAmount(amount)
             else Formats.getDisplayAmount(amount),
             textAlign = TextAlign.Center,
             style = MaterialTheme.typography.titleLarge
-        )
-        Text(
-            Formats.formatTransactionTime(tx.timestamp),
-            style = MaterialTheme.typography.labelSmall
         )
     }
 }
