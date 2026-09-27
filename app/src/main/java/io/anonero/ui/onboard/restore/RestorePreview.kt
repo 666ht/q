@@ -89,7 +89,7 @@ fun RestorePreview(
 ) {
 
     var passPhrase by remember { mutableStateOf<String>("") }
-    var loadingMessage by remember { mutableStateOf<String>("Loading...") }
+    var loadingMessage by remember { mutableStateOf<String>("") }
     var errorMessage by remember { mutableStateOf<String>("") }
     var backupPayload by remember { mutableStateOf<BackupPayload?>(null) }
     var passphraseDialog by remember { mutableStateOf(true) }
@@ -323,7 +323,7 @@ fun RestorePreview(
                             .padding(8.dp),
                         headlineContent = {
                             Text(
-                                "Wallet ",
+                                stringResource(R.string.wallet_label),
                                 textAlign = TextAlign.Center,
                                 modifier = Modifier.padding(
                                     top = 8.dp
@@ -500,7 +500,7 @@ fun RestorePreview(
                 if (meta.timestamp != 0L) {
                     item {
                         Text(
-                            "Created at ${
+                            stringResource(R.string.created_at).format(
                                 LocalDateTime.ofInstant(
                                     Instant.ofEpochMilli(meta.timestamp),
                                     java.time.ZoneId.systemDefault()
