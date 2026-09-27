@@ -237,7 +237,7 @@ fun LockScreen(
                 ) {
                     Image(
                         painter = painterResource(R.drawable.ic_anon),
-                        contentDescription = "Anon nero icon",
+                        contentDescription = stringResource(R.string.anon_icon),
                         modifier = Modifier
                             .size(200.dp)
                     )
@@ -340,7 +340,7 @@ fun LockScreen(
                                     imageVector =
                                         if (key == -2) AnonIcons.Backspace else Icons.TwoTone.Check,
                                     tint = Color.White,
-                                    contentDescription = "clear pin",
+                                    contentDescription = stringResource(R.string.clear),
                                     modifier = Modifier
                                         .size(28.dp)
                                 )
@@ -368,7 +368,7 @@ fun LockScreen(
                         }) {
                             Icon(
                                 AnonIcons.ArrowDownLeft,
-                                contentDescription = "Receive",
+                                contentDescription = stringResource(R.string.receive),
                                 modifier = Modifier.size(64.dp)
                             )
                         }
@@ -380,7 +380,7 @@ fun LockScreen(
                             Icon(
                                 AnonIcons.ArrowUpRight,
                                 tint = MaterialTheme.colorScheme.primary,
-                                contentDescription = "Send",
+                                contentDescription = stringResource(R.string.send),
                                 modifier = Modifier.size(64.dp)
                             )
                         }
