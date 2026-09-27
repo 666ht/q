@@ -206,4 +206,6 @@
     <string name="signed_tx">SIGNED TX</string>
     <string name="unsigned_tx">UNSIGNED TX</string>
     <string name="scan_signed_tx">SCAN SIGNED TX</string>
+    <string name="pin_changed_successfully">PIN changed successfully</string>
+    <string name="error_changing_pin">Error changing PIN. Check logs for more details</string>
 </resources>
