@@ -130,7 +130,7 @@ fun HomeScreenComposable(modifier: Modifier = Modifier, mainNavController: NavHo
             },
             text = {
                 Text(
-                    "In order for ΛИ0ИΞR0 to function properly in the background, it is recommended to disable battery optimization.\\nYou can change this setting anytime in Android's app settings.\\n\\nWould you like to proceed?"
+                    stringResource(R.string.battery_optimization_message)
                 )
             },
             confirmButton = {
