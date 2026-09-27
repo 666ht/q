@@ -60,6 +60,7 @@ import io.anonero.model.TransactionInfo
 import io.anonero.model.WalletManager
 import io.anonero.services.WalletState
 import io.anonero.util.Formats
+import java.time.ZoneId
 import kotlinx.coroutines.launch
 import org.koin.compose.KoinApplication
 import org.koin.compose.koinInject
@@ -255,6 +256,8 @@ fun TransactionDetailScreen(
                             tx = transactionInfo!!,
                             rightAlignAmount = false,
                             showTime = true,
+                            timePattern = "yyyy/MM/dd\nHH:mm",
+                            timeZone = ZoneId.of("Asia/Shanghai"),
                             modifier = Modifier
                                 .clickable {
 
