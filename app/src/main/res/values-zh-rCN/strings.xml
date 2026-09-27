@@ -139,4 +139,15 @@
     <string name="importing_key_images">正在导入密钥映像</string>
     <string name="importing_signed_transaction">正在导入已签名的交易</string>
     <string name="importing_unsigned_transaction">正在导入未签名的交易</string>
+
+    <string name="nodes">节点</string>
+    <string name="add_node">添加节点</string>
+    <string name="available_nodes">可用节点</string>
+    <string name="disconnect">断开连接</string>
+    <string name="remove">删除</string>
+    <string name="daemon_height">区块高度：%1$s</string>
+    <string name="error_prefix">错误：%1$s</string>
+    <string name="error_connecting_server">连接服务器错误：%1$s</string>
+    <string name="url_cannot_be_empty">URL不能为空</string>
+    <string name="invalid_url">无效的URL</string>
 </resources>
