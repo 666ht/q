@@ -167,8 +167,9 @@ fun TransactionScreen(
     val scanUnsignedTxText = stringResource(R.string.scan_unsigned_tx)
     val keyImagesImportedText = stringResource(R.string.key_images_imported)
     val activity = LocalActivity.current;
+    val context = LocalContext.current
     val customXmrFont = remember {
-        FontFamily(Typeface.createFromAsset(LocalContext.current.assets, "160ee2f7b959256f6a2e09db2fa9060b.ttf"))
+        FontFamily(Typeface.createFromAsset(context.assets, "160ee2f7b959256f6a2e09db2fa9060b.ttf"))
     }
 
     if (broadcastSignedTxPath != null) {
@@ -727,4 +728,114 @@ fun TransactionScreen(
                                     animatedVisibilityScope = animatedContentScope
                                 )
                         )
+                    }   )
                     }
+                }
+            }
+        }
+    }
+}
+
+
+@Composable
+fun TransactionItem(tx: TransactionInfo, hideAmounts: Boolean = false, modifier: Modifier = Modifier) {
+    val isIncoming = tx.direction == TransactionInfo.Direction.Direction_In
+    val amount = if (isIncoming) tx.amount else tx.amount
+    val confirmations = tx.confirmations
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(
+                horizontal = 12.dp,
+                vertical = 20.dp
+            )
+            .border(
+                border = BorderStroke(
+                    1.dp,
+                    Color.Black
+                ),
+                shape = MaterialTheme.shapes.medium
+            )
+            .padding(
+                horizontal = 12.dp,
+                vertical = 12.dp
+            ),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Box(modifier = Modifier.padding(top = 2.dp)) {
+            if (confirmations >= 10)
+                Icon(
+                    if (isIncoming) AnonIcons.ArrowDownLeft else AnonIcons.ArrowUpRight,
+                    modifier = Modifier.size(32.dp),
+                    tint = if (isIncoming) MaterialTheme.colorScheme.primary else LocalContentColor.current,
+                    contentDescription = ""
+                )
+            else
+                Box(
+                    modifier = Modifier
+                        .size(28.dp)
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(28.dp),
+                        strokeWidth = 2.dp,
+                        progress = {
+                            ((confirmations.toFloat()) / (10f))
+                        }
+                    )
+                    Text(
+                        text = "$confirmations",
+                        modifier = Modifier.align(Alignment.Center),
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontSize = 9.sp
+                        )
+                    )
+                }
+        }
+        Text(
+            if (hideAmounts) Formats.maskAmount(amount)
+            else Formats.getDisplayAmount(amount),
+            textAlign = TextAlign.Center,
+            style = MaterialTheme.typography.titleLarge
+        )
+        Text(
+            Formats.formatTransactionTime(tx.timestamp),
+            style = MaterialTheme.typography.labelSmall
+        )
+    }
+}
+
+@Composable
+fun LockButton(onLock: () -> Unit, loading: Boolean = false) {
+    val walletState = koinInject<WalletState>()
+    val walletLoading by walletState.isLoading.asLiveData().observeAsState(false)
+    IconButton(
+        modifier = Modifier.alpha(if (walletLoading) 0.2f else 1.0f),
+        colors = IconButtonDefaults.iconButtonColors(
+            contentColor = Color.White
+        ),
+        onClick = {
+            if (walletLoading || loading) {
+                return@IconButton
+            }
+            onLock()
+        }
+    ) {
+        if (loading) {
+            CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+        } else {
+            Icon(Icons.Default.Lock, contentDescription = stringResource(R.string.lock))
+        }
+    }
+}
+
+@Preview(device = "id:pixel_7_pro")
+@Composable
+private fun TransactionScreenReview() {
+    AnonNeroTheme {
+//        TransactionScreen(
+//            animatedContentScope = this@composable,
+//            sharedTransitionScope = this@SharedTransitionLayout
+//        )
+    }
+}
