@@ -718,7 +718,7 @@ fun TransactionScreen(
                 items(transactions.size, key = { transactions[it].getListKey() }) {
                     with(sharedTransitionScope) {
                         TransactionItem(
-                            transactions[it], hideAmounts = hideAmounts, modifier = Modifier
+                            transactions[it], hideAmounts = hideAmounts, moveRight = true, modifier = Modifier
                                 .clickable {
                                     onItemClick(transactions[it])
                                 }
@@ -738,7 +738,7 @@ fun TransactionScreen(
 
 
 @Composable
-fun TransactionItem(tx: TransactionInfo, hideAmounts: Boolean = false, modifier: Modifier = Modifier) {
+fun TransactionItem(tx: TransactionInfo, hideAmounts: Boolean = false, moveRight: Boolean = false, modifier: Modifier = Modifier) {
     val isIncoming = tx.direction == TransactionInfo.Direction.Direction_In
     val amount = if (isIncoming) tx.amount else tx.amount
     val confirmations = tx.confirmations
@@ -763,10 +763,41 @@ fun TransactionItem(tx: TransactionInfo, hideAmounts: Boolean = false, modifier:
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Row(
-            modifier = Modifier.weight(1f),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+        if (moveRight) {
+            Row(
+                modifier = Modifier.weight(1f),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(modifier = Modifier.padding(top = 2.dp)) {
+                    if (confirmations >= 10)
+                        Icon(
+                            if (isIncoming) AnonIcons.ArrowDownLeft else AnonIcons.ArrowUpRight,
+                            modifier = Modifier.size(20.dp),
+                            tint = if (isIncoming) MaterialTheme.colorScheme.primary else LocalContentColor.current,
+                            contentDescription = ""
+                        )
+                    else
+                        Box(modifier = Modifier.size(28.dp)) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(28.dp),
+                                strokeWidth = 2.dp,
+                                progress = { ((confirmations.toFloat()) / 10f) }
+                            )
+                            Text(
+                                text = "$confirmations",
+                                modifier = Modifier.align(Alignment.Center),
+                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 9.sp)
+                            )
+                        }
+                }
+            }
+            Text(
+                if (hideAmounts) Formats.maskAmount(amount)
+                else Formats.getDisplayAmount(amount),
+                textAlign = TextAlign.End,
+                style = MaterialTheme.typography.titleLarge
+            )
+        } else {
             Box(modifier = Modifier.padding(top = 2.dp)) {
                 if (confirmations >= 10)
                     Icon(
@@ -776,33 +807,27 @@ fun TransactionItem(tx: TransactionInfo, hideAmounts: Boolean = false, modifier:
                         contentDescription = ""
                     )
                 else
-                    Box(
-                        modifier = Modifier
-                            .size(28.dp)
-                    ) {
+                    Box(modifier = Modifier.size(28.dp)) {
                         CircularProgressIndicator(
                             modifier = Modifier.size(28.dp),
                             strokeWidth = 2.dp,
-                            progress = {
-                                ((confirmations.toFloat()) / (10f))
-                            }
+                            progress = { ((confirmations.toFloat()) / 10f) }
                         )
                         Text(
                             text = "$confirmations",
                             modifier = Modifier.align(Alignment.Center),
-                            style = MaterialTheme.typography.bodySmall.copy(
-                                fontSize = 9.sp
-                            )
+                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 9.sp)
                         )
                     }
             }
+            Text(
+                if (hideAmounts) Formats.maskAmount(amount)
+                else Formats.getDisplayAmount(amount),
+                textAlign = TextAlign.Center,
+                style = MaterialTheme.typography.titleLarge
+            )
+            Spacer(modifier = Modifier.size(12.dp))
         }
-        Text(
-            if (hideAmounts) Formats.maskAmount(amount)
-            else Formats.getDisplayAmount(amount),
-            textAlign = TextAlign.End,
-            style = MaterialTheme.typography.titleLarge
-        )
     }
 }
 
