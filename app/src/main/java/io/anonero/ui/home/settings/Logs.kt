@@ -147,7 +147,7 @@ fun LogViewer(
         topBar = {
             TopAppBar(
                 title = {
-                    Text("Logs")
+                    Text(stringResource(R.string.logs))
                 },
                 navigationIcon = {
                     IconButton(
@@ -185,21 +185,21 @@ fun LogViewer(
                                         context.startActivity(
                                             Intent.createChooser(
                                                 shareIntent,
-                                                "Share Encrypted Backup File"
+                                                stringResource(R.string.share_encrypted_backup_file)
                                             )
                                         )
                                     }
                                 }
                         }
                     ) {
-                        Icon(AnonIcons.Share_log, contentDescription = "Share Logs")
+                        Icon(AnonIcons.Share_log, contentDescription = stringResource(R.string.share_logs))
                     }
                     IconButton(
                         onClick = {
                             viewModel.clearLogs()
                         }
                     ) {
-                        Icon(AnonIcons.Clear_all, contentDescription = "Clear Logs")
+                        Icon(AnonIcons.Clear_all, contentDescription = stringResource(R.string.clear_logs))
                     }
                 },
                 scrollBehavior = scrollBehavior
