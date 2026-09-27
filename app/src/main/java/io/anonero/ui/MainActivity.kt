@@ -178,13 +178,15 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         scope.launch(Dispatchers.IO) {
-            WalletManager.instance?.wallet?.let {
-                it.store()
-                it.close()
-            }
-        }.invokeOnCompletion {
-            if (it != null) {
-                Timber.tag(TAG).e(it)
+            runCatching {
+                WalletManager.instance?.wallet?.let {
+                    if (it.isInitialized) {
+                        it.store()
+                    }
+                    it.close()
+                }
+            }.onFailure {
+                Timber.tag(TAG).e(it, "Wallet shutdown during activity destroy failed")
             }
         }
         torService.dispose()
