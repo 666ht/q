@@ -26,11 +26,10 @@ object Formats {
     }
 
     fun getDisplayAmount(amount: Long): String {
-        if (amount == 0L) return "0.000000000000"
-        var d = BigDecimal(amount).scaleByPowerOfTen(-AnonConfig.XMR_DECIMALS)
+        return BigDecimal(amount)
+            .scaleByPowerOfTen(-AnonConfig.XMR_DECIMALS)
             .setScale(12, RoundingMode.HALF_UP)
-        if (d.scale() < 2) d = d.setScale(2, RoundingMode.UNNECESSARY)
-        return d.toPlainString()
+            .toPlainString()
     }
 
     fun formatTransactionTime(timestamp: Long, pattern: String = "HH:mm\ndd/MM"): String {
