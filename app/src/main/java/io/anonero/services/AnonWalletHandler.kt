@@ -219,7 +219,13 @@ class AnonWalletHandler(
             // even when an earlier wallet shutdown step fails.
             AnonConfig.context?.let { AnonConfig.getDefaultWalletDir(it).deleteRecursively() }
         }
-        return closed
+        val walletDirDeleted = AnonConfig.context?.let {
+            !AnonConfig.getDefaultWalletDir(it).exists()
+        } ?: false
+        if (!walletDirDeleted) {
+            throw IllegalStateException("Secure wipe failed: wallet data still exists")
+        }
+        return true
     }
 
 }
