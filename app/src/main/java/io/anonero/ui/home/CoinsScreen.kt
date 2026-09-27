@@ -177,8 +177,10 @@ fun CoinsScreen(
                             )
                             Text(
                                 Formats.getDisplayAmount(coin.amount),
+                                modifier = Modifier.weight(1f),
                                 color = MaterialTheme.colorScheme.primary,
-                                fontWeight = FontWeight.SemiBold
+                                fontWeight = FontWeight.SemiBold,
+                                textAlign = TextAlign.Center
                             )
                         }
                     },
