@@ -103,7 +103,7 @@ fun PinSetup(
                 ) {
                     Image(
                         painter = painterResource(R.drawable.ic_anon),
-                        contentDescription = "Anon nero icon",
+                        contentDescription = stringResource(R.string.anon_icon),
                         modifier = Modifier
                             .size(200.dp)
                     )
@@ -231,7 +231,7 @@ fun PinSetup(
                                     imageVector =
                                         if (key == -2) AnonIcons.Backspace else Icons.TwoTone.Check,
                                     tint = Color.White,
-                                    contentDescription = "clear pin",
+                                    contentDescription = stringResource(R.string.clear),
                                     modifier = Modifier
                                         .size(28.dp)
                                 )
