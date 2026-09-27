@@ -763,36 +763,40 @@ fun TransactionItem(tx: TransactionInfo, hideAmounts: Boolean = false, modifier:
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Box(modifier = Modifier.padding(top = 2.dp)) {
-            if (confirmations >= 10)
-                Icon(
-                    if (isIncoming) AnonIcons.ArrowDownLeft else AnonIcons.ArrowUpRight,
-                    modifier = Modifier.size(20.dp),
-                    tint = if (isIncoming) MaterialTheme.colorScheme.primary else LocalContentColor.current,
-                    contentDescription = ""
-                )
-            else
-                Box(
-                    modifier = Modifier
-                        .size(28.dp)
-                ) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(28.dp),
-                        strokeWidth = 2.dp,
-                        progress = {
-                            ((confirmations.toFloat()) / (10f))
-                        }
+        Row(
+            modifier = Modifier.weight(1f),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(modifier = Modifier.padding(top = 2.dp)) {
+                if (confirmations >= 10)
+                    Icon(
+                        if (isIncoming) AnonIcons.ArrowDownLeft else AnonIcons.ArrowUpRight,
+                        modifier = Modifier.size(20.dp),
+                        tint = if (isIncoming) MaterialTheme.colorScheme.primary else LocalContentColor.current,
+                        contentDescription = ""
                     )
-                    Text(
-                        text = "$confirmations",
-                        modifier = Modifier.align(Alignment.Center),
-                        style = MaterialTheme.typography.bodySmall.copy(
-                            fontSize = 9.sp
+                else
+                    Box(
+                        modifier = Modifier
+                            .size(28.dp)
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(28.dp),
+                            strokeWidth = 2.dp,
+                            progress = {
+                                ((confirmations.toFloat()) / (10f))
+                            }
                         )
-                    )
-                }
+                        Text(
+                            text = "$confirmations",
+                            modifier = Modifier.align(Alignment.Center),
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                fontSize = 9.sp
+                            )
+                        )
+                    }
+            }
         }
-        Spacer(modifier = Modifier.weight(1f))
         Text(
             if (hideAmounts) Formats.maskAmount(amount)
             else Formats.getDisplayAmount(amount),
