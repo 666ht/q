@@ -146,7 +146,7 @@ class NodeSettingsViewModel(
     fun validate(rpcUrl: String, rpcUsername: String, rpcPassPhrase: String): Node? {
         uriValidationError.postValue(null)
         if( rpcUrl.isBlank()) {
-            uriValidationError.postValue("URL cannot be empty")
+            uriValidationError.postValue(AnonConfig.context?.getString(R.string.url_cannot_be_empty))
             return null
         }
         try {
@@ -162,7 +162,7 @@ class NodeSettingsViewModel(
             }
             val validatedUrl = urlForParsing.toUri()
             if (validatedUrl.host == null) {
-                uriValidationError.postValue("Invalid URL")
+                uriValidationError.postValue(AnonConfig.context?.getString(R.string.invalid_url))
                 return null
             }
             val nodeJson = JSONObject()
