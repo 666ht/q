@@ -362,7 +362,7 @@ fun ExportBackUp(onBackPress: () -> Unit = {}) {
                                 leadingContent = {
                                     Icon(
                                         AnonIcons.FileEarmarkLock,
-                                        contentDescription = "Backup icon",
+                                        contentDescription = stringResource(R.string.backup_icon),
                                         modifier = Modifier.size(24.dp),
                                         tint = MaterialTheme.colorScheme.primary
                                     )
