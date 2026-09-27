@@ -157,7 +157,7 @@ fun RestoreWallet(
                 ) {
                     Icon(
                         Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Back",
+                        contentDescription = stringResource(R.string.back),
                         tint = Color.White
                     )
                 }
@@ -197,7 +197,7 @@ fun RestoreWallet(
                             isError = invalidSeed,
                             supportingText = {
                                 if (invalidSeed) {
-                                    Text("Invalid seed", color = MaterialTheme.colorScheme.error)
+                                    Text(stringResource(R.string.invalid_seed), color = MaterialTheme.colorScheme.error)
                                 }
                             },
                             maxLines = 5,
@@ -267,7 +267,7 @@ fun RestoreWallet(
                 onClick = {
                     if (enabled) {
                          if (seedList.size == 25 && restoreHeight.isEmpty()) {
-                            restoreHeightError = "Restore height required for 25 word seed"
+                            restoreHeightError = resources.getString(R.string.restore_height_required_25)
                             return@AnonOutlineButton
                         }
                         oNextPressed(
@@ -340,7 +340,7 @@ fun CustomAutocompleteTextField(
                 IconButton(onClick = {
                     query.takeIf { it.isNotEmpty() }?.let { onSuggestionSelected("") }
                 }) {
-                    Icon(Icons.Default.Clear, contentDescription = "Clear")
+                    Icon(Icons.Default.Clear, contentDescription = stringResource(R.string.clear))
                 }
             },
             keyboardOptions = KeyboardOptions.Default.copy(
