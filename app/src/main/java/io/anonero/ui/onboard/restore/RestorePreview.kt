@@ -98,23 +98,27 @@ fun RestorePreview(
     val scope = rememberCoroutineScope()
     val errorShake = rememberShakeController()
     val view = LocalView.current
+    val extractingBackupMessage = stringResource(R.string.extracting_backup)
+    val invalidNetworkMessage = stringResource(R.string.invalid_network)
+    val unableToExtractBackupMessage = stringResource(R.string.unable_to_extract_backup)
+    val restoringWalletMessage = stringResource(R.string.restoring_wallet_progress)
 
     fun restoreFromBackup() {
         scope.launch(Dispatchers.IO) {
             try {
                 loading = true
                 passphraseDialog = false
-                loadingMessage = stringResource(R.string.extracting_backup)
+                loadingMessage = extractingBackupMessage
                 backupPayload = BackupHelper.extractBackUp(backUpPath, passPhrase)
                 loading = false
             } catch (e: NetworkMismatchException) {
-                errorMessage = stringResource(R.string.invalid_network)
+                errorMessage = invalidNetworkMessage
                 loading = false
                 scope.launch {
                     errorShake.shake(view)
                 }
             } catch (e: Exception) {
-                errorMessage = stringResource(R.string.unable_to_extract_backup)
+                errorMessage = unableToExtractBackupMessage
                 loading = false
                 scope.launch {
                     errorShake.shake(view)
@@ -461,7 +465,7 @@ fun RestorePreview(
                                 scope.launch(Dispatchers.IO) {
                                     try {
                                         loading = true
-                                        loadingMessage = stringResource(R.string.restoring_wallet_progress)
+                                        loadingMessage = restoringWalletMessage
                                         val success =
                                             BackupHelper.restoreBackUp(backupPayload!!, passPhrase)
                                         if (success) {
