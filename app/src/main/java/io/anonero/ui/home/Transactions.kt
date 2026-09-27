@@ -367,7 +367,7 @@ fun TransactionScreen(
                         showScanner = false
                         qrScannerParam = SpendQRExchangeParam(
                             exportType = ExportType.IMAGE,
-                            title = stringResource(R.string.key_images),
+                            title = context.getString(R.string.key_images),
                             ctaText = scanUnsignedTxText,
                         )
                     }
@@ -595,7 +595,7 @@ fun TransactionScreen(
                                     if (result.isFailure) {
                                         scope.launch {
                                             toastState.show(
-                                                stringResource(R.string.error_prefix, result.exceptionOrNull()?.message ?: ""),
+                                                context.getString(R.string.error_prefix, result.exceptionOrNull()?.message ?: ""),
                                                 type = ToastType.Warning,
                                                 duration = 6.seconds
                                             )
