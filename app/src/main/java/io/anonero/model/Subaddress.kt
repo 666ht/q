@@ -39,7 +39,7 @@ class Subaddress(
         get() {
             val baseLabel = if (label.isEmpty() || DEFAULT_LABEL_FORMATTER.matcher(label).matches()) {
                 if (addressIndex == 0) "主地址" else "子地址"
-            } else label
+            } else label.replace(Regex("""\s*[#＃]?\s*\d+$"""), "")
             return "$baseLabel $addressIndex"
         }
 
