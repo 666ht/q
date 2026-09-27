@@ -371,7 +371,7 @@ fun RestorePreview(
                                 )
                                 ListWidget(
                                     title = stringResource(R.string.balance_label),
-                                    subtitle = "${Wallet.getDisplayAmount(wallet.balanceAll)}",
+                                    subtitle = "${Formats.getDisplayAmount(wallet.balanceAll)}",
                                     modifier = Modifier.weight(1f)
                                 )
                                 HorizontalDivider(
