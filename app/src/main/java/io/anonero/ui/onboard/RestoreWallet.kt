@@ -169,7 +169,8 @@ fun RestoreWallet(
                     modifier = Modifier
                         .size(120.dp)
                 )
-                Spacer(modifier = Modifier.height(48.dp))
+                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(32.dp))
             }
             Column(
                 modifier = Modifier
