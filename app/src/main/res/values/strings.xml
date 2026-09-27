@@ -3,6 +3,8 @@
     <string name="app_name">anonnero</string>
     <!---->
      <string name="polyseed_mnemonic">POLYSEED MNEMONIC</string>
+    <string name="import_polyseed_mnemonic">IMPORT POLYSEED MNEMONIC</string>
+    <string name="enter_seed">ENTER SEED</string>
     <string name="next">NEXT</string>
     <string name="passphrase_encryption">PASSPHRASE ENCRYPTION</string>
     <string name="passphrase">PASSPHRASE</string>
