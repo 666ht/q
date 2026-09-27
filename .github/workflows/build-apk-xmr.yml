@@ -40,11 +40,22 @@ jobs:
         working-directory: external-libs
         run: make android NPROC=2
 
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: |
+            gradle-${{ runner.os }}-
+
       - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
+          cache: gradle
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
@@ -55,5 +66,17 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      - name: Cache APK build outputs
+        id: apk-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            app/build
+            build
+          key: anonero-apk-${{ runner.os }}-${{ hashFiles('app/**', 'build.gradle.kts', 'settings.gradle.kts', 'gradle.properties', 'gradle/libs.versions.toml', 'gradle/wrapper/gradle-wrapper.properties') }}-${{ steps.xmr.outputs.sha }}
+          restore-keys: |
+            anonero-apk-${{ runner.os }}-
+
       - name: Build APK
+        if: steps.apk-cache.outputs.cache-hit != 'true'
         run: ./gradlew --no-daemon assembleAnonRelease
