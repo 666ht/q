@@ -1,8 +1,5 @@
 <resources>
-    <!-- Do not translate the app name. The app_name will be modified by the Gradle build system based on the build variants (Nero/Anon). -->
-    <string name="app_name">anonnero</string>
-    <!---->
-    <string name="polyseed_mnemonic">Polyseed 助记词</string>
+<string name="polyseed_mnemonic">Polyseed 助记词</string>
     <string name="import_polyseed_mnemonic">导入 Polyseed 助记词</string>
     <string name="enter_seed">助记词</string>
     <string name="next">下一步</string>
