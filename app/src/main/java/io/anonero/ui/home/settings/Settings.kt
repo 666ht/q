@@ -1,3 +1,5 @@
+package io.anonero.ui.home.settings
+
 import AnonNeroTheme
 import android.content.SharedPreferences
 import androidx.compose.foundation.clickable
