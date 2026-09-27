@@ -248,10 +248,19 @@ class WalletState {
             it.store()
             it.refreshHistory()
             it.getAllUsedSubAddresses().let { allItems ->
-                _subAddresses.update { allItems.reversed() }
+                val refreshed = allItems.reversed()
+                _subAddresses.update { current ->
+                    refreshed.map { address ->
+                        current.firstOrNull { it.addressIndex == address.addressIndex }
+                            ?.let { existing ->
+                                if (existing.label != address.label) address.withLabel(address.label) else address
+                            }
+                            ?: address
+                    }
+                }
             }
-            it.getLatestSubAddress().let { subAddresses ->
-                _nextAddress.update { subAddresses }
+            it.getLatestSubAddress().let { latest ->
+                _nextAddress.update { latest }
             }
         }
     }
