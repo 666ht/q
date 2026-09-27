@@ -116,10 +116,10 @@ class SecureWipeViewModel(
                 }
             delay(1000)
             _wipeProgress.postValue(.5f)
-            _wipeProgressMessage.postValue(AnonConfig.context!!.getString(R.string.wallet_cleared))
+            _wipeProgressMessage.postValue(AnonConfig.context?.getString(R.string.wallet_cleared) ?: "Wallet cleared")
             delay(1200)
             _wipeProgress.postValue(.6f)
-            _wipeProgressMessage.postValue(AnonConfig.context!!.getString(R.string.clearing_preferences))
+            _wipeProgressMessage.postValue(AnonConfig.context?.getString(R.string.clearing_preferences) ?: "Clearing preferences")
             runCatching { sharedPreferences.edit { clear() } }
                 .onFailure {
                     wipeFailure = wipeFailure ?: it
@@ -127,21 +127,21 @@ class SecureWipeViewModel(
                 }
             delay(800)
             _wipeProgress.postValue(.7f)
-            _wipeProgressMessage.postValue(AnonConfig.context!!.getString(R.string.clearing_nodes))
+            _wipeProgressMessage.postValue(AnonConfig.context?.getString(R.string.clearing_nodes) ?: "Clearing nodes")
             runCatching { nodesRepository.clearAll() }
                 .onFailure {
                     wipeFailure = wipeFailure ?: it
                     Timber.tag(TAG).e(it, "Secure wipe nodes step failed")
                 }
             delay(1200)
-            _wipeProgressMessage.postValue(AnonConfig.context!!.getString(R.string.clearing_logs))
+            _wipeProgressMessage.postValue(AnonConfig.context?.getString(R.string.clearing_logs) ?: "Clearing logs")
             delay(1000)
             runCatching { logRepository.clear() }
                 .onFailure {
                     wipeFailure = wipeFailure ?: it
                     Timber.tag(TAG).e(it, "Secure wipe logs step failed")
                 }
-            runCatching { AnonConfig.clearSpendCacheFiles(AnonConfig.context!!) }
+            runCatching { AnonConfig.context?.let { AnonConfig.clearSpendCacheFiles(it) } }
                 .onFailure {
                     wipeFailure = wipeFailure ?: it
                     Timber.tag(TAG).e(it, "Secure wipe cache step failed")
@@ -152,10 +152,10 @@ class SecureWipeViewModel(
                     Timber.tag(TAG).e(it, "Secure wipe state disposal step failed")
                 }
             _wipeProgress.postValue(.8f)
-            _wipeProgressMessage.postValue(AnonConfig.context!!.getString(R.string.logs_cleared))
+            _wipeProgressMessage.postValue(AnonConfig.context?.getString(R.string.logs_cleared) ?: "Logs cleared")
             delay(1200)
             _wipeProgress.postValue(1f)
-            _wipeProgressMessage.postValue(AnonConfig.context!!.getString(R.string.wallet_wiped_successfully))
+            _wipeProgressMessage.postValue(AnonConfig.context?.getString(R.string.wallet_wiped_successfully) ?: "Wallet wiped successfully")
         }
     }
 
