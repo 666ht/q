@@ -710,10 +710,8 @@ fun TransactionScreen(
                             if (hideAmounts) Formats.maskAmount(balance ?: 0)
                             else Formats.getDisplayAmount(balance ?: 0),
                             style = MaterialTheme.typography.displaySmall,
-                            modifier = Modifier
-                                .fillParentMaxWidth()
-                                .padding(start = 40.dp),
-                            textAlign = TextAlign.Center
+                            modifier = Modifier.fillMaxWidth(),
+                            textAlign = TextAlign.End
                         )
                     }
                 }
