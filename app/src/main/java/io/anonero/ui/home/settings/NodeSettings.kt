@@ -284,6 +284,8 @@ fun NodeSettings(onBackPress: () -> Unit = {}) {
     val activeNode by nodeSettingsVM.activeNode.collectAsState(null)
     val scope = rememberCoroutineScope()
     val toastState = rememberToasterState()
+    val errorPrefix = stringResource(R.string.error_prefix)
+    val resyncInitiatedMessage = resyncInitiatedMessage
 
     if (showNodeDetails)
         Dialog(
@@ -382,7 +384,7 @@ fun NodeSettings(onBackPress: () -> Unit = {}) {
                                         if (result.isFailure) {
                                             scope.launch {
                                                 toastState.show(
-                                                    "${stringResource(R.string.error_prefix)}${result.exceptionOrNull()?.message}",
+                                                    "$errorPrefix${result.exceptionOrNull()?.message}",
                                                     type = ToastType.Warning,
                                                     duration = 6.seconds
                                                 )
