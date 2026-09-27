@@ -288,7 +288,7 @@ private fun LogViewerPrev() {
             topBar = {
                 TopAppBar(
                     title = {
-                        Text("Logs")
+                        Text(stringResource(R.string.logs))
                     },
                 )
             }
