@@ -505,7 +505,7 @@ fun RestorePreview(
                                     Instant.ofEpochMilli(meta.timestamp),
                                     java.time.ZoneId.systemDefault()
                                 ).format(formatter)
-                            }",
+                            ),
                             textAlign = TextAlign.Center,
                             style = MaterialTheme.typography.bodySmall.copy(
                                 color = MaterialTheme.colorScheme.onSecondary.copy(
