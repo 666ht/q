@@ -1,0 +1,127 @@
+---
+name: mirror-sync
+
+"on":
+  workflow_dispatch: {}
+  schedule:
+    - cron: "0 0 * * *"
+  push:
+    branches: [github-config]
+    paths:
+      - ".github/workflows/mirror-sync.yml"
+
+concurrency:
+  group: mirror-sync-${{ github.repository }}-main
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  sync-main:
+    name: Sync main from upstream
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout github-config
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: github-config
+          fetch-depth: 0
+          persist-credentials: false
+          clean: true
+
+      - name: Sync mirror safely
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WORKFLOW_PATH: .github/workflows/mirror-sync.yml
+        run: |
+          set -euo pipefail
+
+          cleanup() {
+            unset http_proxy https_proxy all_proxy HTTP_PROXY HTTPS_PROXY ALL_PROXY
+            git config --global --unset-all http.proxy || true
+            git config --global --unset-all https.proxy || true
+            if systemctl is-active --quiet tor; then
+              sudo systemctl stop tor || true
+            fi
+          }
+          trap cleanup EXIT
+
+          case "${GITHUB_REPOSITORY}" in
+            opsec-enthusiast/ANONERO)
+              UPSTREAM_URL="http://git.anonero5wmhraxqsvzq2ncgptq6gq45qoto6fnkfwughfl4gbt44swad.onion/ANONERO/ANONERO.git"
+              ;;
+            opsec-enthusiast/monero)
+              UPSTREAM_URL="https://github.com/monero-project/monero.git"
+              ;;
+            *)
+              echo "Unsupported repository: ${GITHUB_REPOSITORY}"
+              exit 1
+              ;;
+          esac
+
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends tor torsocks curl ca-certificates
+          sudo systemctl start tor
+
+          tor_ready=0
+          for _ in {1..30}; do
+            if torsocks curl --silent --show-error --max-time 10 https://check.torproject.org/api/ip | grep -q '"IsTor":true'; then
+              tor_ready=1
+              break
+            fi
+            sleep 2
+          done
+          if [ "${tor_ready}" -ne 1 ]; then
+            echo "Tor not ready"
+            exit 1
+          fi
+
+          export ALL_PROXY="socks5h://127.0.0.1:9050"
+          export HTTP_PROXY="${ALL_PROXY}"
+          export HTTPS_PROXY="${ALL_PROXY}"
+          git config --global http.proxy "${ALL_PROXY}"
+          git config --global https.proxy "${ALL_PROXY}"
+
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config --global gc.auto 0
+
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+
+          if git remote get-url upstream >/dev/null 2>&1; then
+            git remote remove upstream
+          fi
+          git remote add upstream "${UPSTREAM_URL}"
+
+          git fetch --no-tags --prune origin "+refs/heads/*:refs/remotes/origin/*"
+          git fetch --no-tags --prune upstream main
+
+          origin_main_sha=""
+          if git show-ref --verify --quiet refs/remotes/origin/main; then
+            origin_main_sha="$(git rev-parse refs/remotes/origin/main)"
+          fi
+
+          git checkout -B main
+          git reset --hard refs/remotes/upstream/main
+
+          git checkout refs/remotes/origin/github-config -- "${WORKFLOW_PATH}"
+          git add -- "${WORKFLOW_PATH}"
+          if ! git diff --cached --quiet --exit-code; then
+            git commit -m "chore: sync upstream main and restore mirror workflow"
+          fi
+
+          final_sha="$(git rev-parse HEAD)"
+          if [ -n "${origin_main_sha}" ] && [ "${final_sha}" = "${origin_main_sha}" ]; then
+            echo "Already up to date"
+            exit 0
+          fi
+
+          if [ -n "${origin_main_sha}" ]; then
+            git push --force-with-lease=main:"${origin_main_sha}" origin HEAD:main
+          else
+            git push --force-with-lease=main origin HEAD:main
+          fi
