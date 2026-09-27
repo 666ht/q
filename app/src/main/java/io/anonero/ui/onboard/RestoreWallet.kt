@@ -169,12 +169,7 @@ fun RestoreWallet(
                     modifier = Modifier
                         .size(120.dp)
                 )
-                Spacer(modifier = Modifier.height(16.dp))
-                Text(
-                    text = stringResource(R.string.import_polyseed_mnemonic),
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
-                )
+                Spacer(modifier = Modifier.height(48.dp))
             }
             Column(
                 modifier = Modifier
