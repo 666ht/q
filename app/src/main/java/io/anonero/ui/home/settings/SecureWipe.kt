@@ -103,8 +103,12 @@ class SecureWipeViewModel(
             (activity as? MainActivity)?.stopNotificationService()
             _wipeProgress.postValue(.3f)
             _wipeProgressMessage.postValue(activity.getString(R.string.wiping_wallet))
+            var wipeFailure: Throwable? = null
             runCatching { anonWalletHandler.wipe(passPhrase) }
-                .onFailure { Timber.tag(TAG).e(it, "Secure wipe wallet step failed") }
+                .onFailure {
+                    wipeFailure = it
+                    Timber.tag(TAG).e(it, "Secure wipe wallet step failed")
+                }
             delay(1000)
             _wipeProgress.postValue(.5f)
             _wipeProgressMessage.postValue(activity.getString(R.string.wallet_cleared))
@@ -112,19 +116,32 @@ class SecureWipeViewModel(
             _wipeProgress.postValue(.6f)
             _wipeProgressMessage.postValue(activity.getString(R.string.clearing_preferences))
             runCatching { sharedPreferences.edit { clear() } }
-                .onFailure { Timber.tag(TAG).e(it, "Secure wipe preferences step failed") }
+                .onFailure {
+                    wipeFailure = wipeFailure ?: it
+                    Timber.tag(TAG).e(it, "Secure wipe preferences step failed")
+                }
             delay(800)
             _wipeProgress.postValue(.7f)
             _wipeProgressMessage.postValue(activity.getString(R.string.clearing_nodes))
             runCatching { nodesRepository.clearAll() }
-                .onFailure { Timber.tag(TAG).e(it, "Secure wipe nodes step failed") }
+                .onFailure {
+                    wipeFailure = wipeFailure ?: it
+                    Timber.tag(TAG).e(it, "Secure wipe nodes step failed")
+                }
             delay(1200)
             _wipeProgressMessage.postValue(activity.getString(R.string.clearing_logs))
             delay(1000)
             runCatching { logRepository.clear() }
-                .onFailure { Timber.tag(TAG).e(it, "Secure wipe logs step failed") }
+                .onFailure {
+                    wipeFailure = wipeFailure ?: it
+                    Timber.tag(TAG).e(it, "Secure wipe logs step failed")
+                }
             runCatching { AnonConfig.disposeState() }
-                .onFailure { Timber.tag(TAG).e(it, "Secure wipe state disposal step failed") }
+                .onFailure {
+                    wipeFailure = wipeFailure ?: it
+                    Timber.tag(TAG).e(it, "Secure wipe state disposal step failed")
+                }
+            wipeFailure?.let { throw it }
             _wipeProgress.postValue(.8f)
             _wipeProgressMessage.postValue(activity.getString(R.string.logs_cleared))
             delay(1200)
