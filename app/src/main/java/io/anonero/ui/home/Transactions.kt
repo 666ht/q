@@ -101,6 +101,7 @@ import io.anonero.ui.home.spend.qr.QRExchangeScreen
 import io.anonero.ui.home.spend.qr.SpendQRExchangeParam
 import io.anonero.ui.home.spend.qr.URQRScanner
 import io.anonero.util.Formats
+import java.time.ZoneId
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.map
@@ -738,7 +739,7 @@ fun TransactionScreen(
 
 
 @Composable
-fun TransactionItem(tx: TransactionInfo, hideAmounts: Boolean = false, modifier: Modifier = Modifier, rightAlignAmount: Boolean = true, showTime: Boolean = false) {
+fun TransactionItem(tx: TransactionInfo, hideAmounts: Boolean = false, modifier: Modifier = Modifier, rightAlignAmount: Boolean = true, showTime: Boolean = false, timePattern: String = "dd/MM\nHH:mm", timeZone: ZoneId = ZoneId.systemDefault()) {
     val isIncoming = tx.direction == TransactionInfo.Direction.Direction_In
     val amount = if (isIncoming) tx.amount else tx.amount
     val confirmations = tx.confirmations
@@ -800,7 +801,7 @@ fun TransactionItem(tx: TransactionInfo, hideAmounts: Boolean = false, modifier:
         }
         if (showTime) {
             Text(
-                Formats.formatTransactionTime(tx.timestamp),
+                Formats.formatTransactionTime(tx.timestamp, timePattern, timeZone),
                 style = MaterialTheme.typography.labelSmall
             )
         }
