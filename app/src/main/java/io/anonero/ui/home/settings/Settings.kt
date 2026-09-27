@@ -75,6 +75,8 @@ fun SettingsPage(
         .applicationContext
         .getSharedPreferences(AnonConfig.PREFS, android.content.Context.MODE_PRIVATE)
     val toastState = rememberToasterState()
+    val pinChangedSuccessfullyText = stringResource(R.string.pin_changed_successfully)
+    val errorChangingPinText = stringResource(R.string.error_changing_pin)
     var showLockScreen by remember { mutableStateOf(false) }
     var newPinDialog by remember { mutableStateOf(false) }
 
@@ -111,7 +113,7 @@ fun SettingsPage(
                 onNext = {
                     try {
                         WalletManager.instance?.wallet?.setPassword(it)
-                        toastState.show(stringResource(R.string.pin_changed_successfully), type = ToastType.Success)
+                        toastState.show(pinChangedSuccessfullyText, type = ToastType.Success)
                         prefs.edit(commit = true) {
                             putString(
                                 PREFS_PIN_HASH,
@@ -124,7 +126,7 @@ fun SettingsPage(
                         }
                     } catch (e: Exception) {
                         toastState.show(
-                            stringResource(R.string.error_changing_pin),
+                            errorChangingPinText,
                             type = ToastType.Error
                         )
                         Timber.tag(TAG).e(e)
