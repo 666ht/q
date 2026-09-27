@@ -5,7 +5,7 @@
     <string name="next">下一步</string>
     <string name="passphrase_encryption"></string>
     <string name="passphrase">短语密码</string>
-    <string name="confirm_passphrase">确认</string>
+    <string name="confirm_passphrase">确认密码</string>
     <string name="passphrases_do_not_match">短语密码不匹配</string>
     <string name="restore_from_seed">从助记词恢复</string>
     <string name="restore_from_backup">从备份恢复</string>
