@@ -1,7 +1,6 @@
 package io.anonero.ui.home.settings
 
 import AnonNeroTheme
-import android.app.Activity
 import android.content.SharedPreferences
 import android.view.HapticFeedbackConstants
 import androidx.activity.compose.BackHandler
@@ -98,11 +97,11 @@ class SecureWipeViewModel(
     private val _wipeProgress = MutableLiveData(0.1f)
     val wipeProgress: LiveData<Float> = _wipeProgress
 
-    fun wipe(passPhrase: String, activity: Activity): Job {
+    fun wipe(passPhrase: String, activity: MainActivity?): Job {
         return viewModelScope.launch(Dispatchers.IO) {
-            (activity as? MainActivity)?.stopNotificationService()
+            activity?.stopNotificationService()
             _wipeProgress.postValue(.3f)
-            _wipeProgressMessage.postValue(activity.getString(R.string.wiping_wallet))
+            _wipeProgressMessage.postValue(AnonConfig.context!!.getString(R.string.wiping_wallet))
             var wipeFailure: Throwable? = null
             runCatching { anonWalletHandler.wipe(passPhrase) }
                 .onFailure {
@@ -111,10 +110,10 @@ class SecureWipeViewModel(
                 }
             delay(1000)
             _wipeProgress.postValue(.5f)
-            _wipeProgressMessage.postValue(activity.getString(R.string.wallet_cleared))
+            _wipeProgressMessage.postValue(AnonConfig.context!!.getString(R.string.wallet_cleared))
             delay(1200)
             _wipeProgress.postValue(.6f)
-            _wipeProgressMessage.postValue(activity.getString(R.string.clearing_preferences))
+            _wipeProgressMessage.postValue(AnonConfig.context!!.getString(R.string.clearing_preferences))
             runCatching { sharedPreferences.edit { clear() } }
                 .onFailure {
                     wipeFailure = wipeFailure ?: it
@@ -122,14 +121,14 @@ class SecureWipeViewModel(
                 }
             delay(800)
             _wipeProgress.postValue(.7f)
-            _wipeProgressMessage.postValue(activity.getString(R.string.clearing_nodes))
+            _wipeProgressMessage.postValue(AnonConfig.context!!.getString(R.string.clearing_nodes))
             runCatching { nodesRepository.clearAll() }
                 .onFailure {
                     wipeFailure = wipeFailure ?: it
                     Timber.tag(TAG).e(it, "Secure wipe nodes step failed")
                 }
             delay(1200)
-            _wipeProgressMessage.postValue(activity.getString(R.string.clearing_logs))
+            _wipeProgressMessage.postValue(AnonConfig.context!!.getString(R.string.clearing_logs))
             delay(1000)
             runCatching { logRepository.clear() }
                 .onFailure {
@@ -141,12 +140,11 @@ class SecureWipeViewModel(
                     wipeFailure = wipeFailure ?: it
                     Timber.tag(TAG).e(it, "Secure wipe state disposal step failed")
                 }
-            wipeFailure?.let { throw it }
             _wipeProgress.postValue(.8f)
-            _wipeProgressMessage.postValue(activity.getString(R.string.logs_cleared))
+            _wipeProgressMessage.postValue(AnonConfig.context!!.getString(R.string.logs_cleared))
             delay(1200)
             _wipeProgress.postValue(1f)
-            _wipeProgressMessage.postValue(activity.getString(R.string.wallet_wiped_successfully))
+            _wipeProgressMessage.postValue(AnonConfig.context!!.getString(R.string.wallet_wiped_successfully))
         }
     }
 
@@ -221,7 +219,7 @@ fun SecureWipe(
                 passPhraseDialog = false
                 requestClearScreen(false)
                 activity?.let { currentActivity ->
-                    secureWipeViewModel.wipe(passPhrase, currentActivity)
+                    secureWipeViewModel.wipe(passPhrase, currentActivity as? MainActivity)
                         .invokeOnCompletion {
                             if (it != null) {
                                 Timber.tag(TAG).e(it)
