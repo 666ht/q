@@ -139,7 +139,7 @@ fun CoinsScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Text("Coins")
+                    Text(stringResource(R.string.coins))
                 },
                 navigationIcon = {
                     IconButton(
