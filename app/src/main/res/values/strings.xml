@@ -209,4 +209,17 @@
     <string name="scan_signed_tx">SCAN SIGNED TX</string>
     <string name="pin_changed_successfully">PIN changed successfully</string>
     <string name="error_changing_pin">Error changing PIN. Check logs for more details</string>
+    <string name="yes">Yes</string>
+    <string name="exit">Exit</string>
+    <string name="ok">Ok</string>
+    <string name="edit">Edit</string>
+    <string name="success">Success</string>
+    <string name="check">Check</string>
+    <string name="scan">Scan</string>
+    <string name="anon_icon">Anon nero icon</string>
+    <string name="backup_icon">Backup icon</string>
+    <string name="share_encrypted_backup_file">Share Encrypted Backup File</string>
+    <string name="share_logs">Share Logs</string>
+    <string name="clear_logs">Clear Logs</string>
+    <string name="battery_optimization_message">In order for ΛИ0ИΞR0 to function properly in the background, it is recommended to disable battery optimization.\nYou can change this setting anytime in Android's app settings.\n\nWould you like to proceed?</string>
 </resources>
