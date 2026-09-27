@@ -763,7 +763,7 @@ fun TransactionItem(tx: TransactionInfo, hideAmounts: Boolean = false, modifier:
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        
+        Spacer(modifier = Modifier.weight(1f))
             Box(modifier = Modifier.padding(top = 2.dp)) {
                 if (confirmations >= 10)
                     Icon(
@@ -786,7 +786,7 @@ fun TransactionItem(tx: TransactionInfo, hideAmounts: Boolean = false, modifier:
                         )
                     }
             }
-            Spacer(modifier = Modifier.weight(1f))
+            Spacer(modifier = Modifier.size(12.dp))
             Text(
                 if (hideAmounts) Formats.maskAmount(amount)
                 else Formats.getDisplayAmount(amount),
