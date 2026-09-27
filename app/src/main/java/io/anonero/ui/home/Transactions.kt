@@ -217,8 +217,7 @@ fun TransactionScreen(
                         containerColor = MaterialTheme.colorScheme.background,
                     )
                 ) {
-                    Text(
-                        "Cancel",
+                    Text(stringResource(R.string.cancel),
                         style = MaterialTheme.typography.bodyMedium.copy(
                             color = MaterialTheme.colorScheme.onSecondary.copy(
                                 alpha = 0.8f
@@ -301,8 +300,7 @@ fun TransactionScreen(
                         containerColor = MaterialTheme.colorScheme.background,
                     )
                 ) {
-                    Text(
-                        "Cancel",
+                    Text(stringResource(R.string.cancel),
                         style = MaterialTheme.typography.bodyMedium.copy(
                             color = MaterialTheme.colorScheme.onSecondary.copy(
                                 alpha = 0.8f
