@@ -203,4 +203,7 @@
     <string name="restore_wallet_action">Restore Wallet</string>
     <string name="created_at">Created at %1$s</string>
 
+    <string name="signed_tx">SIGNED TX</string>
+    <string name="unsigned_tx">UNSIGNED TX</string>
+    <string name="scan_signed_tx">SCAN SIGNED TX</string>
 </resources>
