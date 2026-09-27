@@ -150,4 +150,5 @@
     <string name="error_connecting_server">Error connecting to server :%1$s</string>
     <string name="url_cannot_be_empty">URL cannot be empty</string>
     <string name="invalid_url">Invalid URL</string>
+    <string name="more">More</string>
 </resources>
