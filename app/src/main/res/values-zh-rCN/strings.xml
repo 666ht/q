@@ -203,4 +203,7 @@
     <string name="restore_wallet_action">恢复钱包</string>
     <string name="created_at">创建时间：%1$s</string>
 
+    <string name="signed_tx">已签名交易</string>
+    <string name="unsigned_tx">未签名交易</string>
+    <string name="scan_signed_tx">扫描已签名交易</string>
 </resources>
