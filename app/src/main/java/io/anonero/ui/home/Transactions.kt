@@ -738,7 +738,7 @@ fun TransactionScreen(
 
 
 @Composable
-fun TransactionItem(tx: TransactionInfo, hideAmounts: Boolean = false, modifier: Modifier = Modifier, rightAlignAmount: Boolean = true) {
+fun TransactionItem(tx: TransactionInfo, hideAmounts: Boolean = false, modifier: Modifier = Modifier, rightAlignAmount: Boolean = true, showTime: Boolean = false) {
     val isIncoming = tx.direction == TransactionInfo.Direction.Direction_In
     val amount = if (isIncoming) tx.amount else tx.amount
     val confirmations = tx.confirmations
@@ -797,6 +797,12 @@ fun TransactionItem(tx: TransactionInfo, hideAmounts: Boolean = false, modifier:
         )
         if (!rightAlignAmount) {
             Spacer(modifier = Modifier.size(12.dp))
+        }
+        if (showTime) {
+            Text(
+                Formats.formatTransactionTime(tx.timestamp),
+                style = MaterialTheme.typography.labelSmall
+            )
         }
     }
     }
