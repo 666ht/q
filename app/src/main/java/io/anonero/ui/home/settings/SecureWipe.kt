@@ -74,6 +74,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.koin.androidx.compose.koinViewModel
 import org.koin.compose.koinInject
 import org.koin.core.qualifier.named
@@ -221,12 +222,16 @@ fun SecureWipe(
     }
 
     fun clearWallet() {
-        scope.launch(Dispatchers.IO) {
-            val hash = prefs.getString(PREFS_PASSPHRASE_HASH, "")
-            val hashedPass = KeyStoreHelper.getCrazyPass(AnonConfig.context, passPhrase)
-            if (hash == hashedPass) {
-                // Hide the password dialog only after validation. The wipe screen
-                // remains visible for the entire deletion sequence.
+        scope.launch {
+            val result = withContext(Dispatchers.IO) {
+                runCatching {
+                    val hash = prefs.getString(PREFS_PASSPHRASE_HASH, "")
+                    val hashedPass = KeyStoreHelper.getCrazyPass(AnonConfig.context, passPhrase)
+                    hash == hashedPass
+                }.getOrDefault(false)
+            }
+            if (result) {
+                // Keep all Compose state changes on the main thread.
                 passPhraseDialog = false
                 requestClearScreen(false)
                 secureWipeViewModel.wipe(passPhrase, activity as? MainActivity)
