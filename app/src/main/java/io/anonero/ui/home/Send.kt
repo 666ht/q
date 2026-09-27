@@ -122,7 +122,7 @@ class SendViewModel : ViewModel() {
                 _txComposeError.postValue(null)
                 if (spendType.value == SpendType.SWEEP && _coinsSelected.value.isNullOrEmpty()) {
                     if(wallet?.fullStatus?.connectionStatus != Wallet.ConnectionStatus.ConnectionStatus_Connected) {
-                        throw Exception("Wallet not connected to node. please check network")
+                        throw Exception(AnonConfig.context?.getString(R.string.wallet_not_connected_to_node_please_check_network))
                     }
                     val pendingTx = wallet.createSweepTransaction(
                         dstAddr = addressField,
@@ -141,7 +141,7 @@ class SendViewModel : ViewModel() {
                     pendingTx
                 } else {
                     if(wallet?.fullStatus?.connectionStatus != Wallet.ConnectionStatus.ConnectionStatus_Connected) {
-                        throw Exception("Wallet not connected to node. please check network")
+                        throw Exception(AnonConfig.context?.getString(R.string.wallet_not_connected_to_node_please_check_network))
                     }
                     val pendingTx = wallet.createTransaction(
                         dst_addr = addressField,
