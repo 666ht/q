@@ -56,25 +56,13 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Cache APK build
-        id: apk-cache
-        uses: actions/cache@v4
-        with:
-          path: |
-            app/build
-            build
-          key: anonero-apk-${{ runner.os }}-${{ hashFiles('app/**', 'build.gradle.kts', 'settings.gradle.kts', 'gradle.properties', 'gradle/libs.versions.toml', 'gradle/wrapper/gradle-wrapper.properties') }}-${{ steps.xmr.outputs.sha }}
-          restore-keys: |
-            anonero-apk-${{ runner.os }}-
-
       - name: Build APK
-        if: steps.apk-cache.outputs.cache-hit != 'true'
-        run: ./gradlew --no-daemon assembleAnonRelease
+        run: ./gradlew --no-daemon assembleAnonRelease -PbuildNumber="${{ github.run_number }}"
 
       - name: Upload APK for download
         uses: actions/upload-artifact@v4
         with:
-          name: anonero-apk
+          name: anonero-apk-build-${{ github.run_number }}
           path: app/build/outputs/apk/anon/release/*.apk
           if-no-files-found: error
           retention-days: 7
