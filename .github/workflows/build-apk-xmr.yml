@@ -83,7 +83,7 @@ jobs:
             gradle-build-${{ runner.os }}-
 
       - name: Build APK
-        run: ./gradlew --offline --no-daemon assembleAnonRelease -PbuildNumber="${{ github.run_number }}"
+        run: ./gradlew --no-daemon assembleAnonRelease -PbuildNumber="${{ github.run_number }}"
 
       - name: Upload APK for download
         uses: actions/upload-artifact@v4
