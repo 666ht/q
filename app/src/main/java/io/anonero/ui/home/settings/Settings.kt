@@ -27,6 +27,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
@@ -68,9 +69,9 @@ fun SettingsPage(
 ) {
     // Read preferences directly from the application context. This screen is also
     // used by the Preview and must not depend on a Koin qualifier being available.
-    val prefs: SharedPreferences = AnonConfig.context
-        ?.getSharedPreferences(AnonConfig.PREFS, android.content.Context.MODE_PRIVATE)
-        ?: throw IllegalStateException("Application context is not initialized")
+    val prefs: SharedPreferences = LocalContext.current
+        .applicationContext
+        .getSharedPreferences(AnonConfig.PREFS, android.content.Context.MODE_PRIVATE)
     val toastState = rememberToasterState()
     var showLockScreen by remember { mutableStateOf(false) }
     var newPinDialog by remember { mutableStateOf(false) }
