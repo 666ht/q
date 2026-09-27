@@ -19,7 +19,7 @@
     <string name="receive">Receive</string>
     <string name="send">Send</string>
     <string name="settings">Settings</string>
-    <string name="set_subaddress_label">Set subaddress label</string>
+    <string name="set_subaddress_label">设置子地址标签</string>
     <string name="node_connection">NODE CONNECTION</string>
     <string name="node">Node</string>
     <string name="onion_address_example">http://address.onion:port</string>
@@ -152,7 +152,7 @@
     <string name="invalid_url">Invalid URL</string>
     <string name="more">More</string>
 
-    <string name="label_cannot_be_empty">Label cannot be empty</string>
+    <string name="label_cannot_be_empty">标签不能为空</string>
     <string name="update">Update</string>
     <string name="broadcast_transaction_confirm">Do you want to broadcast transaction?</string>
     <string name="exit_app_confirm">Do you want to exit %1$s?</string>
