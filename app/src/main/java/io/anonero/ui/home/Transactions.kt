@@ -252,7 +252,7 @@ fun TransactionScreen(
                                 broadcastSignedTxPath = null
                             }
                         }
-                    }) { Text("Yes") }
+                    }) { Text(stringResource(R.string.yes)) }
             },
         )
     }
@@ -322,7 +322,7 @@ fun TransactionScreen(
                     ),
                     onClick = {
                         activity?.finishAffinity()
-                    }) { Text("Exit") }
+                    }) { Text(stringResource(R.string.exit)) }
             },
         )
     }
@@ -367,7 +367,7 @@ fun TransactionScreen(
                         showScanner = false
                         qrScannerParam = SpendQRExchangeParam(
                             exportType = ExportType.IMAGE,
-                            title = "KEY IMAGES",
+                            title = stringResource(R.string.key_images),
                             ctaText = scanUnsignedTxText,
                         )
                     }
@@ -518,7 +518,7 @@ fun TransactionScreen(
                             showScanner = true
                         }
                     ) {
-                        Icon(AnonIcons.Scan, contentDescription = "Scan")
+                        Icon(AnonIcons.Scan, contentDescription = stringResource(R.string.scan))
                     }
                     IconButton(
                         onClick = {
@@ -561,7 +561,7 @@ fun TransactionScreen(
                             showMenu = !showMenu
                         }
                     ) {
-                        Icon(Icons.Default.MoreVert, contentDescription = "More")
+                        Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.more))
                         DropdownMenu(
                             expanded = showMenu,
                             containerColor = MaterialTheme.colorScheme.background,
@@ -595,7 +595,7 @@ fun TransactionScreen(
                                     if (result.isFailure) {
                                         scope.launch {
                                             toastState.show(
-                                                "Error : ${result.exceptionOrNull()?.message}",
+                                                stringResource(R.string.error_prefix, result.exceptionOrNull()?.message ?: ""),
                                                 type = ToastType.Warning,
                                                 duration = 6.seconds
                                             )
