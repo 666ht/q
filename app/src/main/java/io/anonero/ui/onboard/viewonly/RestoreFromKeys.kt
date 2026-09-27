@@ -117,12 +117,7 @@ fun RestoreFromKeys(
                     modifier = Modifier
                         .size(120.dp)
                 )
-                Spacer(Modifier.height(16.dp))
-                Text(
-                    text = stringResource(R.string.import_view_keys),
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold
-                )
+                Spacer(Modifier.height(48.dp))
             }
             Column(
                 modifier = Modifier
