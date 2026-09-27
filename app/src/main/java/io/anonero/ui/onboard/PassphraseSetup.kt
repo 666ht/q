@@ -86,7 +86,7 @@ fun SetupPassphrase(
                 ) {
                     Icon(
                         Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Back",
+                        contentDescription = stringResource(R.string.back),
                         tint = Color.White
                     )
                 }
@@ -94,7 +94,7 @@ fun SetupPassphrase(
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Image(
                     painter = painterResource(R.drawable.ic_anon),
-                    contentDescription = "Anon nero icon",
+                    contentDescription = stringResource(R.string.anon_icon),
                     modifier = Modifier
                         .size(120.dp)
                 )
