@@ -20,15 +20,13 @@ object Formats {
         return compactDecimalFormat.format(number)
     }
 
-
     fun maskAmount(amount: Long): String {
         val plain = getDisplayAmount(amount)
         return "#".repeat(plain.length)
     }
 
     fun getDisplayAmount(amount: Long): String {
-
-        if (amount == 0L) return "0.00000000"
+        if (amount == 0L) return "0.000000000000"
         var d = BigDecimal(amount).scaleByPowerOfTen(-AnonConfig.XMR_DECIMALS)
             .setScale(12, RoundingMode.HALF_UP)
         if (d.scale() < 2) d = d.setScale(2, RoundingMode.UNNECESSARY)
@@ -43,14 +41,12 @@ object Formats {
         return dateTime.format(formatter)
     }
 
-
     fun formatLogTime(timestamp: Long): String {
         val instant =
             Instant.ofEpochMilli(timestamp)
         val dateTime = LocalDateTime.ofInstant(instant, ZoneId.systemDefault())
         val formatter = DateTimeFormatter.ofPattern("MMM dd hh:mm")
         return dateTime.format(formatter)
-
     }
 
     fun formatFileSize(sizeInBytes: Long): String {
@@ -64,5 +60,4 @@ object Formats {
             units[digitGroups]
         )
     }
-
 }
