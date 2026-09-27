@@ -117,6 +117,10 @@ tasks.matching { it.name.startsWith("merge") && it.name.endsWith("Assets") }.con
     dependsOn("prepareCustomFontAsset")
 }
 
+tasks.matching { it.name.contains("LintVital") || it.name.contains("lintVital") }.configureEach {
+    dependsOn("prepareCustomFontAsset")
+}
+
 dependencies {
 
     implementation(libs.androidx.core.ktx)
