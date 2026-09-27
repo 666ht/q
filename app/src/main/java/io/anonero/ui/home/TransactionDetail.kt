@@ -256,7 +256,7 @@ fun TransactionDetailScreen(
                             tx = transactionInfo!!,
                             rightAlignAmount = false,
                             showTime = true,
-                            timePattern = "yyyy/MM/dd\nHH:mm",
+                            timePattern = "yyyy/MM/dd HH:mm",
                             timeZone = ZoneId.of("Asia/Shanghai"),
                             upstreamLayout = true,
                             modifier = Modifier
