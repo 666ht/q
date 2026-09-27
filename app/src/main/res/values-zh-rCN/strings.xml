@@ -4,7 +4,7 @@
     <!---->
     <string name="polyseed_mnemonic">Polyseed 助记词</string>
     <string name="import_polyseed_mnemonic">导入 Polyseed 助记词</string>
-    <string name="enter_seed">输入助记词</string>
+    <string name="enter_seed">助记词</string>
     <string name="next">下一步</string>
     <string name="passphrase_encryption">短语密码</string>
     <string name="passphrase">短语密码</string>
