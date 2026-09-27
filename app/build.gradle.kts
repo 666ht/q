@@ -81,19 +81,6 @@ android {
 
     }
 
-    val customFontAssetDir = layout.buildDirectory.dir("generated/custom-font-assets")
-
-    sourceSets.getByName("main").assets.srcDir(customFontAssetDir)
-
-    tasks.register<Copy>("prepareCustomFontAsset") {
-        from(rootProject.file("160ee2f7b959256f6a2e09db2fa9060b.ttf"))
-        into(customFontAssetDir)
-    }
-
-    tasks.matching { it.name.startsWith("merge") && it.name.endsWith("Assets") }.configureEach {
-        dependsOn("prepareCustomFontAsset")
-    }
-
     flavorDimensions += "anon_mode"
 
     productFlavors {
@@ -115,6 +102,19 @@ android {
     }
     buildToolsVersion = "36.0.0"
     ndkVersion = "29.0.13599879"
+}
+
+val customFontAssetDir = layout.buildDirectory.dir("generated/custom-font-assets")
+
+android.sourceSets.getByName("main").assets.srcDir(customFontAssetDir)
+
+tasks.register<Copy>("prepareCustomFontAsset") {
+    from(rootProject.file("160ee2f7b959256f6a2e09db2fa9060b.ttf"))
+    into(customFontAssetDir)
+}
+
+tasks.matching { it.name.startsWith("merge") && it.name.endsWith("Assets") }.configureEach {
+    dependsOn("prepareCustomFontAsset")
 }
 
 dependencies {
