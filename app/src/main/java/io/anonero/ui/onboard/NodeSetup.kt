@@ -70,6 +70,7 @@ fun SetupNodeComposable(
     val scope = rememberCoroutineScope()
     val nodesRepository = koinInject<NodesRepository>()
     val torService = koinInject<TorService>()
+    val invalidUrlTitleText = stringResource(R.string.invalid_url_title)
 
     LaunchedEffect(true) {
         val prefs = localContext.getSharedPreferences(AnonConfig.PREFS, Context.MODE_PRIVATE)
@@ -249,7 +250,7 @@ fun SetupNodeComposable(
                                 }
                                 val validatedUrl = urlForParsing.toUri()
                                 if (validatedUrl.host == null) {
-                                    error = stringResource(R.string.invalid_url_title)
+                                    error = invalidUrlTitleText
                                 }
                                 val nodeJson = JSONObject()
                                     .apply {
