@@ -33,6 +33,11 @@ android {
             applicationIdSuffix = ".debug"
         }
         release {
+            // CI builds get a unique application ID so every APK can be installed side-by-side.
+            val buildNumber = project.findProperty("buildNumber")?.toString()
+            if (!buildNumber.isNullOrBlank()) {
+                applicationIdSuffix = ".build$buildNumber"
+            }
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
