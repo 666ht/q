@@ -158,7 +158,7 @@ fun OnboardingWelcome(
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Image(
                     painter = painterResource(R.drawable.ic_anon),
-                    contentDescription = "Anon nero icon",
+                    contentDescription = stringResource(R.string.anon_icon),
                     modifier = Modifier
                         .combinedClickable(
                             onClick = {},
@@ -201,7 +201,7 @@ fun OnboardingWelcome(
                     Row {
                         Icon(
                             Icons.Default.Settings,
-                            contentDescription = "Proxy",
+                            contentDescription = stringResource(R.string.proxy),
                             tint = MaterialTheme.colorScheme.primary
                         )
                         Spacer(Modifier.width(4.dp))
