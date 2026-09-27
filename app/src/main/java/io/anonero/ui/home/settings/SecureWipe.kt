@@ -99,9 +99,15 @@ class SecureWipeViewModel(
 
     fun wipe(passPhrase: String, activity: MainActivity?): Job {
         return viewModelScope.launch(Dispatchers.IO) {
-            activity?.stopNotificationService()
+            _wipeProgress.postValue(.1f)
+            _wipeProgressMessage.postValue(
+                AnonConfig.context?.getString(R.string.wiping_wallet) ?: "Wiping wallet"
+            )
+            runCatching { activity?.stopNotificationService() }
+                .onFailure {
+                    Timber.tag(TAG).e(it, "Stopping notification service failed; continuing secure wipe")
+                }
             _wipeProgress.postValue(.3f)
-            _wipeProgressMessage.postValue(AnonConfig.context!!.getString(R.string.wiping_wallet))
             var wipeFailure: Throwable? = null
             runCatching { anonWalletHandler.wipe(passPhrase) }
                 .onFailure {
@@ -134,6 +140,11 @@ class SecureWipeViewModel(
                 .onFailure {
                     wipeFailure = wipeFailure ?: it
                     Timber.tag(TAG).e(it, "Secure wipe logs step failed")
+                }
+            runCatching { AnonConfig.clearSpendCacheFiles(AnonConfig.context!!) }
+                .onFailure {
+                    wipeFailure = wipeFailure ?: it
+                    Timber.tag(TAG).e(it, "Secure wipe cache step failed")
                 }
             runCatching { AnonConfig.disposeState() }
                 .onFailure {
@@ -218,16 +229,7 @@ fun SecureWipe(
                 // remains visible for the entire deletion sequence.
                 passPhraseDialog = false
                 requestClearScreen(false)
-                activity?.let { currentActivity ->
-                    secureWipeViewModel.wipe(passPhrase, currentActivity as? MainActivity)
-                        .invokeOnCompletion {
-                            if (it != null) {
-                                Timber.tag(TAG).e(it)
-                                error = it.message
-                                requestClearScreen(false)
-                            }
-                        }
-                }
+                secureWipeViewModel.wipe(passPhrase, activity as? MainActivity)
             } else {
                 errorShake.shake(ShakeConfig(6, translateX = 5f))
                 repeat(6) {
