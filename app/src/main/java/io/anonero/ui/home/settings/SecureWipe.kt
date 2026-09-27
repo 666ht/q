@@ -187,14 +187,18 @@ fun SecureWipe(
             val hash = prefs.getString(PREFS_PASSPHRASE_HASH, "")
             val hashedPass = KeyStoreHelper.getCrazyPass(AnonConfig.context, passPhrase)
             if (hash == hashedPass) {
+                // Hide the password dialog only after validation. The wipe screen
+                // remains visible for the entire deletion sequence.
                 passPhraseDialog = false
-                requestClearScreen(true)
+                requestClearScreen(false)
                 activity?.let { currentActivity ->
                     secureWipeViewModel.wipe(passPhrase, currentActivity)
                         .invokeOnCompletion {
                             if (it == null) {
                                 view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
-                                scope.launch(Dispatchers.Main) { goToHome() }
+                                scope.launch(Dispatchers.Main) {
+                                    goToHome()
+                                }
                             } else {
                                 Timber.tag(TAG).e(it)
                                 error = it.message
