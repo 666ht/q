@@ -739,7 +739,7 @@ fun TransactionScreen(
 
 
 @Composable
-fun TransactionItem(tx: TransactionInfo, hideAmounts: Boolean = false, modifier: Modifier = Modifier, rightAlignAmount: Boolean = true, showTime: Boolean = false, timePattern: String = "dd/MM\nHH:mm", timeZone: ZoneId = ZoneId.systemDefault()) {
+fun TransactionItem(tx: TransactionInfo, hideAmounts: Boolean = false, modifier: Modifier = Modifier, rightAlignAmount: Boolean = true, showTime: Boolean = false, timePattern: String = "dd/MM\nHH:mm", timeZone: ZoneId = ZoneId.systemDefault(), upstreamLayout: Boolean = false) {
     val isIncoming = tx.direction == TransactionInfo.Direction.Direction_In
     val amount = if (isIncoming) tx.amount else tx.amount
     val confirmations = tx.confirmations
@@ -771,7 +771,7 @@ fun TransactionItem(tx: TransactionInfo, hideAmounts: Boolean = false, modifier:
                 if (confirmations >= 10)
                     Icon(
                         if (isIncoming) AnonIcons.ArrowDownLeft else AnonIcons.ArrowUpRight,
-                        modifier = Modifier.size(20.dp),
+                        modifier = Modifier.size(if (upstreamLayout) 32.dp else 20.dp),
                         tint = if (isIncoming) MaterialTheme.colorScheme.primary else LocalContentColor.current,
                         contentDescription = ""
                     )
@@ -796,7 +796,7 @@ fun TransactionItem(tx: TransactionInfo, hideAmounts: Boolean = false, modifier:
             textAlign = if (rightAlignAmount) TextAlign.End else TextAlign.Center,
             style = MaterialTheme.typography.titleLarge
         )
-        if (!rightAlignAmount) {
+        if (!rightAlignAmount && !upstreamLayout) {
             Spacer(modifier = Modifier.size(12.dp))
         }
         if (showTime) {
