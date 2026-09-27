@@ -1,8 +1,4 @@
-<resources>
-    <!-- Do not translate the app name. The app_name will be modified by the Gradle build system based on the build variants (Nero/Anon). -->
-    <string name="app_name">anonnero</string>
-    <!---->
-    <string name="polyseed_mnemonic">Frase mnemónica de Polyseed</string>
+<resources><string name="polyseed_mnemonic">Frase mnemónica de Polyseed</string>
     <string name="next">SIGUIENTE</string>
     <string name="passphrase_encryption">Cifrado de la frase de paso</string>
     <string name="passphrase">Frase de paso</string>
