@@ -370,11 +370,11 @@ fun ReviewTransactionScreen(
                     ) {
                         Icon(
                             Icons.Default.Check,
-                            contentDescription = "Check",
+                            contentDescription = stringResource(R.string.check),
                             tint = SuccessColor,
                             modifier = Modifier.size(44.dp)
                         )
-                        Text("Success")
+                        Text(stringResource(R.string.success))
                     }
                 }
                 AnimatedVisibility(
