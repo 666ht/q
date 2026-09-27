@@ -52,9 +52,9 @@
     <string name="constructing_transaction">CONSTRUCTING TX...</string>
     <string name="invalid_address">invalid address</string>
     <string name="amount">Amount</string>
-    <string name="sweeping_balance">Sweeping balance:</string>
+    <string name="sweeping_balance">清空余额:</string>
     <string name="minus_fees">(minus fees)</string>
-    <string name="available_balance">Available balance:</string>
+    <string name="available_balance">余额:</string>
     <string name="_1_coin_selected">1 coin selected</string>
     <string name="coins_selected">coins selected</string>
     <string name="scan_key_images">SCAN KEY IMAGES</string>
