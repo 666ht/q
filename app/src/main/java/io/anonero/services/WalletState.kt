@@ -221,7 +221,7 @@ class WalletState {
 
     fun getNewAddress() {
         getWallet?.let {
-            it.addSubaddress(it.getAccountIndex(), "Subaddress #${it.numSubAddresses}")
+            it.addSubaddress(it.getAccountIndex(), "")
             it.store()
             it.getLatestSubAddress().let { subAddresses ->
                 _nextAddress.update { subAddresses }
