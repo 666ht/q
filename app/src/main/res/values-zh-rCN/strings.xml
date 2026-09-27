@@ -150,4 +150,5 @@
     <string name="error_connecting_server">连接服务器错误：%1$s</string>
     <string name="url_cannot_be_empty">URL不能为空</string>
     <string name="invalid_url">无效的URL</string>
+    <string name="more">更多</string>
 </resources>
