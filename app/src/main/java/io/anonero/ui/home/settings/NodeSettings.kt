@@ -146,7 +146,7 @@ class NodeSettingsViewModel(
     fun validate(rpcUrl: String, rpcUsername: String, rpcPassPhrase: String): Node? {
         uriValidationError.postValue(null)
         if( rpcUrl.isBlank()) {
-            uriValidationError.postValue("URL cannot be empty")
+            uriValidationError.postValue(stringResource(R.string.url_cannot_be_empty))
             return null
         }
         try {
@@ -162,7 +162,7 @@ class NodeSettingsViewModel(
             }
             val validatedUrl = urlForParsing.toUri()
             if (validatedUrl.host == null) {
-                uriValidationError.postValue("Invalid Url")
+                uriValidationError.postValue(stringResource(R.string.invalid_url))
                 return null
             }
             val nodeJson = JSONObject()
@@ -351,7 +351,7 @@ fun NodeSettings(onBackPress: () -> Unit = {}) {
                             onClick = {
                                 showNodeDetails = true
                             }
-                        ) { Text("Add Node") }
+                        ) { Text(stringResource(R.string.add_node)) }
                         IconButton(
                             colors = IconButtonDefaults.iconButtonColors(
                                 contentColor = Color.White
@@ -375,14 +375,14 @@ fun NodeSettings(onBackPress: () -> Unit = {}) {
                                 onDismissRequest = { showMenu = false }
                             ) {
                                 DropdownMenuItem(
-                                    text = { Text("Resync BlockChain") },
+                                    text = { Text(stringResource(R.string.resync_blockchain)) },
                                     onClick = {
                                         showMenu = false
                                         val result = walletState.resyncBlockchain()
                                         if (result.isFailure) {
                                             scope.launch {
                                                 toastState.show(
-                                                    "Error : ${result.exceptionOrNull()?.message}",
+                                                    "${stringResource(R.string.error_prefix)}${result.exceptionOrNull()?.message}",
                                                     type = ToastType.Warning,
                                                     duration = 6.seconds
                                                 )
@@ -390,7 +390,7 @@ fun NodeSettings(onBackPress: () -> Unit = {}) {
                                         } else {
                                             scope.launch {
                                                 toastState.show(
-                                                    "Resync initiated… this may take a while.",
+                                                    stringResource(R.string.resync_initiated_this_may_take_a_while),
                                                     type = ToastType.Success,
                                                 )
                                             }
@@ -402,7 +402,7 @@ fun NodeSettings(onBackPress: () -> Unit = {}) {
 
                     },
                     title = {
-                        Text("Nodes")
+                        Text(stringResource(R.string.nodes))
                     },
                 )
                 WalletProgressIndicator()
@@ -432,7 +432,7 @@ fun NodeSettings(onBackPress: () -> Unit = {}) {
                             )
                             .background(color = Color.Black)
                     ) {
-                        Text("Available Nodes", style = MaterialTheme.typography.bodySmall)
+                        Text(stringResource(R.string.available_nodes), style = MaterialTheme.typography.bodySmall)
                         Spacer(Modifier.padding(4.dp))
                         HorizontalDivider()
                     }
@@ -513,7 +513,7 @@ fun NodeListItem(
         supportingContent = {
             if (active)
                 Text(
-                    "Daemon Height : ${daemonStatus?.daemonHeight?.toString() ?: ""} ",
+                    stringResource(R.string.daemon_height, daemonStatus?.daemonHeight?.toString() ?: ""),
                     style = MaterialTheme
                         .typography.bodySmall,
                     modifier = Modifier.padding(top = 4.dp)
@@ -547,7 +547,7 @@ fun NodeListItem(
                     onDismissRequest = { menu = false }
                 ) {
                     DropdownMenuItem(
-                        text = { Text(if (active) "Disconnect" else "Connect") },
+                        text = { Text(if (active) stringResource(R.string.disconnect) else stringResource(R.string.connect)) },
                         onClick = {
                             if (active) onDisconnect(node) else onConnect(node)
                             menu = false
@@ -556,7 +556,7 @@ fun NodeListItem(
                     if (!active) {
                         HorizontalDivider()
                         DropdownMenuItem(
-                            text = { Text("Remove") },
+                            text = { Text(stringResource(R.string.remove)) },
                             onClick = {
                                 onRemove(node)
                                 menu = false
@@ -616,7 +616,7 @@ fun NodeForm(
                         ),
                         placeholder = {
                             Text(
-                                text = "http://address.onion:port",
+                                text = stringResource(R.string.onion_address_example),
                                 color = labelColor
                             )
                         },
@@ -629,7 +629,7 @@ fun NodeForm(
             ListItem(
                 headlineContent = {
                     Text(
-                        text = "Username",
+                        text = stringResource(R.string.username),
                         color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.padding(start = 4.dp)
                     )
@@ -640,7 +640,7 @@ fun NodeForm(
                         shape = MaterialTheme.shapes.medium,
                         placeholder = {
                             Text(
-                                text = "(Optional)",
+                                text = stringResource(R.string.optional),
                                 color = labelColor
                             )
                         },
@@ -658,7 +658,7 @@ fun NodeForm(
             ListItem(
                 headlineContent = {
                     Text(
-                        text = "PASSWORD",
+                        text = stringResource(R.string.password),
                         color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.padding(start = 4.dp)
                     )
@@ -675,7 +675,7 @@ fun NodeForm(
                         ),
                         placeholder = {
                             Text(
-                                text = "(Optional)",
+                                text = stringResource(R.string.optional),
                                 color = labelColor
                             )
                         },
@@ -690,7 +690,7 @@ fun NodeForm(
             ) {
                 if (connectionError != null)
                     Text(
-                        "Error connecting to server :$connectionError",
+                        stringResource(R.string.error_connecting_server, connectionError ?: ""),
                         modifier = Modifier.padding(
                             vertical = 12.dp,
                             horizontal = 8.dp
