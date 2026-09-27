@@ -104,17 +104,17 @@ fun RestorePreview(
             try {
                 loading = true
                 passphraseDialog = false
-                loadingMessage = "Extracting backup..."
+                loadingMessage = stringResource(R.string.extracting_backup)
                 backupPayload = BackupHelper.extractBackUp(backUpPath, passPhrase)
                 loading = false
             } catch (e: NetworkMismatchException) {
-                errorMessage = "Invalid network"
+                errorMessage = stringResource(R.string.invalid_network)
                 loading = false
                 scope.launch {
                     errorShake.shake(view)
                 }
             } catch (e: Exception) {
-                errorMessage = "Unable to extract backup."
+                errorMessage = stringResource(R.string.unable_to_extract_backup)
                 loading = false
                 scope.launch {
                     errorShake.shake(view)
@@ -266,7 +266,7 @@ fun RestorePreview(
                             horizontal = 16.dp,
                         ),
                 ) {
-                    Text("View Logs")
+                    Text(stringResource(R.string.view_logs))
                 }
             }
         }
@@ -339,7 +339,7 @@ fun RestorePreview(
                                     )
                                 )
                                 ListWidget(
-                                    title = "Seed",
+                                    title = stringResource(R.string.seed_label),
                                     subtitle = "${wallet.seed}",
                                     modifier = Modifier.padding(
                                         bottom = 8.dp
@@ -353,7 +353,7 @@ fun RestorePreview(
                                         )
                                     )
                                     ListWidget(
-                                        title = "Primary Address",
+                                        title = stringResource(R.string.primary_address_label),
                                         subtitle = "${wallet.primaryAddress}",
                                         modifier = Modifier.padding(
                                             bottom = 8.dp
@@ -366,7 +366,7 @@ fun RestorePreview(
                                     )
                                 )
                                 ListWidget(
-                                    title = "Balance",
+                                    title = stringResource(R.string.balance_label),
                                     subtitle = "${Wallet.getDisplayAmount(wallet.balanceAll)}",
                                     modifier = Modifier.weight(1f)
                                 )
@@ -376,7 +376,7 @@ fun RestorePreview(
                                     )
                                 )
                                 ListWidget(
-                                    title = "Restore Height",
+                                    title = stringResource(R.string.restore_height_label),
                                     subtitle = "${wallet.restoreHeight}",
                                     modifier = Modifier.weight(1f)
                                 )
@@ -461,7 +461,7 @@ fun RestorePreview(
                                 scope.launch(Dispatchers.IO) {
                                     try {
                                         loading = true
-                                        loadingMessage = "Restoring wallet..."
+                                        loadingMessage = stringResource(R.string.restoring_wallet_progress)
                                         val success =
                                             BackupHelper.restoreBackUp(backupPayload!!, passPhrase)
                                         if (success) {
@@ -482,7 +482,7 @@ fun RestorePreview(
 
                             },
                         ){
-                            Text("Restore Wallet")
+                            Text(stringResource(R.string.restore_wallet_action))
                         }
                     }
                 }
