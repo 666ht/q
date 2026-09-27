@@ -1,9 +1,9 @@
 <resources>
-<string name="polyseed_mnemonic">Polyseed 助记词</string>
-    <string name="import_polyseed_mnemonic">导入 Polyseed 助记词</string>
+<string name="polyseed_mnemonic"></string>
+    <string name="import_polyseed_mnemonic"></string>
     <string name="enter_seed">助记词</string>
     <string name="next">下一步</string>
-    <string name="passphrase_encryption">短语密码</string>
+    <string name="passphrase_encryption"></string>
     <string name="passphrase">短语密码</string>
     <string name="confirm_passphrase">确认</string>
     <string name="passphrases_do_not_match">短语密码不匹配</string>
@@ -60,7 +60,7 @@
     <string name="key_images">密钥映像</string>
     <string name="scan_unsigned_tx">扫描未签名交易</string>
     <string name="outputs">输出</string>
-    <string name="set_transaction_description">设置交易备注</string>
+    <string name="set_transaction_description">交易备注</string>
     <string name="save">保存</string>
     <string name="dismiss">取消</string>
     <string name="transaction_id">交易ID</string>
@@ -125,7 +125,7 @@
     <string name="settings_seed">助记词</string>
     <string name="settings_change_pin">修改PIN</string>
     <string name="settings_export_backup">导出备份</string>
-    <string name="settings_secure_wipe">安全擦除数据</string>
+    <string name="settings_secure_wipe">安全删除</string>
     <string name="settings_logs">日志</string>
     <string name="settings_app_version">%1$s %2$s</string>
     <string name="total">总计</string>
