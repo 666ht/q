@@ -32,10 +32,10 @@ object Formats {
             .toPlainString()
     }
 
-    fun formatTransactionTime(timestamp: Long, pattern: String = "dd/MM\nHH:mm"): String {
+    fun formatTransactionTime(timestamp: Long, pattern: String = "dd/MM\nHH:mm", zoneId: ZoneId = ZoneId.systemDefault()): String {
         val instant =
             Instant.ofEpochSecond(timestamp)
-        val dateTime = LocalDateTime.ofInstant(instant, ZoneId.systemDefault())
+        val dateTime = LocalDateTime.ofInstant(instant, zoneId)
         val formatter = DateTimeFormatter.ofPattern(pattern)
         return dateTime.format(formatter)
     }
