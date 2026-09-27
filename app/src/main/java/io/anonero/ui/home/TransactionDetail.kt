@@ -325,7 +325,7 @@ fun TransactionDetailScreen(
                         title = stringResource(R.string.time),
                         subtitle = Formats.formatTransactionTime(
                             transactionInfo!!.timestamp,
-                            "HH:mm dd/MM/yyy"
+                            "yyyy年MM月dd日 HH:mm:ss"
                         )
                     )
                 }
