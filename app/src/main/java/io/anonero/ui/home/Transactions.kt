@@ -786,14 +786,13 @@ fun TransactionItem(tx: TransactionInfo, hideAmounts: Boolean = false, modifier:
                         )
                     }
             }
+            Spacer(modifier = Modifier.weight(1f))
             Text(
                 if (hideAmounts) Formats.maskAmount(amount)
                 else Formats.getDisplayAmount(amount),
-                modifier = Modifier.weight(1f),
                 textAlign = TextAlign.End,
                 style = MaterialTheme.typography.titleLarge
             )
-            Spacer(modifier = Modifier.size(12.dp))
         }
     }
 
