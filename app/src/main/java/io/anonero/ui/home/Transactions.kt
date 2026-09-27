@@ -751,7 +751,7 @@ fun TransactionItem(tx: TransactionInfo, hideAmounts: Boolean = false, modifier:
             .fillMaxWidth()
             .padding(
                 start = 40.dp,
-                end = 12.dp,
+                end = 0.dp,
                 top = 20.dp,
                 bottom = 20.dp
             )
