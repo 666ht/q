@@ -8,6 +8,13 @@ on:
 permissions:
   contents: read
 
+env:
+  GRADLE_OPTS: >-
+    -Dorg.gradle.caching=true
+    -Dorg.gradle.parallel=true
+    -Dorg.gradle.daemon=false
+    -Dorg.gradle.jvmargs=-Xmx4g -XX:+UseG1GC
+
 jobs:
   build:
     runs-on: ubuntu-24.04
@@ -50,14 +57,33 @@ jobs:
         with:
           packages: 'platform-tools'
 
+      - name: Cache Android SDK
+        uses: actions/cache@v4
+        with:
+          path: |
+            $ANDROID_SDK_ROOT/platforms/android-35
+            $ANDROID_SDK_ROOT/build-tools/36.0.0
+          key: android-sdk-35-build-tools-36.0.0-${{ runner.os }}
+
       - name: Install Android SDK components
         run: sdkmanager "platforms;android-35" "build-tools;36.0.0" "platform-tools"
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      - name: Cache Gradle build outputs
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches/build-cache-1
+            .gradle
+            app/build
+          key: gradle-build-${{ runner.os }}-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties', 'gradle.properties', 'app/src/**') }}
+          restore-keys: |
+            gradle-build-${{ runner.os }}-
+
       - name: Build APK
-        run: ./gradlew --no-daemon assembleAnonRelease -PbuildNumber="${{ github.run_number }}"
+        run: ./gradlew --offline --no-daemon assembleAnonRelease -PbuildNumber="${{ github.run_number }}"
 
       - name: Upload APK for download
         uses: actions/upload-artifact@v4
