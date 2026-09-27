@@ -48,6 +48,12 @@ class Subaddress(
             Pattern.compile("^[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{2}:[0-9]{2}:[0-9]{2}$")
     }
 
+    fun withLabel(newLabel: String): Subaddress {
+        return Subaddress(accountIndex, addressIndex, address, newLabel).also {
+            it.amount = amount
+        }
+    }
+
     val totalAmount: Long
         get() = amount
 
