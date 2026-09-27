@@ -188,7 +188,7 @@ fun TransactionScreen(
                 )
             },
             text = {
-                Text("Do you want to broadcast transaction?")
+                Text(stringResource(R.string.broadcast_transaction_confirm))
             },
             onDismissRequest = {
                 scanFailure = null
@@ -272,7 +272,7 @@ fun TransactionScreen(
                 )
             },
             text = {
-                Text("Do you want to exit ${stringResource(R.string.app_name)}?")
+                Text(stringResource(R.string.exit_app_confirm, stringResource(R.string.app_name)))
             },
             onDismissRequest = {
                 showExitDialog = false
@@ -359,7 +359,7 @@ fun TransactionScreen(
                         qrScannerParam = SpendQRExchangeParam(
                             exportType = ExportType.IMAGE,
                             title = "KEY IMAGES",
-                            ctaText = "SCAN UNSIGNED TX",
+                            ctaText = stringResource(R.string.scan_unsigned_tx),
                         )
                     }
 
@@ -369,7 +369,7 @@ fun TransactionScreen(
 
                     ImportEvents.IMPORT_KEY_IMAGES -> {
                         toastState.show(
-                            "Key images imported",
+                            stringResource(R.string.key_images_imported),
                             type = ToastType.Success,
                             duration = 4.seconds
                         )
@@ -519,7 +519,7 @@ fun TransactionScreen(
                         val torIconColor = if (useTor && torConnected == false) Color.Red else Color.White
                         Icon(
                             painterResource(R.drawable.ic_tor),
-                            contentDescription = "Tor Status",
+                            contentDescription = stringResource(R.string.tor_status),
                             tint = torIconColor
                         )
                     }
