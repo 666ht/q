@@ -162,6 +162,8 @@ fun TransactionScreen(
     val hideAmounts by walletState.hideAmountsFlow.asLiveData().observeAsState(false)
     val scope = rememberCoroutineScope()
     val toastState = rememberToasterState()
+    val scanUnsignedTxText = stringResource(R.string.scan_unsigned_tx)
+    val keyImagesImportedText = stringResource(R.string.key_images_imported)
     val activity = LocalActivity.current;
 
     if (broadcastSignedTxPath != null) {
@@ -359,7 +361,7 @@ fun TransactionScreen(
                         qrScannerParam = SpendQRExchangeParam(
                             exportType = ExportType.IMAGE,
                             title = "KEY IMAGES",
-                            ctaText = stringResource(R.string.scan_unsigned_tx),
+                            ctaText = scanUnsignedTxText,
                         )
                     }
 
@@ -369,7 +371,7 @@ fun TransactionScreen(
 
                     ImportEvents.IMPORT_KEY_IMAGES -> {
                         toastState.show(
-                            stringResource(R.string.key_images_imported),
+                            keyImagesImportedText,
                             type = ToastType.Success,
                             duration = 4.seconds
                         )
