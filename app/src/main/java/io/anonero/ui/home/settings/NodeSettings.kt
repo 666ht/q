@@ -285,7 +285,7 @@ fun NodeSettings(onBackPress: () -> Unit = {}) {
     val scope = rememberCoroutineScope()
     val toastState = rememberToasterState()
     val errorPrefix = stringResource(R.string.error_prefix)
-    val resyncInitiatedMessage = resyncInitiatedMessage
+    val resyncInitiatedMessage = stringResource(R.string.resync_initiated_this_may_take_a_while)
 
     if (showNodeDetails)
         Dialog(
@@ -392,7 +392,7 @@ fun NodeSettings(onBackPress: () -> Unit = {}) {
                                         } else {
                                             scope.launch {
                                                 toastState.show(
-                                                    stringResource(R.string.resync_initiated_this_may_take_a_while),
+                                                    resyncInitiatedMessage,
                                                     type = ToastType.Success,
                                                 )
                                             }
