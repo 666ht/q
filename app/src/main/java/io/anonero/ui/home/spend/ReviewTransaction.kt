@@ -217,8 +217,7 @@ fun ReviewTransactionScreen(
     var readyToBroadcast by remember { mutableStateOf(!AnonConfig.viewOnly) }
 
     val titleStyle = MaterialTheme.typography.bodyLarge.copy(
-        color = MaterialTheme.colorScheme.primary,
-        fontSize = 20.sp
+        color = MaterialTheme.colorScheme.primary,        fontSize = 20.sp
     )
     val subTitleStyle = MaterialTheme.typography.bodyMedium.copy(
         color = MaterialTheme.colorScheme.onBackground,
@@ -286,6 +285,9 @@ fun ReviewTransactionScreen(
         )
 
     val context = LocalContext.current;
+    val signedTxText = stringResource(R.string.signed_tx)
+    val unsignedTxText = stringResource(R.string.unsigned_tx)
+    val scanSignedTxText = stringResource(R.string.scan_signed_tx)
     val ctaText = if (AnonConfig.viewOnly) {
         if (!viewModel.isUnsignedTransaction() && !readyToBroadcast) {
             stringResource(R.string.confirm).capitalize()
@@ -437,8 +439,7 @@ fun ReviewTransactionScreen(
                                     supportingContent = {
                                         Text(
                                             Formats.getDisplayAmount(
-                                                reviewModel!!.amount
-                                            ),
+                                                reviewModel!!.amount                                            ),
                                             style = subTitleStyle
                                         )
                                     }
