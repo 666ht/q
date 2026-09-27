@@ -284,7 +284,7 @@ fun TransactionDetailScreen(
                                     HapticFeedbackConstants.CONTEXT_CLICK
                                 )
                             }) {
-                                Icon(Icons.Filled.Edit, contentDescription = "Edit")
+                                Icon(Icons.Filled.Edit, contentDescription = stringResource(R.string.edit))
                             }
                         }
                     )
