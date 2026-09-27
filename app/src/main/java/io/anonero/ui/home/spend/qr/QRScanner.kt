@@ -92,7 +92,7 @@ class QRScannerVM : ViewModel() {
                 val wallet = WalletManager.instance?.wallet;
                 if (wallet == null) {
                     Timber.tag(TAG).e("wallet is null")
-                    return Result.failure(Exception("Wallet is null"))
+                    return Result.failure(Exception(AnonConfig.context?.getString(R.string.wallet_is_null)))
                 }
                 val filePath = destinationFile.path;
                 when (AnonUrRegistryTypes.fromUrTag(ur)) {
@@ -106,7 +106,7 @@ class QRScannerVM : ViewModel() {
                                 Timber.tag(TAG).i("Imported outputs")
                                 return Result.success(ImportEvents.IMPORT_OUTPUTS)
                             } else {
-                                return Result.failure(Exception("Failed to import outputs"))
+                                return Result.failure(Exception(AnonConfig.context?.getString(R.string.failed_to_import_outputs)))
                             }
                         } catch (error: Exception) {
                             return Result.failure(error)
@@ -125,7 +125,7 @@ class QRScannerVM : ViewModel() {
                             if (status) {
                                 return Result.success(ImportEvents.IMPORT_KEY_IMAGES)
                             } else {
-                                return Result.failure(Exception("Failed to import key images"))
+                                return Result.failure(Exception(AnonConfig.context?.getString(R.string.failed_to_import_key_images)))
                             }
                         } finally {
                             _loaderState.postValue(false);
@@ -143,7 +143,7 @@ class QRScannerVM : ViewModel() {
                                 return Result.success(ImportEvents.IMPORT_UNSIGNED_TX)
                             } else {
                                 Timber.tag(TAG).e("Failed to import unsigned transaction")
-                                return Result.failure(Exception("Failed to import unsigned transaction"))
+                                return Result.failure(Exception(AnonConfig.context?.getString(R.string.failed_to_import_unsigned_transaction)))
                             }
                         } finally {
                             _loaderState.postValue(false);
@@ -158,12 +158,12 @@ class QRScannerVM : ViewModel() {
 
                     null -> {
                         Timber.tag(TAG).e("Unknown UR type")
-                        return Result.failure(Exception("Unknown UR type"))
+                        return Result.failure(Exception(AnonConfig.context?.getString(R.string.unknown_ur_type)))
                     }
                 }
             }
         }
-        return Result.failure(Exception("Unknown UR type"))
+        return Result.failure(Exception(AnonConfig.context?.getString(R.string.unknown_ur_type)))
     }
 
 
