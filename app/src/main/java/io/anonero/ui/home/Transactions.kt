@@ -716,6 +716,9 @@ fun TransactionScreen(
                         )
                     }
                 }
+                item(key = "transaction_offset") {
+                    Spacer(modifier = Modifier.size(40.dp))
+                }
                 items(transactions.size, key = { transactions[it].getListKey() }) {
                     with(sharedTransitionScope) {
                         TransactionItem(
