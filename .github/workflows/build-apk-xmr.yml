@@ -3,6 +3,8 @@ name: Build APK from upstream instructions
 on:
   push:
     branches: ["build/xmr-cache-apk"]
+  pull_request:
+    branches: ["main"]
   workflow_dispatch:
 
 permissions:
