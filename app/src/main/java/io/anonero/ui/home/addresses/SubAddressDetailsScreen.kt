@@ -80,7 +80,7 @@ fun SubAddressDetailScreen(
         SubAddressDetail(subAddress)
     }
     val transactions by subAddressDetailVm.transactions.observeAsState(listOf())
-    var addressLabel by remember { mutableStateOf(subAddress.displayLabel) }
+    var addressLabel by remember { mutableStateOf(if (subAddress.addressIndex == 0) "主地址 0" else "子地址 ${subAddress.addressIndex}") }
     BackHandler {
         onBackPress()
     }
