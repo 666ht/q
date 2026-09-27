@@ -207,16 +207,19 @@ class AnonWalletHandler(
 
     fun wipe(passPhrase: String): Boolean {
         WalletManager.instance?.wallet?.pauseRefresh()
-        WalletManager.instance?.wallet?.stopBackgroundSync(passPhrase)
-        WalletManager.instance?.setDaemon(null)
-        if (WalletManager.instance?.wallet?.close() == true) {
-            AnonConfig.context?.let { AnonConfig.getDefaultWalletDir(it) }
-                ?.deleteRecursively()
-            return true
-        } else {
-            throw UnableToCloseWallet()
+        var closed = false
+        try {
+            WalletManager.instance?.wallet?.stopBackgroundSync(passPhrase)
+            WalletManager.instance?.setDaemon(null)
+            closed = WalletManager.instance?.wallet?.close() == true
+        } catch (e: Exception) {
+            Timber.tag(TAG).e(e, "Wallet close failed; continuing secure wipe")
+        } finally {
+            // The confirmation is authoritative: remove the wallet directory
+            // even when an earlier wallet shutdown step fails.
+            AnonConfig.context?.let { AnonConfig.getDefaultWalletDir(it).deleteRecursively() }
         }
-
+        return closed
     }
 
 }
