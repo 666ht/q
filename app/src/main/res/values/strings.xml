@@ -221,8 +221,5 @@
     <string name="share_encrypted_backup_file">Share Encrypted Backup File</string>
     <string name="share_logs">Share Logs</string>
     <string name="clear_logs">Clear Logs</string>
-    <string name="battery_optimization_message">In order for ΛИ0ИΞR0 to function properly in the background, it is recommended to disable battery optimization.
-You can change this setting anytime in Android&apos;s app settings.
-
-Would you like to proceed?</string>
+    <string name="battery_optimization_message">为了让 ΛИ0ИΞR0 在后台正常运行，建议关闭电池优化。你可以随时在 Android 应用设置中更改此选项。是否继续？</string>
 </resources>
