@@ -599,7 +599,7 @@ fun NodeForm(
             ListItem(
                 headlineContent = {
                     Text(
-                        text = "NODE",
+                        text = stringResource(R.string.node),
                         color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.padding(start = 4.dp)
                     )
