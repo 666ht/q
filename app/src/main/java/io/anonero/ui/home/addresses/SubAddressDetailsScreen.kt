@@ -80,7 +80,14 @@ fun SubAddressDetailScreen(
         SubAddressDetail(subAddress)
     }
     val transactions by subAddressDetailVm.transactions.observeAsState(listOf())
-    var addressLabel by remember { mutableStateOf(if (subAddress.addressIndex == 0) "主地址 0" else "子地址 ${subAddress.addressIndex}") }
+    var addressLabel by remember { mutableStateOf(subAddress.label) }
+    val displayAddressLabel = remember(addressLabel, subAddress.addressIndex) {
+        if (addressLabel.isEmpty() || Subaddress.DEFAULT_LABEL_FORMATTER.matcher(addressLabel).matches()) {
+            if (subAddress.addressIndex == 0) "主地址 0" else "子地址 ${subAddress.addressIndex}"
+        } else {
+            addressLabel.replace(Regex("""\s*[#＃]?\s*\d+$"""), "")
+        }
+    }
     BackHandler {
         onBackPress()
     }
@@ -164,7 +171,7 @@ fun SubAddressDetailScreen(
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Text(
-                                    addressLabel,
+                                    displayAddressLabel,
                                     modifier = Modifier.clickable {
                                         labelDialog = true
                                     },
