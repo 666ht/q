@@ -1,9 +1,9 @@
 <resources>
-<string name="polyseed_mnemonic"></string>
-    <string name="import_polyseed_mnemonic"></string>
+<string name="polyseed_mnemonic">Polyseed 助记词</string>
+    <string name="import_polyseed_mnemonic">导入 Polyseed 助记词</string>
     <string name="enter_seed">助记词</string>
     <string name="next">下一步</string>
-    <string name="passphrase_encryption"></string>
+    <string name="passphrase_encryption">密码短语加密</string>
     <string name="passphrase">短语密码</string>
     <string name="confirm_passphrase">确认密码</string>
     <string name="passphrases_do_not_match">短语密码不匹配</string>
@@ -20,7 +20,8 @@
     <string name="send">发送</string>
     <string name="settings">设置</string>
     <string name="set_subaddress_label">添加标签</string>
-    <string name="node_connection"></string>
+    <string name="node_connection">节点连接</string>
+    <string name="clear">清除</string>
     <string name="node">节点</string>
     <string name="onion_address_example">http://onion地址:端口</string>
     <string name="username">用户名</string>
