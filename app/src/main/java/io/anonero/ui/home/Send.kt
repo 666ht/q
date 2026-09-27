@@ -437,7 +437,7 @@ fun SendScreen(
                 ){
                     Image(
                         painter = painterResource(R.drawable.ic_anon),
-                        contentDescription = "Anon nero icon",
+                        contentDescription = stringResource(R.string.anon_icon),
                         modifier = Modifier
                             .size(110.dp)
                     )
