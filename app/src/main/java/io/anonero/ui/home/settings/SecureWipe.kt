@@ -4,6 +4,7 @@ import AnonNeroTheme
 import android.app.ActivityManager
 import android.content.SharedPreferences
 import android.view.HapticFeedbackConstants
+import android.os.Process
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.LocalActivity
 import androidx.compose.animation.core.LinearOutSlowInEasing
@@ -200,43 +201,40 @@ class SecureWipeViewModel(
                     wipeFailure = wipeFailure ?: it
                     Timber.tag(TAG).e(it, "Secure wipe state disposal step failed")
                 }
-            _wipeProgress.postValue(.8f)
-            _wipeProgressMessage.postValue(AnonConfig.context?.getString(R.string.logs_cleared) ?: "正在完成最终清理")
-            delay(1200)
-            _wipeProgress.postValue(1f)
-            delay(500)
 
-            // Final step: let Android clear the complete application data set.
-            // This covers all app-private files, preferences, databases, caches,
-            // and other persistent app state, not just known wallet paths.
-            val activityManager = activity?.getSystemService(ActivityManager::class.java)
-            if (activityManager != null) {
-                val clearedBySystem = runCatching {
-                    activityManager.clearApplicationUserData()
-                }.getOrElse {
-                    wipeFailure = wipeFailure ?: it
-                    Timber.tag(TAG).e(it, "System application-data wipe failed")
-                    false
-                }
-                if (!clearedBySystem) {
-                    wipeFailure = wipeFailure ?: IllegalStateException("Android application-data wipe failed")
-                }
+            _wipeProgress.postValue(.95f)
+            _wipeProgressMessage.postValue(
+                AnonConfig.context?.getString(R.string.logs_cleared) ?: "正在完成最终清理"
+            )
+            delay(300)
+
+            // Secure wipe means the entire application data set is removed.
+            // Do not navigate back into the app after this point because that
+            // can recreate preferences or cache files.
+            val context = AnonConfig.context?.applicationContext
+            val allDataCleared = if (context != null) {
+                runCatching { AnonConfig.clearAllAppData(context) }
+                    .onFailure {
+                        wipeFailure = wipeFailure ?: it
+                        Timber.tag(TAG).e(it, "Complete application-data wipe failed")
+                    }
+                    .getOrDefault(false)
             } else {
-                wipeFailure = wipeFailure ?: IllegalStateException("ActivityManager unavailable for full data wipe")
+                wipeFailure = wipeFailure ?: IllegalStateException("Application context unavailable")
+                false
             }
 
-            if (wipeFailure != null || !walletWiped) {
+            if (wipeFailure != null || !walletWiped || !allDataCleared) {
                 _wipeErrorMessage.postValue(
                     AnonConfig.context?.getString(R.string.wallet_wipe_failed) ?: "钱包删除失败"
                 )
-                _wipeProgressMessage.postValue(
-                    AnonConfig.context?.getString(R.string.wallet_wiped_successfully) ?: "钱包已成功擦除"
-                )
-            } else {
-                _wipeProgressMessage.postValue(
-                    AnonConfig.context?.getString(R.string.wallet_wiped_successfully) ?: "钱包已成功擦除"
-                )
+                return@launch
             }
+
+            // Exit immediately so the running process cannot recreate any
+            // application data after the final deletion pass.
+            _wipeProgress.postValue(1f)
+            Process.killProcess(Process.myPid())
         }
     }
 
