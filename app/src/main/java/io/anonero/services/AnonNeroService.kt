@@ -140,8 +140,13 @@ class AnonNeroService : Service() {
                         }
                     }
                 }
-                if (wallet.fullStatus.connectionStatus != Wallet.ConnectionStatus.ConnectionStatus_Connected) {
-                    torSate = ""
+                val torSate = if (
+                    wallet.fullStatus.connectionStatus == Wallet.ConnectionStatus.ConnectionStatus_Connected &&
+                    torService.socks != null
+                ) {
+                    " | Tor 守护进程：${torService.socks?.port.toString()}"
+                } else {
+                    ""
                 }
                 withContext(Dispatchers.Main) {
                     mNotificationManager.notify(
