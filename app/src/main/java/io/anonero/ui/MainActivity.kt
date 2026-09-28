@@ -151,12 +151,11 @@ class MainActivity : ComponentActivity() {
             return@registerForActivityResult
         }
 
-        // Start only after Android has completed the permission transaction.
-        runCatching {
-            startAnonService(this)
-        }.onFailure {
-            Timber.tag(TAG).e(it, "Failed to start notification service after permission grant")
-        }
+        // Permission approval must not start the wallet foreground service here.
+        // Service creation can involve Koin/native wallet initialization; doing that
+        // directly from the permission result can terminate the process on some
+        // Android versions. The normal wallet lifecycle starts the service separately.
+        Timber.tag(TAG).i("Notification permission granted")
     }
 
     fun startNotificationService() {
