@@ -73,6 +73,8 @@ fun SubAddressesScreen(
     }
     val vm = viewModel<SubAddressListViewModel>()
     val addresses by vm.subAddresses.observeAsState(listOf())
+    val walletState: WalletState by inject(WalletState::class.java)
+    val hideAmounts by walletState.hideAmountsFlow.asLiveData().observeAsState(false)
     Scaffold(
         topBar = {
             TopAppBar(
@@ -124,7 +126,7 @@ fun SubAddressesScreen(
                                     color = MaterialTheme.colorScheme.primary,
                                 )
                                 Text(
-                                    Formats.getDisplayAmount(address.totalAmount),
+                                    if (hideAmounts) Formats.maskAmount(address.totalAmount) else Formats.getDisplayAmount(address.totalAmount),
                                     color = MaterialTheme.colorScheme.primary,
                                     fontWeight = FontWeight.SemiBold
                                 )
