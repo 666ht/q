@@ -8,11 +8,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
@@ -37,6 +37,7 @@ import java.util.Locale
 
 private const val BLOCK_TIME_SECONDS = 120L
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ResetSyncPage(
     onBackPress: () -> Unit = {}
@@ -91,9 +92,10 @@ fun ResetSyncPage(
                 .fillMaxSize()
                 .padding(padding)
                 .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.Top
+            verticalArrangement = Arrangement.SpaceBetween
         ) {
-            Spacer(modifier = Modifier.height(56.dp))
+            Column {
+                Spacer(modifier = Modifier.height(56.dp))
 
             OutlinedTextField(
                 value = height,
@@ -129,7 +131,7 @@ fun ResetSyncPage(
                 )
             }
 
-            Spacer(modifier = Modifier.weight(1f))
+            }
 
             Button(
                 onClick = {
