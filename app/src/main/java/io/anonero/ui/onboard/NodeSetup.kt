@@ -129,7 +129,7 @@ fun SetupNodeComposable(
                     text = stringResource(R.string.node_connection),
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
-                    modifier = Modifier.alpha(if (showTitle) 1f else 0f)
+                    modifier = Modifier.alpha(0f)
                 )
             }
             Column(
