@@ -25,6 +25,10 @@ class Coins(private val handle: Long){
     }
 
     private external fun refreshJ(): List<CoinsInfo>
+
+    external fun setFrozen(publicKey: String)
+    external fun thaw(publicKey: String)
+
     external fun getCount(): Int
 
     companion object {
