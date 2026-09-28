@@ -177,6 +177,12 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        if (walletState.isWiping()) {
+            scope.cancel()
+            torService.dispose()
+            super.onDestroy()
+            return
+        }
         scope.launch(Dispatchers.IO) {
             runCatching {
                 WalletManager.instance?.wallet?.let {
