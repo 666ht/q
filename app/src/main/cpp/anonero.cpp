@@ -423,21 +423,31 @@ Java_io_anonero_model_WalletManager_openWalletJ(JNIEnv *env, jobject instance,
     const char *_path = env->GetStringUTFChars(path, nullptr);
     const char *_password = env->GetStringUTFChars(password, nullptr);
     Monero::NetworkType _networkType = static_cast<Monero::NetworkType>(networkType);
-    Monero::Wallet *wallet =
-            Monero::WalletManagerFactory::getWalletManager()->openWallet(
-                    std::string(_path),
-                    std::string(_password),
-                    _networkType);
+    Monero::Wallet *wallet = nullptr;
+    try {
+        wallet = Monero::WalletManagerFactory::getWalletManager()->openWallet(
+                std::string(_path),
+                std::string(_password),
+                _networkType);
 
-    if (!viewOnly) {
-        // setup background sync
-        bool setupStatus = wallet->setupBackgroundSync(Monero::Wallet::BackgroundSync_ReusePassword,
-                                                       std::string(_password), {});
-        if (setupStatus == true) {
-            LOGD("openWalletJ(): setupBackgroundSync(): success!");
-        } else {
-            LOGD("openWalletJ(): setupBackgroundSync(): failure!");
+        if (wallet == nullptr) {
+            LOGD("openWalletJ(): openWallet returned null");
+        } else if (!viewOnly) {
+            bool setupStatus = wallet->setupBackgroundSync(
+                    Monero::Wallet::BackgroundSync_ReusePassword,
+                    std::string(_password), {});
+            if (setupStatus == true) {
+                LOGD("openWalletJ(): setupBackgroundSync(): success!");
+            } else {
+                LOGD("openWalletJ(): setupBackgroundSync(): failure!");
+            }
         }
+    } catch (const std::exception &e) {
+        LOGD("openWalletJ(): native exception: %s", e.what());
+        wallet = nullptr;
+    } catch (...) {
+        LOGD("openWalletJ(): unknown native exception");
+        wallet = nullptr;
     }
     env->ReleaseStringUTFChars(path, _path);
     env->ReleaseStringUTFChars(password, _password);
@@ -1194,8 +1204,23 @@ JNIEXPORT jboolean JNICALL
 Java_io_anonero_model_Wallet_stopBackgroundSync(JNIEnv *env, jobject instance, jstring password) {
     LOGD("stopBackgroundSync(): start");
     Monero::Wallet *wallet = getHandle<Monero::Wallet>(env, instance);
+    if (wallet == nullptr) {
+        LOGD("stopBackgroundSync(): wallet handle is null");
+        return JNI_FALSE;
+    }
     const char *_password = env->GetStringUTFChars(password, nullptr);
-    bool bgsyncStatus = wallet->stopBackgroundSync(std::string(_password));
+    if (_password == nullptr) {
+        LOGD("stopBackgroundSync(): password conversion failed");
+        return JNI_FALSE;
+    }
+    bool bgsyncStatus = false;
+    try {
+        bgsyncStatus = wallet->stopBackgroundSync(std::string(_password));
+    } catch (const std::exception &e) {
+        LOGD("stopBackgroundSync(): native exception: %s", e.what());
+    } catch (...) {
+        LOGD("stopBackgroundSync(): unknown native exception");
+    }
     if (bgsyncStatus == true) {
         LOGD("stopBackgroundSync(): end: success!");
     } else {
