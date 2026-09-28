@@ -69,30 +69,16 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
         } else {
             val heightDiff = daemonHeight - chainHeight
             if (heightDiff >= 2) {
-                // The daemon can advance while the wallet is refreshing. Do not
-                // restart/init the wallet here: that resets the refresh cycle and
-                // can leave the UI progress indicator running forever.
                 updateSyncProgress(chainHeight)
                 return
             }
 
-            if (!wallet.isSynchronized) {
-                updateSyncProgress(chainHeight)
-            }
-
-            // The native wallet refresh has completed. Publish the native balance
-            // and refreshed transaction history before ending the UI sync state.
+            // Native refresh has caught up with the daemon. Publish the final
+            // wallet snapshot before clearing the UI sync/loading state.
             wallet.setSynchronized()
-            walletState.syncUpdate(SyncProgress(1f, 0L))
-
-            // Publish the completed native state, then run the normal state
-            // update once more so every balance/transaction observer receives
-            // the final values from the same completed wallet snapshot.
             walletState.publishAfterSync()
             walletState.update()
-
-            // Both loading sources drive the progress UI. Clear loading only
-            // after the final wallet state has been published.
+            walletState.syncUpdate(SyncProgress(1f, 0L))
             walletState.setLoading(false)
 
             try {
