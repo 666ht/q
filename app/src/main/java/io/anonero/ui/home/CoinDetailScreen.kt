@@ -23,6 +23,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.mutableStateOf
@@ -85,13 +86,15 @@ fun CoinDetailScreen(
                         },
                         style = MaterialTheme.typography.titleMedium
                     )
-                    CircularProgressIndicator(
-                        modifier = Modifier
-                            .padding(start = 8.dp)
-                            .size(28.dp),
-                        color = MaterialTheme.colorScheme.primary,
-                        strokeWidth = 2.dp
-                    )
+                    if (busy) {
+                        CircularProgressIndicator(
+                            modifier = Modifier
+                                .padding(start = 8.dp)
+                                .size(28.dp),
+                            color = MaterialTheme.colorScheme.primary,
+                            strokeWidth = 2.dp
+                        )
+                    }
                 }
                 Text(
                     coin?.let { if (hideAmounts) Formats.maskAmount(it.amount) else Formats.getDisplayAmount(it.amount) } ?: "____",
@@ -110,12 +113,15 @@ fun CoinDetailScreen(
                     if (busy) return@OutlinedButton
                     busy = true
                     scope.launch(Dispatchers.IO) {
-                        if (selectedCoin.frozen) {
-                            walletState.thawCoin(selectedCoin.pub_key)
-                        } else {
-                            walletState.freezeCoin(selectedCoin.pub_key)
+                        try {
+                            if (selectedCoin.frozen) {
+                                walletState.thawCoin(selectedCoin.pub_key)
+                            } else {
+                                walletState.freezeCoin(selectedCoin.pub_key)
+                            }
+                        } finally {
+                            busy = false
                         }
-                        busy = false
                     }
                 },
                 modifier = Modifier
