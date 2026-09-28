@@ -367,7 +367,7 @@ fun NodeSettings(onBackPress: () -> Unit = {}) {
                                 editingNode = null
                                 showNodeDetails = true
                             }
-                        ) { Text(stringResource(R.string.add_node)) }
+                        ) { Text(stringResource(R.string.add_node_title)) }
                         IconButton(
                             colors = IconButtonDefaults.iconButtonColors(
                                 contentColor = Color.White
