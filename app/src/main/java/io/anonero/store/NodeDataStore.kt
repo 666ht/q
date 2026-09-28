@@ -76,6 +76,16 @@ class NodesRepository(private val context: Context) {
         }
     }
 
+    suspend fun addItemFirst(item: Node) {
+        context.nodeDataStore.updateData { currentItems ->
+            if (currentItems.find { it.toNodeString() == item.toNodeString() } == null) {
+                listOf(item) + currentItems
+            } else {
+                currentItems
+            }
+        }
+    }
+
 
     // Add a new item to the list
     suspend fun getAll() : List<Node> {
