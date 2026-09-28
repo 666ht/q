@@ -80,6 +80,7 @@ fun SubAddressDetailScreen(
         SubAddressDetail(subAddress)
     }
     val transactions by subAddressDetailVm.transactions.observeAsState(listOf())
+    val hideAmounts by walletState.hideAmountsFlow.asLiveData().observeAsState(false)
     var addressLabel by remember { mutableStateOf(subAddress.label) }
     val displayAddressLabel = remember(addressLabel, subAddress.addressIndex) {
         subAddress.withLabel(addressLabel).displayLabel
@@ -174,7 +175,7 @@ fun SubAddressDetailScreen(
                                     color = MaterialTheme.colorScheme.primary,
                                 )
                                 Text(
-                                    Formats.getDisplayAmount(subAddress.totalAmount),
+                                    if (hideAmounts) Formats.maskAmount(subAddress.totalAmount) else Formats.getDisplayAmount(subAddress.totalAmount),
                                     color = MaterialTheme.colorScheme.primary,
                                     fontWeight = FontWeight.SemiBold
                                 )
