@@ -215,6 +215,15 @@ class WalletState {
         val done = syncProgress.progress >= 1f || syncProgress.left <= 0L
         _syncProgress.update { if (done) null else syncProgress }
         _isSyncing.set(!done)
+        if (done) {
+            // The native refresh has reached the daemon height. Mark the
+            // connection as connected as upstream does, otherwise the home
+            // progress indicator remains visible forever because it sees a
+            // null/disconnected connection state.
+            _connectionStatus.update {
+                Wallet.ConnectionStatus.ConnectionStatus_Connected
+            }
+        }
     }
 
     /**
