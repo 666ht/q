@@ -66,6 +66,7 @@ fun CoinsScreen(
 ) {
     val walletState: WalletState by inject(WalletState::class.java)
     val coins by walletState.coins.collectAsState(arrayListOf())
+    val hideAmounts by walletState.hideAmountsFlow.collectAsState(false)
     var selectedCoins by remember { mutableStateOf(selected) }
     val connectionStatus by walletState.walletConnectionStatus.asLiveData().observeAsState(
         Wallet.ConnectionStatus.ConnectionStatus_Disconnected
@@ -162,7 +163,7 @@ fun CoinsScreen(
                                 color = MaterialTheme.colorScheme.primary,
                             )
                             Text(
-                                Formats.getDisplayAmount(coin.amount),
+                                if (hideAmounts) Formats.maskAmount(coin.amount) else Formats.getDisplayAmount(coin.amount),
                                 modifier = Modifier.weight(1f),
                                 color = MaterialTheme.colorScheme.primary,
                                 fontWeight = FontWeight.SemiBold,
