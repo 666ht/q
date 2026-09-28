@@ -336,6 +336,9 @@ fun NodeSettings(onBackPress: () -> Unit = {}) {
                         onConnect = {
                             if (editingNode != null) {
                                 nodeSettingsVM.updateItem(editingNode!!, it)
+                                scope.launch {
+                                    nodeSettingsVM.connect(it)
+                                }
                             } else {
                                 nodeSettingsVM.addItem(it)
                             }
@@ -754,7 +757,11 @@ fun NodeForm(
                     }
                 },
             ) {
-                Text(stringResource(R.string.add_node))
+                Text(
+                    stringResource(
+                        if (node != null) R.string.connect else R.string.add_node
+                    )
+                )
             }
         }
     }
