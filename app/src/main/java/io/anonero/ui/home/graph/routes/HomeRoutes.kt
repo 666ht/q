@@ -44,6 +44,9 @@ data object CoinsScreenRoute
 data object SettingsNodeRoute
 
 @Serializable
+data object ResetSyncRoute
+
+@Serializable
 data object ProxySettingsRoute
 
 @Serializable
