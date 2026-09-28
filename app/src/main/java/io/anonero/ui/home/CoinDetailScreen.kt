@@ -84,6 +84,20 @@ fun CoinDetailScreen(
                         },
                         style = MaterialTheme.typography.titleMedium
                     )
+                    Text(
+                        coin?.let {
+                            if (hideAmounts) Formats.maskAmount(it.amount)
+                            else Formats.getDisplayAmount(it.amount)
+                        } ?: "____",
+                        modifier = Modifier.weight(1f),
+                        color = if (coin?.frozen == true) {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        } else {
+                            MaterialTheme.colorScheme.primary
+                        },
+                        style = MaterialTheme.typography.titleMedium,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                    )
                     if (busy) {
                         CircularProgressIndicator(
                             modifier = Modifier
@@ -91,13 +105,12 @@ fun CoinDetailScreen(
                                 .size(28.dp),
                             strokeWidth = 2.dp
                         )
+                    } else {
+                        androidx.compose.foundation.layout.Spacer(
+                            modifier = Modifier.size(36.dp)
+                        )
                     }
                 }
-                Text(
-                    coin?.let { if (hideAmounts) Formats.maskAmount(it.amount) else Formats.getDisplayAmount(it.amount) } ?: "____",
-                    modifier = Modifier.padding(top = 12.dp),
-                    style = MaterialTheme.typography.headlineSmall
-                )
                 Text(
                     coin?.pub_key ?: "____",
                     modifier = Modifier.padding(top = 12.dp),
