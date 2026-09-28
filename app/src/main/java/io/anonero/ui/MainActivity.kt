@@ -146,25 +146,40 @@ class MainActivity : ComponentActivity() {
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted ->
-        if (isGranted) {
-            Intent(applicationContext, AnonNeroService::class.java).also {
-                it.action = "start"
-                ContextCompat.startForegroundService(applicationContext, it)
-            }
+        if (!isGranted) {
+            Timber.tag(TAG).w("Notification permission was not granted")
+            return@registerForActivityResult
         }
-        //handle and show dialog
+
+        // Start only after Android has completed the permission transaction.
+        runCatching {
+            startAnonService(this)
+        }.onFailure {
+            Timber.tag(TAG).e(it, "Failed to start notification service after permission grant")
+        }
     }
 
     fun startNotificationService() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+            runCatching {
+                startAnonService(this)
+            }.onFailure {
+                Timber.tag(TAG).e(it, "Failed to start notification service")
+            }
+            return
+        }
+
         if (ContextCompat.checkSelfPermission(
                 this, Manifest.permission.POST_NOTIFICATIONS
             ) != PackageManager.PERMISSION_GRANTED
         ) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-            }
+            requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         } else {
-            startAnonService(applicationContext)
+            runCatching {
+                startAnonService(this)
+            }.onFailure {
+                Timber.tag(TAG).e(it, "Failed to start notification service")
+            }
         }
     }
 
