@@ -231,16 +231,24 @@ class WalletState {
         _syncProgress.update { if (done) null else syncProgress }
         _isSyncing.set(!done)
 
-        if (done) {
-            // The last block has arrived: publish the wallet data immediately.
-            // refreshed() also performs this update when the native refresh callback
-            // arrives, so this is safe as an early completion path.
-            getWallet?.let { wallet ->
-                runCatching { wallet.refreshHistory() }
-                    .onFailure { Timber.tag(TAG).e(it, "final refreshHistory error") }
+        if (done && !_isWiping.get()) {
+            // The block counter can reach the target before the native wallet has
+            // finished its final refresh. Force one synchronous refresh so balance
+            // and transaction history are read from the final wallet state.
+            refreshScope.launch {
+                val wallet = getWallet ?: return@launch
+                runCatching {
+                    wallet.refresh()
+                    wallet.refreshHistory()
+                    wallet.refreshCoins()
+                    update()
+                }.onFailure {
+                    Timber.tag(TAG).e(it, "final wallet refresh error")
+                    // Still publish whatever final state is available.
+                    update()
+                }
+                setLoading(false)
             }
-            update()
-            setLoading(false)
         }
     }
 
