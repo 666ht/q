@@ -384,6 +384,9 @@ fun HomeScreenComposable(modifier: Modifier = Modifier, mainNavController: NavHo
                         NodeSettings(
                             onBackPress = {
                                 bottomNavController.popBackStack()
+                            },
+                            navigateTo = { route ->
+                                bottomNavController.navigate(route)
                             }
                         )
                     }
