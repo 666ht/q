@@ -4,7 +4,6 @@ import AnonNeroTheme
 import android.content.SharedPreferences
 import android.util.Log
 import android.view.HapticFeedbackConstants
-import androidx.activity.compose.LocalActivity
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -59,7 +58,6 @@ import androidx.core.content.edit
 import io.anonero.R
 import io.anonero.icons.AnonIcons
 import io.anonero.services.WalletState
-import io.anonero.ui.MainActivity
 import io.anonero.ui.viewmodels.AppViewModel
 import io.anonero.util.CrazyPassEncoder
 import io.anonero.util.PREFS_PIN_HASH
@@ -104,7 +102,6 @@ fun LockScreen(
     onUnLocked: (String, LockScreenShortCut) -> Unit = { _, _ -> }
 ) {
     val view = LocalView.current
-    val activity = LocalActivity.current
     val prefs = koinInject<SharedPreferences>(named(WALLET_PREFERENCES))
     val currentPin = remember { mutableStateListOf<Int>() }
     var pinError by remember { mutableStateOf(false) }
@@ -182,7 +179,6 @@ fun LockScreen(
                                 appViewModel.startService()
                                 withContext(Dispatchers.Main) {
                                     onUnLocked(pin, shortCut)
-                                    (activity as MainActivity).startNotificationService()
                                 }
                             } else {
                                 withContext(Dispatchers.Main) {
