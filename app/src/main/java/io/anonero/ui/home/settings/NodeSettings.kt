@@ -433,6 +433,11 @@ fun NodeSettings(onBackPress: () -> Unit = {}) {
                         nodeSettingsVM = nodeSettingsVM,
                         onDisconnect = {
                             nodeSettingsVM.disconnect()
+                        },
+                        onRemove = { nodeSettingsVM.removeItem(activeNode!!.toNodeString()) },
+                        onEdit = {
+                            editingNode = activeNode
+                            showNodeDetails = true
                         })
                 }
             if (availableNodes.isNotEmpty())
