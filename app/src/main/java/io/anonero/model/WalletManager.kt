@@ -91,9 +91,10 @@ class WalletManager {
 
     fun openWallet(path: String, password: String): Wallet {
         val walletHandle = openWalletJ(path, password, networkType.value, AnonConfig.viewOnly)
-        val wallet = Wallet(walletHandle)
-        manageWallet(wallet)
-        return wallet
+        if (walletHandle == 0L) {
+            throw IllegalStateException("Native wallet open failed")
+        }
+        return Wallet(walletHandle).also { manageWallet(it) }
     }
 
     private external fun openWalletJ(
