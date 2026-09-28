@@ -169,6 +169,7 @@
     <string name="clearing_logs">正在删除日志</string>
     <string name="logs_cleared">日志已删除</string>
     <string name="wallet_wiped_successfully">钱包已成功删除</string>
+    <string name="wallet_wipe_failed">钱包删除失败</string>
     <string name="pending_transaction_no_txid">待处理交易没有交易 ID</string>
     <string name="wallet_available">钱包可用</string>
     <string name="failed_to_send_transaction">交易发送失败</string>
