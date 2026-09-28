@@ -1,6 +1,7 @@
 package io.anonero.ui.home.settings
 
 import AnonNeroTheme
+import android.app.ActivityManager
 import android.content.SharedPreferences
 import android.view.HapticFeedbackConstants
 import androidx.activity.compose.BackHandler
@@ -203,6 +204,27 @@ class SecureWipeViewModel(
             _wipeProgressMessage.postValue(AnonConfig.context?.getString(R.string.logs_cleared) ?: "正在完成最终清理")
             delay(1200)
             _wipeProgress.postValue(1f)
+            delay(500)
+
+            // Final step: let Android clear the complete application data set.
+            // This covers all app-private files, preferences, databases, caches,
+            // and other persistent app state, not just known wallet paths.
+            val activityManager = activity?.getSystemService(ActivityManager::class.java)
+            if (activityManager != null) {
+                val clearedBySystem = runCatching {
+                    activityManager.clearApplicationUserData()
+                }.getOrElse {
+                    wipeFailure = wipeFailure ?: it
+                    Timber.tag(TAG).e(it, "System application-data wipe failed")
+                    false
+                }
+                if (!clearedBySystem) {
+                    wipeFailure = wipeFailure ?: IllegalStateException("Android application-data wipe failed")
+                }
+            } else {
+                wipeFailure = wipeFailure ?: IllegalStateException("ActivityManager unavailable for full data wipe")
+            }
+
             if (wipeFailure != null || !walletWiped) {
                 _wipeErrorMessage.postValue(
                     AnonConfig.context?.getString(R.string.wallet_wipe_failed) ?: "钱包删除失败"
