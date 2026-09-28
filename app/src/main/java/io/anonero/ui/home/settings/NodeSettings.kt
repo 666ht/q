@@ -343,8 +343,7 @@ fun NodeSettings(onBackPress: () -> Unit = {}, navigateTo: (Any) -> Unit = {}) {
                                 nodeSettingsVM.addItem(it)
                             }
                         },
-                        nodeSettingsVM = nodeSettingsVM,
-                        navigateTo = navigateTo
+                        nodeSettingsVM = nodeSettingsVM
                     )
                 }
             }
@@ -363,12 +362,6 @@ fun NodeSettings(onBackPress: () -> Unit = {}, navigateTo: (Any) -> Unit = {}) {
                         }
                     },
                     actions = {
-                        TextButton(
-                            onClick = {
-                                editingNode = null
-                                showNodeDetails = true
-                            }
-                        ) { Text(stringResource(R.string.add_node_title)) }
                         IconButton(
                             colors = IconButtonDefaults.iconButtonColors(
                                 contentColor = Color.White
@@ -591,8 +584,7 @@ fun NodeForm(
     node: Node? = null,
     onBackPress: () -> Unit = {},
     onConnect: (node: Node) -> Unit = {},
-    nodeSettingsVM: NodeSettingsViewModel,
-    navigateTo: (Any) -> Unit = {}
+    nodeSettingsVM: NodeSettingsViewModel
 ) {
     val connectionError by nodeSettingsVM.connectionError.observeAsState(null)
     var rpcHost by remember(node) { mutableStateOf(node?.host ?: "") }
