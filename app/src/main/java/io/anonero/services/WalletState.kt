@@ -325,6 +325,24 @@ class WalletState {
         }
     }
 
+    fun resetSyncFromHeight(height: Long): Result<Boolean> {
+        return try {
+            val wallet = getWallet ?: return Result.failure(Exception("Wallet not initialized"))
+            if (wallet.fullStatus.connectionStatus != Wallet.ConnectionStatus.ConnectionStatus_Connected) {
+                return Result.failure(Exception(AnonConfig.context?.getString(R.string.resync_daemon_required) ?: "Please connect to daemon for resync"))
+            }
+            if (height < 0L) return Result.failure(IllegalArgumentException("Invalid restore height"))
+            wallet.setRestoreHeight(height)
+            wallet.store()
+            wallet.rescanBlockchainAsync()
+            setLoading(true)
+            Result.success(true)
+        } catch (e: Exception) {
+            Timber.tag(TAG).e(e, "reset sync error")
+            Result.failure(e)
+        }
+    }
+
     fun resyncBlockchain(): Result<Boolean> {
         setLoading(true);
         try {
