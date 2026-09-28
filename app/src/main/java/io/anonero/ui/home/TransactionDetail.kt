@@ -79,6 +79,7 @@ fun TransactionDetailScreen(
     val walletState = koinInject<WalletState>()
     val transactions by walletState.transactions.collectAsState(listOf())
     val transactionInfo = transactions.find { it.hash == transactionId }
+        ?: WalletManager.instance?.wallet?.history?.all?.find { it.hash == transactionId }
     val hideAmounts by walletState.hideAmountsFlow.collectAsState(false)
     val scope = rememberCoroutineScope()
     var notesDialog by remember { mutableStateOf(false) }
