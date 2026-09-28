@@ -62,6 +62,7 @@ fun CoinsScreen(
     navigateToSpend: (route: SendScreenRoute) -> Unit = {},
     onBackPress: () -> Unit = {},
     selected: Set<String> = setOf(),
+    onCoinClick: (CoinsInfo) -> Unit = {},
 ) {
     val walletState: WalletState by inject(WalletState::class.java)
     val coins by walletState.coins.collectAsState(arrayListOf())
@@ -72,13 +73,12 @@ fun CoinsScreen(
     val loading by walletState.isLoading.asLiveData().observeAsState(false)
     val nodeConnected = connectionStatus == Wallet.ConnectionStatus.ConnectionStatus_Connected
 
-
-    var message: String? = null;
+    var message: String? = null
     if (loading) {
         message = stringResource(R.string.wallet_loading)
     } else if (!nodeConnected) {
         message = stringResource(R.string.node_disconnected)
-    } else if(coins.isEmpty()) {
+    } else if (coins.isEmpty()) {
         message = stringResource(R.string.no_coins_available)
     }
 
@@ -95,18 +95,14 @@ fun CoinsScreen(
         floatingActionButtonPosition = FabPosition.Center,
         floatingActionButton = {
             AnimatedVisibility(
-                modifier = Modifier
-                    .padding(
-                        horizontal = 8.dp,
-                        vertical = 8.dp
-                    ),
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
                 visible = selectedCoins.isNotEmpty(),
                 enter = slideInVertically(
-                    initialOffsetY = { it }, // Slide in from the bottom
+                    initialOffsetY = { it },
                     animationSpec = tween(durationMillis = 220)
                 ),
                 exit = slideOutVertically(
-                    targetOffsetY = { it }, // Slide out to the bottom
+                    targetOffsetY = { it },
                     animationSpec = tween(durationMillis = 220)
                 )
             ) {
@@ -125,10 +121,7 @@ fun CoinsScreen(
                     },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(
-                            horizontal = 12.dp
-                        ),
-
+                        .padding(horizontal = 12.dp),
                     shape = MaterialTheme.shapes.medium,
                     contentPadding = PaddingValues(12.dp)
                 ) {
@@ -138,21 +131,16 @@ fun CoinsScreen(
         },
         topBar = {
             TopAppBar(
-                title = {
-                    Text(stringResource(R.string.coins))
-                },
+                title = { Text(stringResource(R.string.coins)) },
                 navigationIcon = {
-                    IconButton(
-                        onClick = onBackPress
-                    ) {
+                    IconButton(onClick = onBackPress) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
                     }
                 },
             )
-        }) {
-        LazyColumn(modifier = Modifier.padding(it).padding(
-            bottom = 44.dp
-        )) {
+        }
+    ) {
+        LazyColumn(modifier = Modifier.padding(it).padding(bottom = 44.dp)) {
             item {
                 WalletProgressIndicator()
             }
@@ -160,12 +148,9 @@ fun CoinsScreen(
                 val coin = coins[index]
                 ListItem(
                     modifier = Modifier
-                        .padding(
-                            horizontal = 4.dp,
-                            vertical = 6.dp
-                        )
+                        .padding(horizontal = 4.dp, vertical = 6.dp)
                         .clickable {
-                            selectCoin(coin)
+                            onCoinClick(coin)
                         },
                     headlineContent = {
                         Row(
@@ -173,7 +158,8 @@ fun CoinsScreen(
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Text(
-                                stringResource(R.string.output_number, index + 1), color = MaterialTheme.colorScheme.primary,
+                                stringResource(R.string.output_number, index + 1),
+                                color = MaterialTheme.colorScheme.primary,
                             )
                             Text(
                                 Formats.getDisplayAmount(coin.amount),
@@ -197,7 +183,7 @@ fun CoinsScreen(
                     trailingContent = {
                         Checkbox(
                             checked = selectedCoins.contains(coin.pub_key),
-                            onCheckedChange = { checked ->
+                            onCheckedChange = {
                                 selectCoin(coin)
                             }
                         )
@@ -214,13 +200,8 @@ fun CoinsScreen(
                         Text(
                             message,
                             modifier = Modifier
-                                .padding(
-                                    horizontal = 16.dp,
-                                    vertical = 8.dp
-                                )
-                                .align(
-                                    Alignment.Center
-                                ),
+                                .padding(horizontal = 16.dp, vertical = 8.dp)
+                                .align(Alignment.Center),
                             textAlign = TextAlign.Center,
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.surfaceVariant
