@@ -582,12 +582,6 @@ fun TransactionScreen(
                                 }
                             )
                             DropdownMenuItem(
-                                text = { Text(stringResource(R.string.refresh)) },
-                                onClick = {
-                                    navigateTo(CoinsScreenRoute)
-                                }
-                            )
-                            DropdownMenuItem(
                                 text = { Text(stringResource(R.string.resync_blockchain)) },
                                 onClick = {
                                     showMenu = false
