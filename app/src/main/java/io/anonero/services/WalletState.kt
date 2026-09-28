@@ -61,25 +61,18 @@ class WalletState {
     private val refreshScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     val transactions: Flow<List<TransactionInfo>> = _transactions
-
     val balanceInfo: Flow<Long?> = _balanceInfo
     val unLockedBalance: Flow<Long?> = _unLockedBalance
     val isLoading: Flow<Boolean> = _isLoading
     val isSyncing get():Boolean = _isSyncing.get()
     val backgroundSync get():Boolean = _backgroundSync.value
     val backgroundSyncFlow: Flow<Boolean> = _backgroundSync
-
     val walletStatus: Flow<Wallet.Status?> = _walletStatus
     val syncProgress: Flow<SyncProgress?> = _syncProgress
-
     val nextAddress: Flow<Subaddress?> = _nextAddress
     val coins: Flow<List<CoinsInfo>> = _coins
     val subAddresses: Flow<List<Subaddress>> = _subAddresses
-
-    val walletConnectionStatus: Flow<Wallet.ConnectionStatus?> = _walletStatus.map {
-        it?.connectionStatus
-    }
-
+    val walletConnectionStatus: Flow<Wallet.ConnectionStatus?> = _walletStatus.map { it?.connectionStatus }
     val daemonInfo: Flow<DaemonInfo?> = _connectedDaemon
     val connectionStatus: Flow<Wallet.ConnectionStatus?> = _connectionStatus
     val incomingTx = _incomingTx.asSharedFlow()
@@ -90,9 +83,7 @@ class WalletState {
             if (wallet.isInitialized) {
                 _balanceInfo.update { wallet.balance }
                 _unLockedBalance.update {
-                    if (AnonConfig.viewOnly) {
-                        wallet.viewOnlyBalance()
-                    }
+                    if (AnonConfig.viewOnly) wallet.viewOnlyBalance()
                     wallet.unlockedBalance
                 }
                 _walletStatus.update { wallet.fullStatus }
@@ -118,21 +109,17 @@ class WalletState {
             val oldTxCount = _transactions.value.size
             val updatedTxs = (wallet.history?.all?.sortedWith(comparator = { o1, o2 ->
                 o2.timestamp.compareTo(o1.timestamp)
-            }) ?: listOf()).fastDistinctBy {
-                it.getListKey()
-            }
+            }) ?: listOf()).fastDistinctBy { it.getListKey() }
             _transactions.update { updatedTxs }
             if (oldTxCount > 0 && updatedTxs.size > oldTxCount) {
                 val hasNewIncoming = updatedTxs.take(updatedTxs.size - oldTxCount).any {
                     it.direction == TransactionInfo.Direction.Direction_In
                 }
-                if (hasNewIncoming) {
-                    _incomingTx.tryEmit(Unit)
-                }
+                if (hasNewIncoming) _incomingTx.tryEmit(Unit)
             }
             if (!backgroundSync) {
-                _nextAddress.update { (wallet.getLatestSubAddress()) }
-                _subAddresses.update { (wallet.getAllUsedSubAddresses()).reversed() }
+                _nextAddress.update { wallet.getLatestSubAddress() }
+                _subAddresses.update { wallet.getAllUsedSubAddresses().reversed() }
                 _coins.update { (wallet.coins?.all ?: listOf()).fastFilter { !it.spent } }
             }
         }
@@ -147,7 +134,7 @@ class WalletState {
 
     fun setLoading(b: Boolean) {
         if (_isWiping.get()) return
-        this._isLoading.update { b }
+        _isLoading.update { b }
     }
 
     fun isWiping(): Boolean = _isWiping.get()
@@ -155,7 +142,7 @@ class WalletState {
     fun emitUnlockShortcut(shortcut: LockScreenShortCut) {
         _unlockShortcut.trySend(shortcut)
     }
-    
+
     suspend fun enterBackgroundSync(): Boolean = bgSyncMutex.withLock {
         val wallet = getWallet ?: return false
         if (!wallet.isInitialized || backgroundSync) return false
@@ -164,10 +151,7 @@ class WalletState {
         if (AnonConfig.viewOnly) return true
         _blockUpdates.set(true)
         try {
-            if (wallet.startBackgroundSync()) {
-                Timber.tag(TAG).i("Entered background sync")
-                return true
-            }
+            if (wallet.startBackgroundSync()) return true
             _backgroundSync.value = false
             Timber.tag(TAG).e("startBackgroundSync returned false")
             return false
@@ -224,14 +208,17 @@ class WalletState {
     }
 
     fun updateDaemon(daemonInfo: DaemonInfo) {
-        this._connectedDaemon.update { daemonInfo }
+        _connectedDaemon.update { daemonInfo }
     }
 
     fun syncUpdate(syncProgress: SyncProgress) {
         val done = syncProgress.progress >= 1f || syncProgress.left <= 0L
         _syncProgress.update { if (done) null else syncProgress }
         _isSyncing.set(!done)
-
+        if (done) {
+            update()
+            setLoading(false)
+        }
     }
 
     fun toggleHideAmounts() {
@@ -246,12 +233,8 @@ class WalletState {
         getWallet?.let {
             it.addSubaddress(it.getAccountIndex(), "")
             it.store()
-            it.getLatestSubAddress().let { subAddresses ->
-                _nextAddress.update { subAddresses }
-            }
-            it.getAllUsedSubAddresses().let { allItems ->
-                _subAddresses.update { allItems.reversed() }
-            }
+            it.getLatestSubAddress().let { subAddresses -> _nextAddress.update { subAddresses } }
+            it.getAllUsedSubAddresses().let { allItems -> _subAddresses.update { allItems.reversed() } }
             update()
         }
     }
@@ -274,24 +257,18 @@ class WalletState {
                 val refreshed = allItems.reversed()
                 _subAddresses.update { current ->
                     refreshed.map { address ->
-                        current.firstOrNull { it.addressIndex == address.addressIndex }
-                            ?.let { existing ->
-                                if (existing.label != address.label) address.withLabel(address.label) else address
-                            }
-                            ?: address
+                        current.firstOrNull { it.addressIndex == address.addressIndex }?.let { existing ->
+                            if (existing.label != address.label) address.withLabel(address.label) else address
+                        } ?: address
                     }
                 }
             }
-            it.getLatestSubAddress().let { latest ->
-                _nextAddress.update { latest }
-            }
+            it.getLatestSubAddress().let { latest -> _nextAddress.update { latest } }
         }
     }
 
     fun refresh() {
-        if(getWallet?.isInitialized != true) {
-            return;
-        }
+        if (getWallet?.isInitialized != true) return
         if (getWallet?.fullStatus?.connectionStatus == Wallet.ConnectionStatus.ConnectionStatus_Connected) {
             setLoading(true)
             refreshScope.launch {
@@ -331,7 +308,7 @@ class WalletState {
     }
 
     fun resyncBlockchain(): Result<Boolean> {
-        setLoading(true);
+        setLoading(true)
         try {
             if (getWallet?.fullStatus?.connectionStatus != Wallet.ConnectionStatus.ConnectionStatus_Connected) {
                 return Result.failure(Exception(AnonConfig.context?.getString(R.string.resync_daemon_required) ?: "Please connect to daemon for resync"))
@@ -342,7 +319,7 @@ class WalletState {
             Timber.tag(TAG).e(e)
             return Result.failure(e)
         } finally {
-            setLoading(false);
+            setLoading(false)
         }
     }
 
