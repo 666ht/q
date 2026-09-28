@@ -285,6 +285,36 @@ class WalletState {
         }
     }
 
+    fun freezeCoin(publicKey: String): Result<Boolean> {
+        return try {
+            val wallet = getWallet ?: return Result.failure(Exception("Wallet not initialized"))
+            val coins = wallet.coins ?: return Result.failure(Exception("Coins not initialized"))
+            coins.setFrozen(publicKey)
+            wallet.store()
+            coins.refresh()
+            update()
+            Result.success(true)
+        } catch (e: Exception) {
+            Timber.tag(TAG).e(e, "freeze coin error")
+            Result.failure(e)
+        }
+    }
+
+    fun thawCoin(publicKey: String): Result<Boolean> {
+        return try {
+            val wallet = getWallet ?: return Result.failure(Exception("Wallet not initialized"))
+            val coins = wallet.coins ?: return Result.failure(Exception("Coins not initialized"))
+            coins.thaw(publicKey)
+            wallet.store()
+            coins.refresh()
+            update()
+            Result.success(true)
+        } catch (e: Exception) {
+            Timber.tag(TAG).e(e, "thaw coin error")
+            Result.failure(e)
+        }
+    }
+
     fun toggleHideAmounts() {
         hideAmountsFlow.update { !it }
     }
