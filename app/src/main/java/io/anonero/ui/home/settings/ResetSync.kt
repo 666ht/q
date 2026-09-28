@@ -131,7 +131,11 @@ fun ResetSyncPage(
 
             Spacer(modifier = Modifier.weight(1f))
 
-            AnonOutlineButton(
+            androidx.compose.foundation.layout.Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = androidx.compose.foundation.layout.Arrangement.Center
+            ) {
+                AnonOutlineButton(
                 onClick = {
                     val restoreHeight = height.toLongOrNull()
                     if (restoreHeight == null) {
@@ -145,11 +149,12 @@ fun ResetSyncPage(
                         error = result.exceptionOrNull()?.message ?: "重置失败"
                     }
                 },
-                modifier = Modifier
-                    .fillMaxWidth(.9f)
-                    .padding(bottom = 16.dp)
-            ) {
-                Text("重置")
+                    modifier = Modifier
+                        .fillMaxWidth(.9f)
+                        .padding(bottom = 16.dp)
+                ) {
+                    Text("重置")
+                }
             }
         }
     }
