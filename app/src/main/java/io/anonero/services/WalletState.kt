@@ -244,6 +244,14 @@ class WalletState {
             _walletStatus.value = status
             _transactions.value = updatedTxs
 
+            // Keep the other wallet collections consistent with the final sync
+            // snapshot without going through update(), which may be gated.
+            if (!backgroundSync) {
+                _nextAddress.value = wallet.getLatestSubAddress()
+                _subAddresses.value = wallet.getAllUsedSubAddresses().reversed()
+                _coins.value = (wallet.coins?.all ?: emptyList()).fastFilter { !it.spent }
+            }
+
             val address = try {
                 WalletManager.instance?.getDaemonAddress()
             } catch (_: Exception) {
