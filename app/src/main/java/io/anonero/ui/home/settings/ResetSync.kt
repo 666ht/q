@@ -94,10 +94,18 @@ fun ResetSyncPage(
                         return@AnonOutlineButton
                     }
                     val result = walletState.resetSyncFromHeight(restoreHeight)
-                    if (result.isSuccess) onBackPress() else error = result.exceptionOrNull()?.message ?: "重置失败"
+                    if (result.isSuccess) {
+                        onBackPress()
+                    } else {
+                        error = result.exceptionOrNull()?.message ?: "重置失败"
+                    }
                 },
-                modifier = Modifier.fillMaxWidth(.9f).padding(bottom = 16.dp)
-            ) { Text("重置") }
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, bottom = 16.dp)
+            ) {
+                Text("重置")
+            }
         }
     ) { padding ->
         Column(
@@ -122,6 +130,7 @@ fun ResetSyncPage(
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
             )
+
             Spacer(modifier = Modifier.height(56.dp))
 
             OutlinedTextField(
@@ -136,27 +145,13 @@ fun ResetSyncPage(
                 label = { Text("日期恢复") },
                 singleLine = true
             )
+
             if (error != null) {
                 Text(
                     text = error!!,
                     color = MaterialTheme.colorScheme.error,
                     modifier = Modifier.padding(top = 16.dp)
                 )
-            }
-
-                    val result = walletState.resetSyncFromHeight(restoreHeight)
-                    if (result.isSuccess) {
-                        onBackPress()
-                    } else {
-                        error = result.exceptionOrNull()?.message ?: "重置失败"
-                    }
-                },
-                modifier = Modifier
-                    .fillMaxWidth(.9f)
-                    .align(Alignment.CenterHorizontally)
-                    .padding(bottom = 16.dp)
-            ) {
-                Text("重置")
             }
         }
     }
