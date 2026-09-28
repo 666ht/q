@@ -84,7 +84,15 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
             // and refreshed transaction history before ending the UI sync state.
             wallet.setSynchronized()
             walletState.syncUpdate(SyncProgress(1f, 0L))
+
+            // Publish the completed native state, then run the normal state
+            // update once more so every balance/transaction observer receives
+            // the final values from the same completed wallet snapshot.
             walletState.publishAfterSync()
+            walletState.update()
+
+            // Both loading sources drive the progress UI. Clear loading only
+            // after the final wallet state has been published.
             walletState.setLoading(false)
 
             try {
