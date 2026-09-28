@@ -144,6 +144,7 @@
 
     <string name="nodes">节点</string>
     <string name="add_node">添加</string>
+    <string name="add_node_title">添加节点</string>
     <string name="available_nodes">可用节点</string>
     <string name="disconnect">断开连接</string>
     <string name="remove">删除</string>
