@@ -225,10 +225,18 @@ class WalletState {
         val done = syncProgress.progress == 1f || syncProgress.left == 0L
         _syncProgress.update { if (done) null else syncProgress }
         _isSyncing.set(!done)
-        // Do not publish completion from the block-progress callback. At this point
-        // the native wallet may not have finished applying the refreshed state yet.
-        // WalletListener.refreshed() is the authoritative completion callback and
-        // refreshes history/balance before clearing the loading state.
+
+        if (done) {
+            // The last block has arrived: publish the wallet data immediately.
+            // refreshed() also performs this update when the native refresh callback
+            // arrives, so this is safe as an early completion path.
+            getWallet?.let { wallet ->
+                runCatching { wallet.refreshHistory() }
+                    .onFailure { Timber.tag(TAG).e(it, "final refreshHistory error") }
+            }
+            update()
+            setLoading(false)
+        }
     }
 
     fun toggleHideAmounts() {
