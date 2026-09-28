@@ -398,6 +398,9 @@ fun HomeScreenComposable(modifier: Modifier = Modifier, mainNavController: NavHo
                                 bottomNavController.popBackStack()
                             },
                             navigateTo = { route ->
+                                if (route is ResetSyncRoute) {
+                                    showBottomNavigation = false
+                                }
                                 bottomNavController.navigate(route)
                             }
                         )
