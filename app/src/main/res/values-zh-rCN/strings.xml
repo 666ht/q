@@ -77,6 +77,7 @@
     <string name="refresh">刷新</string>
     <string name="resync_blockchain">重置同步区块</string>
     <string name="resync_initiated_this_may_take_a_while">已启动重新同步…这可能需要一些时间。</string>
+    <string name="resync_daemon_required">请连接到守护进程后再重新同步区块链</string>
     <string name="show_outputs">显示输出</string>
     <string name="lock">锁定</string>
     <string name="creating_wallet">正在创建钱包...</string>
