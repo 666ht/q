@@ -411,14 +411,7 @@ fun NodeSettings(onBackPress: () -> Unit = {}, navigateTo: (Any) -> Unit = {}) {
         }
     ) {
 
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(it)
-        ) {
-            LazyColumn(
-                modifier = Modifier.weight(1f)
-            ) {
+        LazyColumn(modifier = Modifier.padding(it)) {
             if (activeNode != null)
                 item(key = activeNode?.toNodeString() ?: "active") {
                     NodeListItem(
@@ -478,16 +471,6 @@ fun NodeSettings(onBackPress: () -> Unit = {}, navigateTo: (Any) -> Unit = {}) {
                             })
                     }
                 }
-            }
-            AnonOutlineButton(
-                onClick = { navigateTo(ResetSyncRoute) },
-                modifier = Modifier
-                    .fillMaxWidth(.9f)
-                    .align(Alignment.CenterHorizontally)
-                    .padding(bottom = 16.dp)
-            ) {
-                Text(stringResource(R.string.resync_blockchain))
-            }
         }
     }
     Toaster(
