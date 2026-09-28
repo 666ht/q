@@ -144,6 +144,7 @@
 
     <string name="nodes">Nodes</string>
     <string name="add_node">Add Node</string>
+    <string name="add_node_title">Add Node</string>
     <string name="available_nodes">Available Nodes</string>
     <string name="disconnect">Disconnect</string>
     <string name="remove">Remove</string>
