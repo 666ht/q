@@ -6,15 +6,8 @@ import io.anonero.model.WalletListener
 import io.anonero.model.WalletManager
 import timber.log.Timber
 
-/**
- * Handy class for starting a new thread that has a looper. The looper can then be
- * used to create handler classes. Note that start() must still be called.
- * The started Thread has a stck size of STACK_SIZE (=5MB)
- */
-
 class MoneroHandlerThread(private val wallet: Wallet, private val walletState: WalletState) :
     Thread(null, null, "MoneroHandler", THREAD_STACK_SIZE), WalletListener {
-
 
     @Synchronized
     override fun start() {
@@ -22,7 +15,6 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
     }
 
     override fun run() {
-
     }
 
     override fun moneySpent(txId: String?, amount: Long) {
@@ -46,13 +38,11 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
     }
 
     private fun updateSyncProgress(height: Long) {
-        if (walletState.isWiping()) return
+        if (walletState.isWiping() || wallet.isSynchronized) return
         val syncHeight = wallet.getBlockChainHeight()
         val deamonHeight = wallet.getDaemonBlockChainHeight()
         val left = deamonHeight - syncHeight
-        if (syncHeight < 0 || left < 0) {
-            return
-        }
+        if (syncHeight < 0 || left < 0) return
         val progress = if (wallet.getDaemonBlockChainTargetHeight().toDouble() == 0.0) {
             1f
         } else {
@@ -73,9 +63,7 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
         val status = wallet.fullStatus.connectionStatus
         val daemonHeight = wallet.getDaemonBlockChainHeight()
         val chainHeight = wallet.getBlockChainHeight()
-        /// height
-        Timber.tag(name)
-            .i("refreshed() status:${status} daemonHeight:$daemonHeight chainHeight:$chainHeight ")
+        Timber.tag(name).i("refreshed() status:\${status} daemonHeight:\${daemonHeight} chainHeight:\${chainHeight} ")
         if (status === Wallet.ConnectionStatus.ConnectionStatus_Disconnected || status == null) {
             tryRestartConnection()
         } else {
@@ -87,11 +75,11 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
                     updateSyncProgress(wallet.getBlockChainHeight())
                 }
                 wallet.setSynchronized()
+                walletState.syncUpdate(SyncProgress(1f, 0L))
                 wallet.store()
                 refresh(true)
                 walletState.setLoading(false)
             }
-
         }
         walletState.update()
     }
@@ -104,9 +92,7 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
 
     private fun refresh(walletSynced: Boolean) {
         wallet.refreshHistory()
-        if (walletSynced) {
-            wallet.refreshCoins()
-        }
+        if (walletSynced) wallet.refreshCoins()
         walletState.update()
     }
 
@@ -121,7 +107,6 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
     }
 
     companion object {
-        // from src/cryptonote_config.h
         const val THREAD_STACK_SIZE = (5 * 1024 * 1024).toLong()
     }
 }
