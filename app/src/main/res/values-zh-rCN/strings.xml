@@ -111,7 +111,7 @@
     <string name="securely_wipe_title">安全删除</string>
     <string name="securely_wipe_warning">此操作将使用安全删除方法永久删除所有钱包数据和加密密钥。此过程无法撤销。</string>
     <string name="securely_wipe_passphrase_prompt">请输入短语密码以继续</string>
-    <string name="wipe">删除</string>
+    <string name="wipe">确认</string>
     <string name="nero_keys">[ИΞR0] 密钥</string>
     <string name="view">查看</string>
     <string name="legacy_seed">传统助记词 (Legacy Seed)</string>
