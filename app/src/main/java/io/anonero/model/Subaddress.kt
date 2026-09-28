@@ -37,7 +37,7 @@ class Subaddress(
 
     val displayLabel: String
         get() {
-            if (addressIndex == 0) return "主地址"
+            if (addressIndex == 0) return "主地址 0"
 
             val baseLabel = if (
                 label.isEmpty() ||
