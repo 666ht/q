@@ -725,15 +725,12 @@ fun NodeForm(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1.5f)
-                .padding(bottom = 8.dp)
-            ,
+                .padding(bottom = 8.dp),
             contentAlignment = Alignment.Center
         ) {
             AnonOutlineButton(
                 modifier = Modifier
-                    .fillMaxWidth(
-                        .9f
-                    ),
+                    .fillMaxWidth(.9f),
                 onClick = {
                     val node = nodeSettingsVM.validate(rpcHost, rpcUsername, rpcPassPhrase)
                     if (node != null) {
