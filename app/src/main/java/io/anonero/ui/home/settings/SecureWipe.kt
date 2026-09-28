@@ -163,6 +163,15 @@ class SecureWipeViewModel(
                 wipeFailure = wipeFailure ?: it
                 Timber.tag(TAG).e(it, "Final app-data wipe failed")
             }
+            runCatching {
+                KeyStoreHelper.clearWalletCredentials(
+                    AnonConfig.context?.applicationContext ?: return@runCatching,
+                    "anon"
+                )
+            }.onFailure {
+                wipeFailure = wipeFailure ?: it
+                Timber.tag(TAG).e(it, "Secure wipe keystore credentials failed")
+            }
             runCatching { AnonConfig.disposeState() }
                 .onFailure {
                     wipeFailure = wipeFailure ?: it
