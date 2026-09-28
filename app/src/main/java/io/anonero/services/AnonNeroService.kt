@@ -49,6 +49,7 @@ class AnonNeroService : Service() {
     private val TAG: String = AnonNeroService::class.java.simpleName
     private val job = SupervisorJob()
     private var updateJob: Job? = null
+    private var started = false
     private val scope = CoroutineScope(Dispatchers.IO + job)
     private fun isNetworkAvailable(): Boolean {
         val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
@@ -64,11 +65,15 @@ class AnonNeroService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == "start") {
-            runCatching { start() }
-                .onFailure {
+            if (!started) {
+                runCatching {
+                    start()
+                    started = true
+                }.onFailure {
                     Timber.tag(TAG).e(it, "Failed to start foreground notification service")
                     stopSelfResult(startId)
                 }
+            }
         }
         if (intent?.action == "stop") {
             stopForeground(STOP_FOREGROUND_REMOVE) // Properly removes the notification
@@ -141,47 +146,65 @@ class AnonNeroService : Service() {
     private suspend fun updateNotificationState() {
         val mNotificationManager =
             getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        val wallet = WalletManager.instance?.wallet
-        if (wallet != null) {
-            val isSyncing = walletState.isSyncing
-            if (!isSyncing) {
-                val notificationMessage = if (walletState.backgroundSync) {
-                    getString(R.string.notification_wallet_locked_synced, wallet.getBlockChainHeight())
-                } else if (!wallet.isInitialized) {
-                    getString(R.string.notification_loading_wallet)
-                } else if (!isNetworkAvailable()) {
-                    getString(R.string.notification_disconnected)
-                } else {
-                    // Do not probe the daemon here. Node connection is controlled
-                    // only by the manual Connect action in Node Settings.
-                    when (wallet.fullStatus.connectionStatus) {
-                        Wallet.ConnectionStatus.ConnectionStatus_Disconnected,
-                        null -> getString(R.string.notification_daemon_disconnected)
-                        Wallet.ConnectionStatus.ConnectionStatus_WrongVersion ->
-                            getString(R.string.notification_wrong_version)
-                        Wallet.ConnectionStatus.ConnectionStatus_Connected -> {
-                            if (wallet.getBlockChainHeight() > 1) {
-                                getString(R.string.notification_synced, wallet.getBlockChainHeight())
-                            } else {
-                                getString(R.string.notification_syncing)
-                            }
+        val wallet = WalletManager.instance?.wallet ?: return
+
+        // The notification service can be started before the wallet is opened.
+        // Do not touch the native wallet until initialization has completed.
+        if (!wallet.isInitialized) {
+            withContext(Dispatchers.Main) {
+                runCatching {
+                    mNotificationManager.notify(
+                        NOTIFICATION_ID,
+                        foregroundNotification(getString(R.string.notification_loading_wallet))
+                    )
+                }.onFailure {
+                    Timber.tag(TAG).e(it, "Failed to update loading notification")
+                }
+            }
+            return
+        }
+
+        if (walletState.isSyncing) return
+
+        runCatching {
+            val notificationMessage = if (walletState.backgroundSync) {
+                getString(R.string.notification_wallet_locked_synced, wallet.getBlockChainHeight())
+            } else if (!isNetworkAvailable()) {
+                getString(R.string.notification_disconnected)
+            } else {
+                // Do not probe the daemon here. Node connection is controlled
+                // only by the manual Connect action in Node Settings.
+                when (wallet.fullStatus.connectionStatus) {
+                    Wallet.ConnectionStatus.ConnectionStatus_Disconnected,
+                    null -> getString(R.string.notification_daemon_disconnected)
+                    Wallet.ConnectionStatus.ConnectionStatus_WrongVersion ->
+                        getString(R.string.notification_wrong_version)
+                    Wallet.ConnectionStatus.ConnectionStatus_Connected -> {
+                        if (wallet.getBlockChainHeight() > 1) {
+                            getString(R.string.notification_synced, wallet.getBlockChainHeight())
+                        } else {
+                            getString(R.string.notification_syncing)
                         }
                     }
                 }
-                var torSate = ""
-                if (wallet.fullStatus.connectionStatus != Wallet.ConnectionStatus.ConnectionStatus_Connected) {
-                    torSate = ""
-                }
-                withContext(Dispatchers.Main) {
+            }
+
+            withContext(Dispatchers.Main) {
+                runCatching {
                     mNotificationManager.notify(
                         NOTIFICATION_ID,
-                        foregroundNotification("${notificationMessage}${torSate}")
+                        foregroundNotification(notificationMessage)
                     )
+                }.onFailure {
+                    Timber.tag(TAG).e(it, "Failed to post wallet notification")
                 }
             }
+        }.onFailure {
+            // Never let notification polling take down the wallet process while
+            // the native wallet is opening/closing or being wiped.
+            Timber.tag(TAG).e(it, "Failed to read wallet state for notification")
         }
     }
-
     private fun showProgress(it: SyncProgress, torSate: String) {
         val content = if (it.left != 0L) {
             getString(
