@@ -790,6 +790,7 @@ fun TransactionItem(tx: TransactionInfo, hideAmounts: Boolean = false, modifier:
         Text(
             if (hideAmounts) Formats.maskAmount(amount)
             else Formats.getDisplayAmount(amount),
+            modifier = if (!rightAlignAmount && upstreamLayout) Modifier.weight(1f) else Modifier,
             textAlign = if (rightAlignAmount) TextAlign.End else TextAlign.Center,
             style = MaterialTheme.typography.titleLarge
         )
