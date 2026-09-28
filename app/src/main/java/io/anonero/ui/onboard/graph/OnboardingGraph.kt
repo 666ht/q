@@ -232,7 +232,8 @@ fun NavGraphBuilder.onboardingGraph(
                                     onboardViewModel.restoreFromSeed(pin)
                                 }
                             } else {
-                            onboardViewModel.create(pin)
+                                onboardViewModel.create(pin)
+                            }
                         }
                         delay(600)
                     }.invokeOnCompletion {
