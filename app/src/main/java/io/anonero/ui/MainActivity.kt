@@ -29,6 +29,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.asLiveData
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.whenResumed
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.rememberNavController
 import io.anonero.AnonConfig
@@ -151,11 +153,21 @@ class MainActivity : ComponentActivity() {
             return@registerForActivityResult
         }
 
-        // Permission approval must not start the wallet foreground service here.
-        // Service creation can involve Koin/native wallet initialization; doing that
-        // directly from the permission result can terminate the process on some
-        // Android versions. The normal wallet lifecycle starts the service separately.
+        // Wait until the permission dialog has fully returned control to the
+        // visible Activity before starting the foreground service. Starting the
+        // service from the permission-result callback can race Activity lifecycle
+        // transitions on some Android versions.
         Timber.tag(TAG).i("Notification permission granted")
+        lifecycleScope.launch {
+            lifecycle.whenResumed {
+                kotlinx.coroutines.delay(300)
+                runCatching {
+                    startAnonService(applicationContext)
+                }.onFailure {
+                    Timber.tag(TAG).e(it, "Failed to start notification service after permission grant")
+                }
+            }
+        }
     }
 
     fun startNotificationService() {
