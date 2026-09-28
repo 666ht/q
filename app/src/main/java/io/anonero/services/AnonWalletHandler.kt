@@ -1,14 +1,8 @@
 package io.anonero.services
 
 import android.content.SharedPreferences
-import android.util.Log
 import io.anonero.AnonConfig
-import io.anonero.model.Wallet
 import io.anonero.model.WalletManager
-import io.anonero.model.node.DaemonInfo
-import io.anonero.model.node.Node
-import io.anonero.model.node.NodeFields
-import io.anonero.util.RESTORE_HEIGHT
 import io.anonero.util.WALLET_PROXY
 import io.anonero.util.WALLET_PROXY_PORT
 import io.anonero.util.WALLET_USE_TOR
@@ -20,12 +14,11 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.plus
 import java.io.File
-import org.json.JSONObject
 import timber.log.Timber
 import androidx.core.content.edit
 
 
-class InvalidPin : Exception("invalid pin")
+class InvalidPin : Exception()
 
 private const val TAG = "AnonWalletHandler"
 
@@ -80,15 +73,11 @@ class AnonWalletHandler(
         walletState.setLoading(true)
         walletState.update()
         try {
-            val host = prefs.getString(NodeFields.RPC_HOST.value, "")
-            val rpcPort = prefs.getInt(NodeFields.RPC_PORT.value, Node.defaultRpcPort)
-            val rpcUsername = prefs.getString(NodeFields.RPC_USERNAME.value, "")
-            val rpcPassphrase = prefs.getString(NodeFields.RPC_PASSWORD.value, "")
             val proxyHost = prefs.getString(WALLET_PROXY, "")
             val proxyPort = prefs.getInt(WALLET_PROXY_PORT, -1)
             val useTor = prefs.getBoolean(WALLET_USE_TOR, true)
             if (useTor || proxyHost.isNullOrBlank()) {
-                torService.start();
+                torService.start()
                 while (torService.socks == null) {
                     delay(200)
                 }
@@ -99,42 +88,26 @@ class AnonWalletHandler(
             } else {
                 throw Exception("no proxy")
             }
-            if (host?.isNotEmpty() == true) {
-                val nodeObj = JSONObject()
-                    .apply {
-                        put(NodeFields.RPC_HOST.value, host)
-                        put(NodeFields.RPC_PORT.value, rpcPort)
-                        put(NodeFields.RPC_USERNAME.value, rpcUsername)
-                        put(NodeFields.RPC_PASSWORD.value, rpcPassphrase)
-                        put(NodeFields.RPC_NETWORK.value, AnonConfig.getNetworkType().toString())
-                        put(NodeFields.NODE_NAME.value, "anon")
-                    }
-                val node = Node.fromJson(nodeObj)
-                updateDaemon(node)
-                walletState.setLoading(true)
-            }
+
             walletState.update()
-            if(wallet.isSynchronized) {
+            if (wallet.isSynchronized) {
                 wallet.refreshHistory()
             }
             wallet.init(0)
-            if(prefs.getLong(RESTORE_HEIGHT, 0L)!=0L) {
-                wallet.setRestoreHeight(prefs.getLong(RESTORE_HEIGHT, 0L));
+            if (prefs.getLong(io.anonero.util.RESTORE_HEIGHT, 0L) != 0L) {
+                wallet.setRestoreHeight(prefs.getLong(io.anonero.util.RESTORE_HEIGHT, 0L))
             }
             if (wallet.isInitialized) {
                 wallet.refreshHistory()
-                wallet.setTrustedDaemon(true)
-                wallet.startRefresh()
                 walletState.update()
             }
         } catch (e: Exception) {
             e.printStackTrace()
             walletState.setLoading(false)
         }
-
     }
 
-    fun updateDaemon(node: Node?) {
+    fun updateDaemon(node: io.anonero.model.node.Node?) {
         walletState.setLoading(true)
         val wallet = WalletManager.instance?.wallet
         val walletManager = WalletManager.instance
@@ -142,17 +115,17 @@ class AnonWalletHandler(
         try {
             if (node != null) {
                 walletState.updateDaemon(
-                    DaemonInfo(
+                    io.anonero.model.node.DaemonInfo(
                         daemon = "${node.host}:${node.rpcPort}",
-                        Wallet.ConnectionStatus.ConnectionStatus_Disconnected,
+                        io.anonero.model.Wallet.ConnectionStatus.ConnectionStatus_Disconnected,
                         daemonHeight = 0L
                     )
                 )
             } else {
                 walletState.updateDaemon(
-                    DaemonInfo(
+                    io.anonero.model.node.DaemonInfo(
                         daemon = null,
-                        Wallet.ConnectionStatus.ConnectionStatus_Disconnected,
+                        io.anonero.model.Wallet.ConnectionStatus.ConnectionStatus_Disconnected,
                         daemonHeight = 0L
                     )
                 )
@@ -162,21 +135,19 @@ class AnonWalletHandler(
             walletState.setLoading(false)
         } catch (e: Exception) {
             walletState.updateDaemon(
-                DaemonInfo(
+                io.anonero.model.node.DaemonInfo(
                     daemon = null,
-                    Wallet.ConnectionStatus.ConnectionStatus_Disconnected,
+                    io.anonero.model.Wallet.ConnectionStatus.ConnectionStatus_Disconnected,
                     daemonHeight = 0L
                 )
             )
             e.printStackTrace()
         }
-
     }
 
     fun setProxy(proxy: String?, port: Int?) {
         if (walletState.isWiping()) return
         Timber.tag(TAG).d("setProxy %s%s", proxy, port.toString())
-        //disable proxy
         if (proxy == null && port == null) {
             prefs.edit {
                 remove(WALLET_PROXY)
@@ -213,10 +184,6 @@ class AnonWalletHandler(
         val walletManager = WalletManager.instance
         val wallet = walletManager?.wallet
 
-        // Do not call native stopBackgroundSync here. The wipe passphrase is the
-        // app's wipe credential, not the wallet password, and this JNI call can
-        // touch the wallet after the refresh machinery has already started closing.
-        // Stop all WalletState refresh jobs before the native wallet is closed.
         walletState.prepareForWipe()
         _scope.coroutineContext.cancelChildren()
         handler = null
@@ -239,17 +206,14 @@ class AnonWalletHandler(
                 Timber.tag(TAG).e("Wallet native close returned false; continuing file deletion")
             }
         }
-        // Stop Tor as well so no background component keeps wallet/app files open.
         runCatching { torService.stop() }
             .onFailure { Timber.tag(TAG).e(it, "Tor stop failed; continuing secure wipe") }
 
-        // Drop the Kotlin manager reference before touching the wallet files on disk.
         WalletManager.resetInstance()
 
         val appContext = AnonConfig.context?.applicationContext
         var deleted = true
         if (appContext != null) {
-            // Do not recreate the wallet directory while checking it.
             val walletDir = File(appContext.filesDir, "wallets")
             repeat(20) {
                 if (!walletDir.exists()) return@repeat
@@ -259,8 +223,6 @@ class AnonWalletHandler(
             }
             deleted = !walletDir.exists()
 
-            // Wipe the complete app-private data set as the final step. This also
-            // removes wallet files that were created outside the standard wallet path.
             repeat(5) {
                 if (AnonConfig.clearAllAppData(appContext)) return@repeat
                 Thread.sleep(100)
@@ -268,8 +230,6 @@ class AnonWalletHandler(
             deleted = deleted && AnonConfig.clearAllAppData(appContext)
         }
 
-        // Native close failure must not prevent deletion when the filesystem can
-        // remove the wallet files. Syncing and non-syncing wallets use the same path.
         return deleted
     }
 
