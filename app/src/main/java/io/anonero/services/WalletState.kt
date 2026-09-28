@@ -225,12 +225,10 @@ class WalletState {
         val done = syncProgress.progress == 1f || syncProgress.left == 0L
         _syncProgress.update { if (done) null else syncProgress }
         _isSyncing.set(!done)
-        if (done) {
-            _connectionStatus.update { Wallet.ConnectionStatus.ConnectionStatus_Connected }
-            // Sync completion must publish the freshly synchronized balance/history.
-            update()
-            setLoading(false)
-        }
+        // Do not publish completion from the block-progress callback. At this point
+        // the native wallet may not have finished applying the refreshed state yet.
+        // WalletListener.refreshed() is the authoritative completion callback and
+        // refreshes history/balance before clearing the loading state.
     }
 
     fun toggleHideAmounts() {
