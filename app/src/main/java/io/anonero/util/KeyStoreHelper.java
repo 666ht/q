@@ -197,6 +197,20 @@ public class KeyStoreHelper {
         }
     }
 
+    public static void clearWalletCredentials(@NonNull Context context, String wallet) {
+        String walletKeyAlias = SecurityConstants.WALLET_PASS_KEY_PREFIX + wallet;
+        try {
+            deleteKeys(walletKeyAlias);
+            deleteKeys(RSA_ALIAS);
+        } catch (KeyStoreException ex) {
+            Timber.tag(TAG).e(ex, "Failed to clear wallet keystore entries");
+        }
+        context.getSharedPreferences(SecurityConstants.WALLET_PASS_PREFS_NAME, Context.MODE_PRIVATE)
+                .edit()
+                .clear()
+                .commit();
+    }
+
     public static boolean keyExists(String wallet) throws BrokenPasswordStoreException {
         try {
             KeyStore keyStore = KeyStore.getInstance(SecurityConstants.KEYSTORE_PROVIDER_ANDROID_KEYSTORE);
