@@ -103,7 +103,7 @@ class AnonNeroService : Service() {
         scope.launch {
             walletState.syncProgress.collect {
                 val torSate = if (torService.socks != null) {
-                    " | Tor Daemon: ${torService.socks?.port.toString()}"
+                    " | Tor 守护进程：${torService.socks?.port.toString()}"
                 } else {
                     ""
                 }
@@ -122,7 +122,7 @@ class AnonNeroService : Service() {
         val wallet = WalletManager.instance?.wallet
         val daemon = prefs.getString(NodeFields.RPC_HOST.value, "") ?: ""
         var torSate = if (torService.socks != null) {
-            " | Tor Daemon: ${torService.socks?.port.toString()}"
+            " | Tor 守护进程：${torService.socks?.port.toString()}"
         } else {
             ""
         }
@@ -130,15 +130,15 @@ class AnonNeroService : Service() {
             val isSyncing = walletState.isSyncing
             if (!isSyncing) {
                 val notificationMessage = if (walletState.backgroundSync) {
-                    "Wallet Locked: Synced: ${wallet.getBlockChainHeight()} "
+                    getString(R.string.notification_wallet_locked_synced, wallet.getBlockChainHeight())
                 } else if (!wallet.isInitialized) {
-                    "Loading wallet..."
+                    getString(R.string.notification_loading_wallet)
                 } else if (!isNetworkAvailable()) {
                     // Network is offline — skip the blocking RPC call and mark
                     // disconnected immediately so the bar shows without waiting
                     // for a 30-second timeout
                     walletState.setConnectionStatus(Wallet.ConnectionStatus.ConnectionStatus_Disconnected)
-                    "Disconnected"
+                    getString(R.string.notification_disconnected)
                 } else {
                     // Network is available — probe the daemon with a live RPC call
                     val daemonHeight = withContext(Dispatchers.IO) {
@@ -151,18 +151,18 @@ class AnonNeroService : Service() {
                     walletState.setConnectionStatus(liveStatus)
                     when (liveStatus) {
                         Wallet.ConnectionStatus.ConnectionStatus_Disconnected -> {
-                            "Daemon Disconnected"
+                            getString(R.string.notification_daemon_disconnected)
                         }
 
                         Wallet.ConnectionStatus.ConnectionStatus_WrongVersion -> {
-                            "Wrong Version"
+                            getString(R.string.notification_wrong_version)
                         }
 
                         Wallet.ConnectionStatus.ConnectionStatus_Connected -> {
                             if (wallet.getBlockChainHeight() > 1) {
-                                "Synced: ${wallet.getBlockChainHeight()}"
+                                getString(R.string.notification_synced, wallet.getBlockChainHeight())
                             } else {
-                                "Syncing..."
+                                getString(R.string.notification_syncing)
                             }
                         }
                     }
@@ -181,22 +181,23 @@ class AnonNeroService : Service() {
     }
 
     private fun showProgress(it: SyncProgress, torSate: String) {
-        val notification = foregroundNotification(
-            content = if (it.left != 0L) "Syncing: ${
-                Formats.convertNumber(
-                    it.left,
-                    Locale.getDefault()
-                )
-            } blocks left $torSate" else "Syncing blocks completed $torSate",
-            progress = it
-        )
+        val content = if (it.left != 0L) {
+            getString(
+                R.string.notification_syncing_blocks_left,
+                Formats.convertNumber(it.left, Locale.getDefault()),
+                torSate
+            )
+        } else {
+            getString(R.string.notification_sync_completed, torSate)
+        }
+        val notification = foregroundNotification(content = content, progress = it)
         val mNotificationManager =
             getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         mNotificationManager.notify(NOTIFICATION_ID, notification)
     }
 
     private fun foregroundNotification(
-        content: String = "Loading wallet...",
+        content: String = getString(R.string.notification_loading_wallet),
         title: String = "[ΛИ0ИΞR0]",
         progress: SyncProgress? = null
     ): Notification {
@@ -243,7 +244,7 @@ class AnonNeroService : Service() {
         val notification = NotificationCompat.Builder(applicationContext, TX_CHANNEL)
             .setSmallIcon(R.drawable.anon_notification)
             .setContentTitle("[ΛИ0ИΞR0]")
-            .setContentText("Transaction received")
+            .setContentText(getString(R.string.notification_transaction_received))
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
