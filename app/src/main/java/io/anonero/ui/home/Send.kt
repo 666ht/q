@@ -268,6 +268,7 @@ fun SendScreen(
     val labelColor = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.3f)
     val scope = rememberCoroutineScope()
     val sendViewModel = koinViewModel<SendViewModel>()
+    val walletState: WalletState by inject(WalletState::class.java)
     val unlockedBalance by sendViewModel.balance.observeAsState(0L)
     val hideAmounts by walletState.hideAmountsFlow.collectAsState(false)
     val paymentUriFromScanner by sendViewModel.paymentUri.observeAsState(null)
@@ -275,8 +276,6 @@ fun SendScreen(
     val coins by sendViewModel.coins.observeAsState(emptySet())
     val txComposeError by sendViewModel.txComposeError.observeAsState()
     val view = LocalView.current
-    val walletState: WalletState by inject(WalletState::class.java)
-
     val showIndefiniteLoading by walletState.isLoading.asLiveData().observeAsState(false)
 
 
