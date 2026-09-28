@@ -44,6 +44,7 @@ class AnonWalletHandler(
     init {
         scope.launch {
             torService.socksFlow.collect {
+                if (walletState.isWiping()) return@collect
                 val wallet = WalletManager.instance?.wallet
                 if (prefs.getBoolean(WALLET_USE_TOR, false) && wallet?.isInitialized == true) {
                     setProxy(it.address.toString(), it.port.value)
@@ -171,6 +172,7 @@ class AnonWalletHandler(
     }
 
     fun setProxy(proxy: String?, port: Int?) {
+        if (walletState.isWiping()) return
         Timber.tag(TAG).d("setProxy %s%s", proxy, port.toString())
         //disable proxy
         if (proxy == null && port == null) {
@@ -214,6 +216,8 @@ class AnonWalletHandler(
 
         // Stop all WalletState refresh jobs before the native wallet is closed.
         walletState.prepareForWipe()
+        _scope.coroutineContext.cancelChildren()
+        handler = null
 
         runCatching { wallet?.setListener(null) }
             .onFailure { Timber.tag(TAG).e(it, "Wallet listener detach failed; continuing secure wipe") }
@@ -233,8 +237,6 @@ class AnonWalletHandler(
                 Timber.tag(TAG).e("Wallet native close returned false; continuing file deletion")
             }
         }
-        handler = null
-
         // Drop the Kotlin manager reference before touching the wallet files on disk.
         WalletManager.resetInstance()
 
