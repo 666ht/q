@@ -231,7 +231,7 @@ fun HomeScreenComposable(modifier: Modifier = Modifier, mainNavController: NavHo
                                 }
                             },
                             navigateTo = {
-                                if(it is CoinsScreenRoute){
+                                if(it is CoinsScreenRoute || it is ResetSyncRoute){
                                     showBottomNavigation = false
                                 }
                                 bottomNavController.navigate(it)
