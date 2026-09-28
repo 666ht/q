@@ -465,13 +465,6 @@ Java_io_anonero_model_WalletManager_recoveryWalletJ(JNIEnv *env, jobject instanc
                     (uint64_t) restoreHeight,
                     1, // kdf_rounds
                     std::string(_offset));
-    bool setupStatus = wallet->setupBackgroundSync(Monero::Wallet::BackgroundSync_ReusePassword,
-                                                   std::string(_password), {});
-    if (setupStatus == true) {
-        LOGD("recoveryWalletJ(): setupBackgroundSync(): success!");
-    } else {
-        LOGD("recoveryWalletJ(): setupBackgroundSync(): failure!");
-    }
     env->ReleaseStringUTFChars(path, _path);
     env->ReleaseStringUTFChars(password, _password);
     env->ReleaseStringUTFChars(mnemonic, _mnemonic);
@@ -497,13 +490,6 @@ Java_io_anonero_model_WalletManager_recoveryWalletPolyseedJ(JNIEnv *env, jobject
                     _networkType,
                     std::string(_mnemonic),
                     std::string(_offset), false);
-    bool setupStatus = wallet->setupBackgroundSync(Monero::Wallet::BackgroundSync_ReusePassword,
-                                                   std::string(_password), {});
-    if (setupStatus == true) {
-        LOGD("recoveryWalletPolyseedJ(): setupBackgroundSync(): success!");
-    } else {
-        LOGD("recoveryWalletPolyseedJ(): setupBackgroundSync(): failure!");
-    }
     env->ReleaseStringUTFChars(path, _path);
     env->ReleaseStringUTFChars(password, _password);
     env->ReleaseStringUTFChars(mnemonic, _mnemonic);
