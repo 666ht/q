@@ -15,31 +15,17 @@ fun Wallet.getLastUnusedIndex(): Int {
     return lastUsedSubaddress
 }
 
-
 fun Wallet.getLatestSubAddress(): Subaddress {
-    val lastUsedSubAddress = getLastUnusedIndex()
-    //get the next address
-    val address = this.getSubaddressObject(lastUsedSubAddress + 1)
-    //if label is empty add new subaddress
-    if (address.label.isEmpty()) {
-        this.addSubaddress(getAccountIndex(), "Subaddress #${address.addressIndex}")
-        this.store()
-    }
-    return address
+    val index = getLastUnusedIndex().coerceAtMost((numSubAddresses - 1).coerceAtLeast(0))
+    return getSubaddressObject(index)
 }
 
-
 fun Wallet.getAllUsedSubAddresses(): List<Subaddress> {
-    val subAddresses = arrayListOf<Subaddress>()
-    for (i in 0 until this.numSubAddresses) {
-        subAddresses.add(this.getSubaddressObject(i))
-    }
-    this.getLatestSubAddress().let {
-        if (subAddresses.indexOf(it) == -1) subAddresses.add(it)
-    }
-    return subAddresses
+    return (0 until this.numSubAddresses)
+        .map { this.getSubaddressObject(it) }
         .apply {
             this.removeIf { it.addressIndex == 0 && it.totalAmount != 0L }
         }
-        .distinctBy { it.address }.sortedBy { it.addressIndex }
+        .distinctBy { it.address }
+        .sortedBy { it.addressIndex }
 }
