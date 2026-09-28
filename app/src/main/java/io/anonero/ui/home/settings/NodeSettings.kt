@@ -282,7 +282,7 @@ class NodeSettingsViewModel(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun NodeSettings(onBackPress: () -> Unit = {}) {
+fun NodeSettings(onBackPress: () -> Unit = {}, navigateTo: (Any) -> Unit = {}) {
     val nodeSettingsVM = koinViewModel<NodeSettingsViewModel>()
     var showNodeDetails by remember { mutableStateOf(false) }
     var editingNode by remember { mutableStateOf<Node?>(null) }
@@ -394,23 +394,7 @@ fun NodeSettings(onBackPress: () -> Unit = {}) {
                                     text = { Text(stringResource(R.string.resync_blockchain)) },
                                     onClick = {
                                         showMenu = false
-                                        val result = walletState.resyncBlockchain()
-                                        if (result.isFailure) {
-                                            scope.launch {
-                                                toastState.show(
-                                                    "$errorPrefix${result.exceptionOrNull()?.message}",
-                                                    type = ToastType.Warning,
-                                                    duration = 6.seconds
-                                                )
-                                            }
-                                        } else {
-                                            scope.launch {
-                                                toastState.show(
-                                                    resyncInitiatedMessage,
-                                                    type = ToastType.Success,
-                                                )
-                                            }
-                                        }
+                                        navigateTo(ResetSyncRoute)
                                     }
                                 )
                             }
