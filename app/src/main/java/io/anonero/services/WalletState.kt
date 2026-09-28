@@ -84,7 +84,7 @@ class WalletState {
                 _balanceInfo.update { wallet.balance }
                 _unLockedBalance.update {
                     if (AnonConfig.viewOnly) wallet.viewOnlyBalance()
-                    wallet.unlockedBalance
+                    else wallet.unlockedBalance
                 }
                 _walletStatus.update { wallet.fullStatus }
                 if (wallet.status.errorString.isNotEmpty()) {
@@ -233,6 +233,7 @@ class WalletState {
             // The native refresh has completed, but TransactionHistory is a Java
             // cache. Refresh it explicitly before reading it into StateFlow.
             wallet.refreshHistory()
+            wallet.refreshCoins()
             val balance = wallet.balance
             val unlocked = if (AnonConfig.viewOnly) wallet.viewOnlyBalance() else wallet.unlockedBalance
             val status = wallet.fullStatus
@@ -243,6 +244,7 @@ class WalletState {
             _unLockedBalance.value = unlocked
             _walletStatus.value = status
             _transactions.value = updatedTxs
+            _coins.value = (wallet.coins?.all ?: listOf()).fastFilter { !it.spent }
 
             val address = try {
                 WalletManager.instance?.getDaemonAddress()
@@ -258,8 +260,8 @@ class WalletState {
                 )
             }
             Timber.tag(TAG).i(
-                "publishAfterSync: balance=%s unlocked=%s transactions=%s",
-                balance, unlocked, updatedTxs.size
+                "publishAfterSync: balance=%s unlocked=%s transactions=%s coins=%s",
+                balance, unlocked, updatedTxs.size, wallet.coins?.getCount() ?: 0
             )
             true
         } catch (e: Exception) {
