@@ -155,6 +155,9 @@ class SecureWipeViewModel(
                     Timber.tag(TAG).e(it, "Secure wipe cache step failed")
                 }
             runCatching {
+                // Clear the live preferences before deleting app-data files so
+                // restore height/passphrase state is gone from memory as well.
+                sharedPreferences.edit(commit = true) { clear() }
                 val context = AnonConfig.context?.applicationContext
                 if (context != null && !AnonConfig.clearAllAppData(context)) {
                     throw IllegalStateException("app data remains after secure wipe")
