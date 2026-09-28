@@ -224,32 +224,39 @@ class AnonWalletHandler(
         runCatching { walletManager?.setDaemon(null) }
             .onFailure { Timber.tag(TAG).e(it, "Daemon detach failed; continuing secure wipe") }
 
-        runCatching { wallet?.close() }
-            .onFailure { Timber.tag(TAG).e(it, "Wallet close failed; continuing secure wipe") }
+        var closed = true
+        if (wallet != null) {
+            closed = runCatching { wallet.close() }
+                .onFailure { Timber.tag(TAG).e(it, "Wallet close failed") }
+                .getOrDefault(false)
+            if (!closed) {
+                Timber.tag(TAG).e("Wallet native close returned false; secure wipe aborted")
+                return false
+            }
+        }
         handler = null
 
-        // The native wallet must no longer be referenced before its files are removed.
-        runCatching {
-            if (wallet != null && walletManager?.wallet === wallet) {
-                walletManager.unmanageWallet(wallet)
-            }
-        }.onFailure {
-            Timber.tag(TAG).e(it, "Wallet unmanage failed; continuing secure wipe")
-        }
+        // Wallet.close() removes the managed native wallet handle. Drop the Kotlin
+        // manager reference as well before touching the wallet files on disk.
+        WalletManager.resetInstance()
 
-        // Always attempt the filesystem wipe, even if native wallet shutdown failed.
-        runCatching {
-            AnonConfig.context?.let { context ->
-                val walletDir = AnonConfig.getDefaultWalletDir(context)
-                repeat(3) {
-                    if (!walletDir.exists() || walletDir.deleteRecursively()) return@repeat
+        val walletDir = AnonConfig.context?.let { AnonConfig.getDefaultWalletDir(it) }
+        if (walletDir != null) {
+            var deleted = !walletDir.exists()
+            repeat(5) {
+                if (deleted) return@repeat
+                deleted = walletDir.deleteRecursively()
+                if (!deleted) {
+                    Thread.sleep(100)
                 }
             }
-        }.onFailure {
-            Timber.tag(TAG).e(it, "Wallet directory deletion failed")
+            if (!deleted && walletDir.exists()) {
+                Timber.tag(TAG).e("Wallet directory still exists after secure wipe: %s", walletDir)
+                return false
+            }
         }
 
-        return true
+        return closed
     }
 
 }
