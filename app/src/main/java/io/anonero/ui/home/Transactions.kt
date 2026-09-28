@@ -582,6 +582,16 @@ fun TransactionScreen(
                                 }
                             )
                             DropdownMenuItem(
+                                text = { Text(stringResource(R.string.refresh)) },
+                                onClick = {
+                                    showMenu = false
+                                    scope.launch {
+                                        view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
+                                        walletState.refresh()
+                                    }
+                                }
+                            )
+                            DropdownMenuItem(
                                 text = { Text(stringResource(R.string.resync_blockchain)) },
                                 onClick = {
                                     showMenu = false
