@@ -203,11 +203,14 @@ class AnonNeroService : Service() {
     ): Notification {
 
         val mainActivityIntent = Intent(this, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP
+            flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            action = "io.anonero.OPEN_FROM_NOTIFICATION"
         }
 
         val pendingIntent = PendingIntent.getActivity(
-            this, 0, mainActivityIntent,
+            this,
+            0,
+            mainActivityIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
