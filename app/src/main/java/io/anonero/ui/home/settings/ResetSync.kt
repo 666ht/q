@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -137,7 +138,7 @@ fun ResetSyncPage(
                 )
             }
 
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.weight(1f))
 
             AnonOutlineButton(
                 onClick = {
@@ -153,7 +154,9 @@ fun ResetSyncPage(
                         error = result.exceptionOrNull()?.message ?: "重置失败"
                     }
                 },
-                modifier = Modifier.fillMaxWidth(.9f)
+                modifier = Modifier
+                    .fillMaxWidth(.9f)
+                    .padding(bottom = 16.dp)
             ) {
                 Text("重置")
             }
