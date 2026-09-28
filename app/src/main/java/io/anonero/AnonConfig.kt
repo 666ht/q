@@ -118,6 +118,50 @@ object AnonConfig {
         }
     }
 
+    /**
+     * Removes all app-owned persistent data that can contain wallet material,
+     * preferences, logs, caches, databases, or exported wallet artifacts.
+     *
+     * The app data root itself is not removed; only its data-bearing children
+     * are deleted so the running process can finish the wipe flow safely.
+     */
+    fun clearAllAppData(context: Context): Boolean {
+        val app = context.applicationContext
+
+        val targets = listOfNotNull(
+            app.filesDir,
+            app.cacheDir,
+            app.noBackupFilesDir,
+            app.externalFilesDir,
+            app.externalCacheDir,
+            File(app.applicationInfo.dataDir, "databases"),
+            File(app.applicationInfo.dataDir, "shared_prefs"),
+            File(app.applicationInfo.dataDir, "code_cache")
+        )
+
+        var success = true
+        targets.distinctBy { it.absolutePath }.forEach { target ->
+            if (!deleteContents(target)) {
+                success = false
+            }
+        }
+
+        walletFound = false
+        return success
+    }
+
+    private fun deleteContents(directory: File): Boolean {
+        if (!directory.exists()) return true
+        val children = directory.listFiles() ?: return true
+        var success = true
+        children.forEach { child ->
+            if (!child.deleteRecursively()) {
+                success = false
+            }
+        }
+        return success && directory.listFiles().isNullOrEmpty()
+    }
+
     fun disposeState() {
         walletFound = false
     }
