@@ -153,21 +153,10 @@ class MainActivity : ComponentActivity() {
             return@registerForActivityResult
         }
 
-        // Wait until the permission dialog has fully returned control to the
-        // visible Activity before starting the foreground service. Starting the
-        // service from the permission-result callback can race Activity lifecycle
-        // transitions on some Android versions.
+        // Permission approval must not start the foreground service here.
+        // Starting it from the permission callback was coupled to the PIN unlock
+        // flow and can crash on affected Android versions.
         Timber.tag(TAG).i("Notification permission granted")
-        lifecycleScope.launch {
-            lifecycle.whenResumed {
-                kotlinx.coroutines.delay(300)
-                runCatching {
-                    startAnonService(applicationContext)
-                }.onFailure {
-                    Timber.tag(TAG).e(it, "Failed to start notification service after permission grant")
-                }
-            }
-        }
     }
 
     fun startNotificationService() {
