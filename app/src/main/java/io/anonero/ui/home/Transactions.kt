@@ -693,7 +693,7 @@ fun TransactionScreen(
                             text = "XMR",
                             fontFamily = customXmrFont,
                             fontSize = 50.sp,
-                            modifier = Modifier.padding(start = 8.dp).offset(y = (-2).dp)
+                            modifier = Modifier.padding(start = 4.dp).offset(y = (-2).dp)
                         )
                         Text(
                             if (hideAmounts) Formats.maskAmount(balance ?: 0)
