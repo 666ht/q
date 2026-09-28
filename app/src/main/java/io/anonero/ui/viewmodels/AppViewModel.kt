@@ -42,6 +42,9 @@ class AppViewModel(private val walletState: WalletState, private val torService:
             walletHandler.openWallet(pin)
         } catch (e: InvalidPin) {
             false
+        } catch (e: Throwable) {
+            Timber.tag(TAG).e(e, "openWallet failed")
+            false
         }
     }
 
