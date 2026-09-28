@@ -10,7 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -94,17 +94,18 @@ fun CoinDetailScreen(
                     style = MaterialTheme.typography.bodyMedium
                 )
             }
-            Button(
+            OutlinedButton(
                 onClick = { },
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(bottom = 16.dp),
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.onBackground),
-                colors = ButtonDefaults.buttonColors(
+                colors = ButtonDefaults.outlinedButtonColors(
                     containerColor = MaterialTheme.colorScheme.background,
                     contentColor = MaterialTheme.colorScheme.onBackground
                 ),
-                shape = MaterialTheme.shapes.small
+                shape = MaterialTheme.shapes.medium,
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(12.dp)
             ) {
                 Text(if (coin?.frozen == true) "解冻" else "冻结")
             }
