@@ -79,7 +79,9 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
                 // another blocking refresh before the UI is marked complete.
                 wallet.setSynchronized()
                 walletState.syncUpdate(SyncProgress(1f, 0L))
-                walletState.update()
+                // Force-refresh the Java transaction cache and publish balance/history
+                // without allowing the normal update gate to suppress the final data.
+                walletState.publishAfterSync()
                 walletState.setLoading(false)
                 // Persist after the completed state is visible.
                 try {
