@@ -78,7 +78,9 @@ fun CoinDetailScreen(
                         style = MaterialTheme.typography.titleMedium
                     )
                     CircularProgressIndicator(
-                        modifier = Modifier.padding(start = 8.dp),
+                        modifier = Modifier
+                            .padding(start = 8.dp)
+                            .size(28.dp),
                         color = MaterialTheme.colorScheme.primary,
                         strokeWidth = 2.dp
                     )
