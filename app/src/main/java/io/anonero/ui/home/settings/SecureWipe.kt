@@ -107,7 +107,7 @@ class SecureWipeViewModel(
         return viewModelScope.launch(Dispatchers.IO) {
             _wipeProgress.postValue(.1f)
             _wipeProgressMessage.postValue(
-                AnonConfig.context?.getString(R.string.wiping_wallet) ?: "正在擦除钱包"
+                AnonConfig.context?.getString(R.string.wiping_wallet) ?: "正在关闭并清理钱包"
             )
             runCatching { activity?.stopNotificationService() }
                 .onFailure {
@@ -158,6 +158,7 @@ class SecureWipeViewModel(
                 }
 
             // Clear keystore credentials before the final filesystem pass.
+            _wipeProgressMessage.postValue(AnonConfig.context?.getString(R.string.clearing_keys) ?: "正在清除加密密钥")
             runCatching {
                 KeyStoreHelper.clearWalletCredentials(
                     AnonConfig.context?.applicationContext ?: return@runCatching,
@@ -168,6 +169,8 @@ class SecureWipeViewModel(
                 Timber.tag(TAG).e(it, "Secure wipe keystore credentials failed")
             }
 
+            _wipeProgress.postValue(.85f)
+            _wipeProgressMessage.postValue(AnonConfig.context?.getString(R.string.clearing_cache) ?: "正在清理缓存")
             runCatching {
                 // Clear every preference store first, including restore height
                 // and wallet password/passphrase state.
@@ -204,7 +207,7 @@ class SecureWipeViewModel(
 
             _wipeProgress.postValue(.95f)
             _wipeProgressMessage.postValue(
-                AnonConfig.context?.getString(R.string.logs_cleared) ?: "正在完成最终清理"
+                AnonConfig.context?.getString(R.string.finalizing_wipe) ?: "正在完成安全清理"
             )
             delay(300)
 
