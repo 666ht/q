@@ -32,6 +32,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.runtime.mutableStateOf
@@ -58,6 +59,7 @@ import io.anonero.R
 import io.anonero.model.PendingTransaction
 import io.anonero.model.UnsignedTransaction
 import io.anonero.model.WalletManager
+import io.anonero.services.WalletState
 import io.anonero.ui.home.graph.routes.ReviewTransactionRoute
 import io.anonero.ui.home.spend.qr.ExportType
 import io.anonero.ui.home.spend.qr.ImportEvents
@@ -72,6 +74,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import timber.log.Timber
+import org.koin.compose.koinInject
 import java.io.File
 
 enum class BroadcastState {
@@ -208,6 +211,8 @@ fun ReviewTransactionScreen(
 
     var qrScannerParam by remember { mutableStateOf<SpendQRExchangeParam?>(null) }
     val viewModel = viewModel<ReviewTransactionViewModel>()
+    val walletState = koinInject<WalletState>()
+    val hideAmounts by walletState.hideAmountsFlow.collectAsState(false)
     val reviewModel by viewModel.reviewModelLive.observeAsState()
     val scope = rememberCoroutineScope()
     val view = LocalView.current
@@ -438,8 +443,7 @@ fun ReviewTransactionScreen(
                                     headlineContent = { Text(stringResource(R.string.amount), style = titleStyle) },
                                     supportingContent = {
                                         Text(
-                                            Formats.getDisplayAmount(
-                                                reviewModel!!.amount                                            ),
+                                            if (hideAmounts) Formats.maskAmount(reviewModel!!.amount) else Formats.getDisplayAmount(reviewModel!!.amount),
                                             style = subTitleStyle
                                         )
                                     }
@@ -451,9 +455,7 @@ fun ReviewTransactionScreen(
                                     headlineContent = { Text(stringResource(R.string.fee), style = titleStyle) },
                                     supportingContent = {
                                         Text(
-                                            Formats.getDisplayAmount(
-                                                reviewModel!!.fee
-                                            ),
+                                            if (hideAmounts) Formats.maskAmount(reviewModel!!.fee) else Formats.getDisplayAmount(reviewModel!!.fee),
                                             style = subTitleStyle
                                         )
                                     }
@@ -464,9 +466,7 @@ fun ReviewTransactionScreen(
                                     headlineContent = { Text(stringResource(R.string.total), style = titleStyle) },
                                     supportingContent = {
                                         Text(
-                                            Formats.getDisplayAmount(
-                                                reviewModel!!.total
-                                            ),
+                                            if (hideAmounts) Formats.maskAmount(reviewModel!!.total) else Formats.getDisplayAmount(reviewModel!!.total),
                                             textAlign = TextAlign.Center,
                                             style = MaterialTheme.typography.titleLarge,
                                             modifier = Modifier
