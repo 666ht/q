@@ -206,7 +206,7 @@ fun NavGraphBuilder.onboardingGraph(
             var showErrorMessage by remember { mutableStateOf<String?>(null) }
             val context = LocalContext.current
             val appViewModel: AppViewModel = koinViewModel()
-            OnboardErrorDialog/(
+            OnboardErrorDialog(
                 showErrorMessage = showErrorMessage,
                 isRestoreMode = onboardViewModel.getMode() == Mode.RESTORE,
                 onClose = {
