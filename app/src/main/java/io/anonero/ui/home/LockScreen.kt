@@ -155,7 +155,9 @@ fun LockScreen(
                             }
                         )
                         if (prefsHash == pinHash) {
-                            onUnLocked(pin, shortCut)
+                            withContext(Dispatchers.Main) {
+                                onUnLocked(pin, shortCut)
+                            }
                         } else {
                             withContext(Dispatchers.Main) {
                                 showError()
@@ -202,7 +204,9 @@ fun LockScreen(
                         if (prefsHash != pinHash) {
                             withContext(Dispatchers.Main) { showError() }
                         } else {
-                            onUnLocked(pin, shortCut)
+                            withContext(Dispatchers.Main) {
+                                onUnLocked(pin, shortCut)
+                            }
                         }
                     }
                 } catch (e: Exception) {
