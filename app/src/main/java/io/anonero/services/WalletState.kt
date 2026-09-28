@@ -215,24 +215,7 @@ class WalletState {
         val done = syncProgress.progress >= 1f || syncProgress.left <= 0L
         _syncProgress.update { if (done) null else syncProgress }
         _isSyncing.set(!done)
-        if (done) {
-            // The native refresh callback can mark block sync complete before the
-            // wallet history/balance has been reflected in the UI state. Re-read
-            // both after synchronization so the final state is not left stale.
-            refreshScope.launch {
-                val wallet = getWallet
-                if (wallet?.isInitialized == true) {
-                    runCatching {
-                        wallet.refreshHistory()
-                        wallet.refreshCoins()
-                    }.onFailure {
-                        Timber.tag(TAG).e(it, "final wallet refresh after sync failed")
-                    }
-                }
-                update()
-                setLoading(false)
-            }
-        }
+        // Final wallet refresh is completed by refreshed() before loading is cleared.
     }
 
     fun toggleHideAmounts() {
