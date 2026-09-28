@@ -19,6 +19,7 @@ import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.plus
+import java.io.File
 import org.json.JSONObject
 import timber.log.Timber
 import androidx.core.content.edit
@@ -238,26 +239,37 @@ class AnonWalletHandler(
                 Timber.tag(TAG).e("Wallet native close returned false; continuing file deletion")
             }
         }
+        // Stop Tor as well so no background component keeps wallet/app files open.
+        runCatching { torService.stop() }
+            .onFailure { Timber.tag(TAG).e(it, "Tor stop failed; continuing secure wipe") }
+
         // Drop the Kotlin manager reference before touching the wallet files on disk.
         WalletManager.resetInstance()
 
-        val walletDir = AnonConfig.context?.let { AnonConfig.getDefaultWalletDir(it) }
-        var deleted = walletDir?.let { !it.exists() } ?: true
-        if (walletDir != null) {
-            repeat(5) {
-                if (deleted) return@repeat
-                deleted = walletDir.deleteRecursively()
-                if (!deleted) {
+        val appContext = AnonConfig.context?.applicationContext
+        var deleted = true
+        if (appContext != null) {
+            // Do not recreate the wallet directory while checking it.
+            val walletDir = File(appContext.filesDir, "wallets")
+            repeat(20) {
+                if (!walletDir.exists()) return@repeat
+                if (!walletDir.deleteRecursively()) {
                     Thread.sleep(100)
                 }
             }
-            if (!deleted && walletDir.exists()) {
-                Timber.tag(TAG).e("Wallet directory still exists after secure wipe: %s", walletDir)
+            deleted = !walletDir.exists()
+
+            // Wipe the complete app-private data set as the final step. This also
+            // removes wallet files that were created outside the standard wallet path.
+            repeat(5) {
+                if (AnonConfig.clearAllAppData(appContext)) return@repeat
+                Thread.sleep(100)
             }
+            deleted = deleted && AnonConfig.clearAllAppData(appContext)
         }
 
-        // The animation flow must continue even if native close reports failure.
-        // A successful wipe is determined by the wallet files actually being gone.
+        // Native close failure must not prevent deletion when the filesystem can
+        // remove the wallet files. Syncing and non-syncing wallets use the same path.
         return deleted
     }
 
