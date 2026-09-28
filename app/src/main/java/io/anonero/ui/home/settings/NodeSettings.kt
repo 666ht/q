@@ -81,6 +81,7 @@ import io.anonero.services.WalletState
 import io.anonero.store.NodesRepository
 import io.anonero.ui.components.DaemonStatus
 import io.anonero.ui.components.WalletProgressIndicator
+import io.anonero.ui.home.graph.routes.ResetSyncRoute
 import io.anonero.ui.theme.DangerColor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
