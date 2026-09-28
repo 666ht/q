@@ -127,7 +127,14 @@ object AnonConfig {
         // Wipe every child of the app data root, including files/directories
         // that are not part of the known wallet paths.
         val dataRoot = File(app.applicationInfo.dataDir)
-        val success = deleteContents(dataRoot)
+        var success = deleteContents(dataRoot)
+
+        app.getExternalFilesDirs(null).filterNotNull().forEach { dir ->
+            if (!deleteContents(dir)) success = false
+        }
+        app.externalCacheDirs.filterNotNull().forEach { dir ->
+            if (!deleteContents(dir)) success = false
+        }
 
         walletFound = false
         return success
