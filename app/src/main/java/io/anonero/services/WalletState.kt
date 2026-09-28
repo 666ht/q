@@ -227,6 +227,9 @@ class WalletState {
         _isSyncing.set(!done)
         if (done) {
             _connectionStatus.update { Wallet.ConnectionStatus.ConnectionStatus_Connected }
+            // Sync completion must publish the freshly synchronized balance/history.
+            update()
+            setLoading(false)
         }
     }
 
