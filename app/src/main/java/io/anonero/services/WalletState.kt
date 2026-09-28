@@ -323,21 +323,33 @@ class WalletState {
     }
 
     fun refresh() {
-        if (getWallet?.isInitialized != true) return
-        if (getWallet?.fullStatus?.connectionStatus == Wallet.ConnectionStatus.ConnectionStatus_Connected) {
+        val wallet = getWallet ?: return
+        if (!wallet.isInitialized) return
+
+        // Native wallet refresh is not re-entrant. During blockchain sync the
+        // existing refresh must be allowed to finish; starting another refresh
+        // from the UI can block the native wallet and make the screen appear
+        // frozen. The active sync callback will publish the final data.
+        if (_isSyncing.get() || wallet.isSynchronized.not()) {
+            Timber.tag(TAG).d("refresh ignored while wallet sync is active")
+            return
+        }
+
+        if (wallet.fullStatus.connectionStatus == Wallet.ConnectionStatus.ConnectionStatus_Connected) {
             setLoading(true)
             refreshScope.launch {
                 try {
-                    getWallet?.startRefresh()
+                    wallet.startRefresh()
                 } catch (e: Exception) {
                     Timber.tag(TAG).e(e, "refresh error")
                     setLoading(false)
                 }
             }
         }
+
         refreshScope.launch {
             try {
-                getWallet?.refreshHistory()
+                wallet.refreshHistory()
             } catch (e: Exception) {
                 Timber.tag(TAG).e(e, "refreshHistory error")
             }
