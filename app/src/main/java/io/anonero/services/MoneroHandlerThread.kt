@@ -74,27 +74,21 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
                 if (!wallet.isSynchronized) {
                     updateSyncProgress(wallet.getBlockChainHeight())
                 }
+                // The native wallet refresh has already completed here. Publish
+                // the current native balance/history immediately instead of doing
+                // another blocking refresh before the UI is marked complete.
                 wallet.setSynchronized()
-                wallet.store()
-                // Refresh history/coins independently. A failure in one must not
-                // prevent the completed sync state and already refreshed data from
-                // reaching the UI or leave the progress indicator running.
-                try {
-                    wallet.refreshHistory()
-                } catch (e: Exception) {
-                    Timber.tag(name).e(e, "refreshHistory after sync failed")
-                }
-                try {
-                    wallet.refreshCoins()
-                } catch (e: Exception) {
-                    Timber.tag(name).e(e, "refreshCoins after sync failed")
-                }
                 walletState.syncUpdate(SyncProgress(1f, 0L))
                 walletState.update()
                 walletState.setLoading(false)
+                // Persist after the completed state is visible.
+                try {
+                    wallet.store()
+                } catch (e: Exception) {
+                    Timber.tag(name).e(e, "wallet store after sync failed")
+                }
             }
         }
-        walletState.update()
     }
 
     private fun tryRestartConnection() {
