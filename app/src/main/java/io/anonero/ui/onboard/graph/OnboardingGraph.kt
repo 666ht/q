@@ -23,7 +23,6 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.dialog
 import androidx.navigation.compose.navigation
-import org.koin.androidx.compose.koinViewModel
 import androidx.navigation.toRoute
 import io.anonero.AnonConfig
 import io.anonero.R
@@ -41,7 +40,6 @@ import io.anonero.ui.onboard.SetupNodeComposable
 import io.anonero.ui.onboard.SetupPassphrase
 import io.anonero.ui.onboard.restore.RestorePreview
 import io.anonero.ui.onboard.viewonly.RestoreFromKeys
-import io.anonero.ui.viewmodels.AppViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -205,7 +203,6 @@ fun NavGraphBuilder.onboardingGraph(
         composable<OnboardPinScreen> {
             var showErrorMessage by remember { mutableStateOf<String?>(null) }
             val context = LocalContext.current
-            val appViewModel: AppViewModel = koinViewModel()
             OnboardErrorDialog(
                 showErrorMessage = showErrorMessage,
                 isRestoreMode = onboardViewModel.getMode() == Mode.RESTORE,
@@ -229,14 +226,12 @@ fun NavGraphBuilder.onboardingGraph(
                     onboardViewModel.viewModelScope.launch {
                         if (AnonConfig.viewOnly) {
                             onboardViewModel.createViewOnly(pin)
-                        } else if (onboardViewModel.getMode() == Mode.RESTORE) {
-                            withContext(Dispatchers.IO) {
-                                onboardViewModel.restoreFromSeed(pin)
-                            }
-                            if (!appViewModel.openWallet(pin)) {
-                                throw Exception(context.getString(R.string.unable_to_create_wallet))
-                            }
                         } else {
+                            if (onboardViewModel.getMode() == Mode.RESTORE) {
+                                withContext(Dispatchers.IO) {
+                                    onboardViewModel.restoreFromSeed(pin)
+                                }
+                            } else {
                             onboardViewModel.create(pin)
                         }
                         delay(600)
