@@ -77,6 +77,7 @@
     <string name="refresh">Refresh</string>
     <string name="resync_blockchain">Resync BlockChain</string>
     <string name="resync_initiated_this_may_take_a_while">Resync initiated… this may take a while.</string>
+    <string name="resync_daemon_required">Please connect to daemon for resync</string>
     <string name="show_outputs">Show Outputs</string>
     <string name="lock">Lock</string>
     <string name="creating_wallet">Creating wallet...</string>
