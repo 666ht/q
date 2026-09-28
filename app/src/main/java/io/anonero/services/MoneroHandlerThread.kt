@@ -26,22 +26,27 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
     }
 
     override fun moneySpent(txId: String?, amount: Long) {
-
+        if (walletState.isWiping()) return
     }
 
     override fun moneyReceived(txId: String?, amount: Long) {
+        if (walletState.isWiping()) return
         Timber.tag(name).i("moneyReceived: %s", amount)
         WalletManager.instance?.wallet?.store()
     }
 
-    override fun unconfirmedMoneyReceived(txId: String?, amount: Long) {}
+    override fun unconfirmedMoneyReceived(txId: String?, amount: Long) {
+        if (walletState.isWiping()) return
+    }
 
     override fun newBlock(height: Long) {
+        if (walletState.isWiping()) return
         Timber.tag(name).i("newBlock: %s", height)
         updateSyncProgress(height)
     }
 
     private fun updateSyncProgress(height: Long) {
+        if (walletState.isWiping()) return
         val syncHeight = wallet.getBlockChainHeight()
         val deamonHeight = wallet.getDaemonBlockChainHeight()
         val left = deamonHeight - syncHeight
@@ -57,12 +62,14 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
     }
 
     override fun updated() {
+        if (walletState.isWiping()) return
         refresh(false)
         Timber.tag(name).i("updated()")
         walletState.update()
     }
 
     override fun refreshed() {
+        if (walletState.isWiping()) return
         val status = wallet.fullStatus.connectionStatus
         val daemonHeight = wallet.getDaemonBlockChainHeight()
         val chainHeight = wallet.getBlockChainHeight()
