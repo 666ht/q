@@ -8,16 +8,15 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -38,7 +37,6 @@ import java.util.Locale
 
 private const val BLOCK_TIME_SECONDS = 120L
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ResetSyncPage(
     onBackPress: () -> Unit = {}
@@ -65,11 +63,14 @@ fun ResetSyncPage(
         }
     }
 
+    val defaultHeight = remember(wallet) {
+        wallet?.getRestoreHeight() ?: 0L
+    }
     var height by remember {
-        mutableStateOf(wallet?.getRestoreHeight()?.toString() ?: "")
+        mutableStateOf("")
     }
     var date by remember {
-        mutableStateOf(wallet?.getRestoreHeight()?.let(::dateForHeight) ?: "")
+        mutableStateOf("")
     }
     var error by remember { mutableStateOf<String?>(null) }
 
@@ -92,6 +93,8 @@ fun ResetSyncPage(
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.Top
         ) {
+            Spacer(modifier = Modifier.height(56.dp))
+
             OutlinedTextField(
                 value = height,
                 onValueChange = {
@@ -103,11 +106,6 @@ fun ResetSyncPage(
                 label = { Text("高度恢复") },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-            )
-            Text(
-                text = "日期：$date",
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.padding(start = 4.dp, top = 6.dp)
             )
 
             Spacer(modifier = Modifier.height(56.dp))
@@ -123,29 +121,29 @@ fun ResetSyncPage(
                 label = { Text("日期恢复") },
                 singleLine = true
             )
-            Text(
-                text = "高度：$height",
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.padding(start = 4.dp, top = 6.dp)
-            )
 
             if (error != null) {
                 Text(
                     text = error!!,
-                    color = MaterialTheme.colorScheme.error,
                     modifier = Modifier.padding(top = 16.dp)
                 )
             }
 
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.weight(1f))
 
             Button(
                 onClick = {
-                    val restoreHeight = height.toLongOrNull()
+                    val restoreHeight = when {
+                        height.isNotBlank() -> height.toLongOrNull()
+                        date.isNotBlank() -> heightForDate(date)
+                        else -> defaultHeight
+                    }
+
                     if (restoreHeight == null) {
                         error = "请输入有效高度或日期"
                         return@Button
                     }
+
                     val result = walletState.resetSyncFromHeight(restoreHeight)
                     if (result.isSuccess) {
                         onBackPress()
@@ -153,7 +151,9 @@ fun ResetSyncPage(
                         error = result.exceptionOrNull()?.message ?: "重置失败"
                     }
                 },
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp)
             ) {
                 Text("重置")
             }
