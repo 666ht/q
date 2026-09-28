@@ -36,6 +36,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -61,6 +62,7 @@ import androidx.core.net.toUri
 fun SetupNodeComposable(
     onBackPressed: () -> Unit = {},
     oNextPressed: () -> Unit = {},
+    showTitle: Boolean = true,
 ) {
     var rpcHost by remember { mutableStateOf("") }
     var rpcUsername by remember { mutableStateOf("") }
@@ -126,7 +128,8 @@ fun SetupNodeComposable(
                 Text(
                     text = stringResource(R.string.node_connection),
                     style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.alpha(if (showTitle) 1f else 0f)
                 )
             }
             Column(
