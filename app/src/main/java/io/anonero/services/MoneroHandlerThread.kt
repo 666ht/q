@@ -40,13 +40,14 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
     private fun updateSyncProgress(height: Long) {
         if (walletState.isWiping() || wallet.isSynchronized) return
         val syncHeight = wallet.getBlockChainHeight()
-        val deamonHeight = wallet.getDaemonBlockChainHeight()
-        val left = deamonHeight - syncHeight
+        val daemonHeight = wallet.getDaemonBlockChainHeight()
+        val left = daemonHeight - syncHeight
         if (syncHeight < 0 || left < 0) return
-        val progress = if (wallet.getDaemonBlockChainTargetHeight().toDouble() == 0.0) {
+        val targetHeight = wallet.getDaemonBlockChainTargetHeight()
+        val progress = if (targetHeight <= 0L) {
             1f
         } else {
-            (height.toDouble() / wallet.getDaemonBlockChainTargetHeight().toDouble()).toFloat()
+            (height.toDouble() / targetHeight.toDouble()).toFloat().coerceIn(0f, 1f)
         }
         walletState.syncUpdate(SyncProgress(progress, left))
     }
@@ -63,33 +64,48 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
         val status = wallet.fullStatus.connectionStatus
         val daemonHeight = wallet.getDaemonBlockChainHeight()
         val chainHeight = wallet.getBlockChainHeight()
-        Timber.tag(name).i("refreshed() status:\${status} daemonHeight:\${daemonHeight} chainHeight:\${chainHeight} ")
-        if (status === Wallet.ConnectionStatus.ConnectionStatus_Disconnected || status == null) {
+        Timber.tag(name).i(
+            "refreshed() status:%s daemonHeight:%s chainHeight:%s",
+            status, daemonHeight, chainHeight
+        )
+
+        if (status == Wallet.ConnectionStatus.ConnectionStatus_Disconnected || status == null) {
             tryRestartConnection()
-        } else {
-            val heightDiff = daemonHeight - chainHeight
-            if (heightDiff >= 2) {
-                tryRestartConnection()
-            } else {
-                if (!wallet.isSynchronized) {
-                    updateSyncProgress(wallet.getBlockChainHeight())
-                }
-                // The native wallet refresh has already completed here. Publish
-                // the current native balance/history immediately instead of doing
-                // another blocking refresh before the UI is marked complete.
-                wallet.setSynchronized()
-                walletState.syncUpdate(SyncProgress(1f, 0L))
-                // Force-refresh the Java transaction cache and publish balance/history
-                // without allowing the normal update gate to suppress the final data.
-                walletState.publishAfterSync()
-                walletState.setLoading(false)
-                // Persist after the completed state is visible.
-                try {
-                    wallet.store()
-                } catch (e: Exception) {
-                    Timber.tag(name).e(e, "wallet store after sync failed")
-                }
+            return
+        }
+
+        val heightDiff = daemonHeight - chainHeight
+        if (heightDiff >= 2) {
+            // Do not publish completion while the native wallet is still behind.
+            updateSyncProgress(chainHeight)
+            tryRestartConnection()
+            return
+        }
+
+        try {
+            wallet.setSynchronized()
+            walletState.syncUpdate(SyncProgress(1f, 0L))
+
+            // The native refresh is complete. Refresh the Java caches and publish
+            // their values even when the regular update gate is active.
+            wallet.refreshHistory()
+            wallet.refreshCoins()
+            if (!walletState.publishAfterSync()) {
+                Timber.tag(name).w("publishAfterSync returned false; using fallback update")
+                walletState.update()
             }
+        } catch (e: Exception) {
+            Timber.tag(name).e(e, "sync completion publish failed")
+            walletState.update()
+        } finally {
+            // Never leave the UI in the loading state after refreshed() returns.
+            walletState.setLoading(false)
+        }
+
+        try {
+            wallet.store()
+        } catch (e: Exception) {
+            Timber.tag(name).e(e, "wallet store after sync failed")
         }
     }
 
