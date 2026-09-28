@@ -443,6 +443,21 @@ fun NodeSettings(onBackPress: () -> Unit = {}, navigateTo: (Any) -> Unit = {}) {
                         HorizontalDivider()
                     }
                 }
+            item(key = "reset_sync") {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 16.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    AnonOutlineButton(
+                        modifier = Modifier.fillMaxWidth(.9f),
+                        onClick = { navigateTo(ResetSyncRoute) }
+                    ) {
+                        Text(stringResource(R.string.resync_blockchain))
+                    }
+                }
+            }
             if (availableNodes.isNotEmpty())
                 items(
                     availableNodes.size,
