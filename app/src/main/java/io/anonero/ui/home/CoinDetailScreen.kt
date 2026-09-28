@@ -121,7 +121,9 @@ fun CoinDetailScreen(
                         }
                     }
                 },
-                modifier = Modifier.padding(bottom = 16.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp)
             ) {
                 Text(if (coin?.frozen == true) "解冻" else "冻结")
             }
