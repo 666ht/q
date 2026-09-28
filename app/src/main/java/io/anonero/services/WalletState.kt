@@ -3,6 +3,7 @@ package io.anonero.services
 import androidx.compose.ui.util.fastDistinctBy
 import androidx.compose.ui.util.fastFilter
 import io.anonero.AnonConfig
+import io.anonero.R
 import io.anonero.model.CoinsInfo
 import io.anonero.model.Subaddress
 import io.anonero.model.TransactionInfo
@@ -319,7 +320,7 @@ class WalletState {
         setLoading(true);
         try {
             if (getWallet?.fullStatus?.connectionStatus != Wallet.ConnectionStatus.ConnectionStatus_Connected) {
-                return Result.failure(Exception("Please connect to daemon for resync"))
+                return Result.failure(Exception(AnonConfig.context?.getString(R.string.resync_daemon_required) ?: "Please connect to daemon for resync"))
             }
             getWallet?.rescanBlockchainAsync()
             return Result.success(true)
