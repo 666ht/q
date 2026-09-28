@@ -200,6 +200,5 @@ class MainActivity : ComponentActivity() {
         torService.dispose()
         scope.cancel()
         super.onDestroy()
-        Process.killProcess(Process.myPid())
     }
 }
