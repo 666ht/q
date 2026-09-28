@@ -76,9 +76,9 @@ fun TransactionDetailScreen(
     animatedContentScope: AnimatedContentScope
 ) {
 //    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
-    var transactionInfo: TransactionInfo? by remember { mutableStateOf(null) }
     val walletState = koinInject<WalletState>()
     val transactions by walletState.transactions.collectAsState(listOf())
+    val transactionInfo = transactions.find { it.hash == transactionId }
     val scope = rememberCoroutineScope()
     var notesDialog by remember { mutableStateOf(false) }
     var notes by remember { mutableStateOf(TextFieldValue(text = "")) }
@@ -100,34 +100,27 @@ fun TransactionDetailScreen(
         }
     }
 
-    LaunchedEffect(true) {
+    LaunchedEffect(transactionInfo?.hash) {
+        val tx = transactionInfo ?: return@LaunchedEffect
+        val wallet = WalletManager.instance?.wallet ?: return@LaunchedEffect
         scope.launch {
-            transactionInfo = transactions.find { it.hash == transactionId }
-            val wallet = WalletManager.instance?.wallet ?: return@launch
-            if (transactionInfo != null) {
-                var destination = ""
-                transactionInfo?.transfers?.forEach {
-                    destination = "${it.address}\n${destination}"
-                }
-                destinations = destination.trim()
-
-                if (transactionInfo?.direction == TransactionInfo.Direction.Direction_In) {
-                    destinations = wallet.getSubaddress(
-                        0,
-                        transactionInfo!!.addressIndex
-                    )
-                }
-                transactionKey =
-                    wallet.getTxKey(transactionInfo!!.hash) ?: "____"
-
-                transactionInfo?.notes?.let {
-                    notes = notes.copy(
-                        text = it,
-                        selection = TextRange(it.length)
-                    )
-                }
+            var destination = ""
+            tx.transfers?.forEach {
+                destination = it.address + "\n" + destination
             }
+            destinations = destination.trim()
 
+            if (tx.direction == TransactionInfo.Direction.Direction_In) {
+                destinations = wallet.getSubaddress(0, tx.addressIndex)
+            }
+            transactionKey = wallet.getTxKey(tx.hash) ?: "____"
+
+            tx.notes?.let {
+                notes = notes.copy(
+                    text = it,
+                    selection = TextRange(it.length)
+                )
+            }
         }
     }
 
