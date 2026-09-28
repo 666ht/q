@@ -786,7 +786,7 @@ fun TransactionItem(tx: TransactionInfo, hideAmounts: Boolean = false, modifier:
                         )
                     }
             }
-        Spacer(modifier = Modifier.size(8.dp))
+        Spacer(modifier = Modifier.size(10.dp))
         Text(
             if (hideAmounts) Formats.maskAmount(amount)
             else Formats.getDisplayAmount(amount),
