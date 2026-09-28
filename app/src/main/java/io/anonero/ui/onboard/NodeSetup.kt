@@ -62,7 +62,6 @@ import androidx.core.net.toUri
 fun SetupNodeComposable(
     onBackPressed: () -> Unit = {},
     oNextPressed: () -> Unit = {},
-    showTitle: Boolean = true,
 ) {
     var rpcHost by remember { mutableStateOf("") }
     var rpcUsername by remember { mutableStateOf("") }
