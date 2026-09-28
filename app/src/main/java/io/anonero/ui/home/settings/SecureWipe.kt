@@ -109,10 +109,6 @@ class SecureWipeViewModel(
             _wipeProgressMessage.postValue(
                 AnonConfig.context?.getString(R.string.wiping_wallet) ?: "正在关闭并清理钱包"
             )
-            runCatching { activity?.stopNotificationService() }
-                .onFailure {
-                    Timber.tag(TAG).e(it, "Stopping notification service failed; continuing secure wipe")
-                }
             _wipeProgress.postValue(.3f)
             var wipeFailure: Throwable? = null
             val walletWiped = runCatching { anonWalletHandler.wipe(passPhrase) }
