@@ -16,6 +16,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -133,6 +134,12 @@ class WalletState {
                 _coins.update { (wallet.coins?.all ?: listOf()).fastFilter { !it.spent } }
             }
         }
+    }
+
+    fun prepareForWipe() {
+        _blockUpdates.set(true)
+        refreshScope.coroutineContext.cancelChildren()
+        _backgroundSync.value = false
     }
 
     fun setLoading(b: Boolean) {
