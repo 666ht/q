@@ -93,6 +93,8 @@ class AnonNeroService : Service() {
             walletState.walletConnectionStatus.collect {
                 updateNotificationState()
             }
+        }
+        scope.launch {
             walletState.walletStatus.collect {
                 updateNotificationState()
             }
@@ -116,9 +118,18 @@ class AnonNeroService : Service() {
                 } else {
                     ""
                 }
-                if (it != null) {
-                    withContext(Dispatchers.Main) {
+                withContext(Dispatchers.Main) {
+                    if (it != null) {
                         showProgress(it, torSate)
+                    } else {
+                        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                        manager.notify(
+                            NOTIFICATION_ID,
+                            foregroundNotification(
+                                content = getString(R.string.notification_sync_completed, torSate),
+                                progress = null
+                            )
+                        )
                     }
                 }
             }
@@ -209,8 +220,10 @@ class AnonNeroService : Service() {
             .setContentTitle(title)
             .setContentText(content)
             .apply {
-                if (progress != null && progress.progress < 1) {
+                if (progress != null && progress.progress < 1f) {
                     this.setProgress(100, (progress.progress * 100).toInt(), false)
+                } else {
+                    this.setProgress(0, 0, false)
                 }
             }
             .setGroup("BackgroundService")
