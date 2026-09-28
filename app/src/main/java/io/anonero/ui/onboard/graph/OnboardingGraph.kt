@@ -138,6 +138,7 @@ fun NavGraphBuilder.onboardingGraph(
         }
         composable<OnboardNodeSetupScreen> {
             SetupNodeComposable(
+                showTitle = onboardViewModel.getMode() != Mode.RESTORE,
                 onBackPressed = {
                     navController.navigateUp()
                 },
