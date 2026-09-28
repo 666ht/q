@@ -60,33 +60,39 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
 
     override fun refreshed() {
         if (walletState.isWiping()) return
+
         val status = wallet.fullStatus.connectionStatus
         val daemonHeight = wallet.getDaemonBlockChainHeight()
         val chainHeight = wallet.getBlockChainHeight()
-        Timber.tag(name).i("refreshed() status:\${status} daemonHeight:\${daemonHeight} chainHeight:\${chainHeight} ")
+
+        Timber.tag(name).i(
+            "refreshed() status:%s daemonHeight:%s chainHeight:%s",
+            status,
+            daemonHeight,
+            chainHeight
+        )
+
         if (status === Wallet.ConnectionStatus.ConnectionStatus_Disconnected || status == null) {
             tryRestartConnection()
-        } else {
-            val heightDiff = daemonHeight - chainHeight
-            if (heightDiff >= 2) {
-                updateSyncProgress(chainHeight)
-                return
-            }
-
-            // Native refresh has caught up with the daemon. Publish the final
-            // wallet snapshot before clearing the UI sync/loading state.
-            wallet.setSynchronized()
-            walletState.publishAfterSync()
-            walletState.update()
-            walletState.syncUpdate(SyncProgress(1f, 0L))
-            walletState.setLoading(false)
-
-            try {
-                wallet.store()
-            } catch (e: Exception) {
-                Timber.tag(name).e(e, "wallet store after sync failed")
-            }
+            return
         }
+
+        val heightDiff = daemonHeight - chainHeight
+        if (heightDiff >= 2) {
+            tryRestartConnection()
+            return
+        }
+
+        if (!wallet.isSynchronized) {
+            updateSyncProgress(chainHeight)
+        }
+        wallet.setSynchronized()
+        wallet.store()
+        refresh(true)
+        walletState.publishAfterSync()
+        walletState.syncUpdate(SyncProgress(1f, 0L))
+        walletState.setLoading(false)
+        walletState.update()
     }
 
     private fun tryRestartConnection() {
