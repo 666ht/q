@@ -36,7 +36,6 @@ object AnonConfig {
     const val EXPORT_SIGNED_TX_FILE = "export_signed_tx.stx"
     const val IMPORT_SIGNED_TX_FILE = "import_signed_tx"
 
-
     fun getNetworkType(): NetworkType {
         if (BuildConfig.APPLICATION_ID.lowercase().contains("stagenet")) {
             return NetworkType.NetworkType_Stagenet
@@ -52,7 +51,6 @@ object AnonConfig {
         return anonWallet
     }
 
-
     fun getTorConfig(scope: CoroutineScope): TorRuntime.Environment {
         val torDir = File(context?.filesDir, "tor")
         torDir.mkdirs()
@@ -65,16 +63,14 @@ object AnonConfig {
         )
     }
 
-
     fun isWalletFileExist(): Boolean {
         return walletFound
     }
 
-
     fun getLogFile(context: Context): File {
         val logDir = File(context.applicationContext.cacheDir, "logs")
         if (!logDir.exists()) {
-            logDir.mkdirs() // Create the directory if it doesn't exist
+            logDir.mkdirs()
         }
         val logFile = File(logDir, "anon_log")
         if (!logFile.exists()) {
@@ -110,7 +106,7 @@ object AnonConfig {
 
             EXPORT_SIGNED_TX_FILE,
             IMPORT_SIGNED_TX_FILE
-        );
+        )
         context.cacheDir.listFiles()?.forEach { file ->
             if (files.any { file.name.contains(it) }) {
                 file.delete()
@@ -132,7 +128,7 @@ object AnonConfig {
             app.filesDir,
             app.cacheDir,
             app.noBackupFilesDir,
-            app.externalFilesDir,
+            app.getExternalFilesDir(null),
             app.externalCacheDir,
             File(app.applicationInfo.dataDir, "databases"),
             File(app.applicationInfo.dataDir, "shared_prefs"),
