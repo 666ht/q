@@ -3,6 +3,9 @@ package io.anonero.services
 import android.content.SharedPreferences
 import io.anonero.AnonConfig
 import io.anonero.model.WalletManager
+import io.anonero.model.node.Node
+import io.anonero.model.node.NodeFields
+import org.json.JSONObject
 import io.anonero.util.WALLET_PROXY
 import io.anonero.util.WALLET_PROXY_PORT
 import io.anonero.util.WALLET_USE_TOR
@@ -73,6 +76,10 @@ class AnonWalletHandler(
         walletState.setLoading(true)
         walletState.update()
         try {
+            val host = prefs.getString(NodeFields.RPC_HOST.value, "")
+            val rpcPort = prefs.getInt(NodeFields.RPC_PORT.value, Node.defaultRpcPort)
+            val rpcUsername = prefs.getString(NodeFields.RPC_USERNAME.value, "")
+            val rpcPassphrase = prefs.getString(NodeFields.RPC_PASSWORD.value, "")
             val proxyHost = prefs.getString(WALLET_PROXY, "")
             val proxyPort = prefs.getInt(WALLET_PROXY_PORT, -1)
             val useTor = prefs.getBoolean(WALLET_USE_TOR, true)
@@ -89,6 +96,20 @@ class AnonWalletHandler(
                 throw Exception("no proxy")
             }
 
+            if (host?.isNotEmpty() == true) {
+                val nodeObj = JSONObject().apply {
+                    put(NodeFields.RPC_HOST.value, host)
+                    put(NodeFields.RPC_PORT.value, rpcPort)
+                    put(NodeFields.RPC_USERNAME.value, rpcUsername)
+                    put(NodeFields.RPC_PASSWORD.value, rpcPassphrase)
+                    put(NodeFields.RPC_NETWORK.value, AnonConfig.getNetworkType().toString())
+                    put(NodeFields.NODE_NAME.value, "anon")
+                }
+                val node = Node.fromJson(nodeObj)
+                updateDaemon(node)
+                walletState.setLoading(true)
+            }
+
             walletState.update()
             if (wallet.isSynchronized) {
                 wallet.refreshHistory()
@@ -99,6 +120,8 @@ class AnonWalletHandler(
             }
             if (wallet.isInitialized) {
                 wallet.refreshHistory()
+                wallet.setTrustedDaemon(true)
+                wallet.startRefresh()
                 walletState.update()
             }
         } catch (e: Exception) {
