@@ -94,6 +94,7 @@ import io.anonero.services.WalletState
 import io.anonero.ui.components.WalletProgressIndicator
 import io.anonero.ui.home.graph.routes.CoinsScreenRoute
 import io.anonero.ui.home.graph.routes.ReviewTransactionRoute
+import io.anonero.ui.home.graph.routes.ResetSyncRoute
 import io.anonero.ui.home.graph.routes.SendScreenRoute
 import io.anonero.ui.home.graph.routes.SettingsNodeRoute
 import io.anonero.ui.home.graph.routes.TransactionsRoute
@@ -595,23 +596,7 @@ fun TransactionScreen(
                                 text = { Text(stringResource(R.string.resync_blockchain)) },
                                 onClick = {
                                     showMenu = false
-                                    val result = walletState.resyncBlockchain()
-                                    if (result.isFailure) {
-                                        scope.launch {
-                                            toastState.show(
-                                                context.getString(R.string.error_prefix, result.exceptionOrNull()?.message ?: ""),
-                                                type = ToastType.Warning,
-                                                duration = 6.seconds
-                                            )
-                                        }
-                                    } else {
-                                        scope.launch {
-                                            toastState.show(
-                                                context.getString(R.string.resync_initiated_this_may_take_a_while),
-                                                type = ToastType.Success,
-                                            )
-                                        }
-                                    }
+                                    navigateTo(ResetSyncRoute)
                                 }
                             )
                             if (AnonConfig.viewOnly) {
