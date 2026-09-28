@@ -23,9 +23,7 @@ fun Wallet.getLatestSubAddress(): Subaddress {
 fun Wallet.getAllUsedSubAddresses(): List<Subaddress> {
     return (0 until this.numSubAddresses)
         .map { this.getSubaddressObject(it) }
-        .apply {
-            this.removeIf { it.addressIndex == 0 && it.totalAmount != 0L }
-        }
+        .filterNot { it.addressIndex == 0 && it.totalAmount != 0L }
         .distinctBy { it.address }
         .sortedBy { it.addressIndex }
 }
