@@ -234,7 +234,7 @@ fun NavGraphBuilder.onboardingGraph(
                             withContext(Dispatchers.IO) {
                                 onboardViewModel.restoreFromSeed(pin)
                             }
-                            if (!appViewModel.openWallet(pin)) {
+                            if (!withContext(Dispatchers.IO) { appViewModel.openWallet(pin) }) {
                                 throw Exception(context.getString(R.string.unable_to_create_wallet))
                             }
                             appViewModel.startService()
