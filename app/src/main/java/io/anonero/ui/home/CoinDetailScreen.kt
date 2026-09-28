@@ -91,7 +91,6 @@ fun CoinDetailScreen(
                             modifier = Modifier
                                 .padding(start = 8.dp)
                                 .size(28.dp),
-                            color = MaterialTheme.colorScheme.primary,
                             strokeWidth = 2.dp
                         )
                     }
