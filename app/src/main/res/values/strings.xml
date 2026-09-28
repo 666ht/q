@@ -164,14 +164,14 @@
     <string name="backup_created">Backup created :%1$s</string>
     <string name="invalid_proxy_address">Invalid proxy address</string>
     <string name="invalid_port">Invalid port</string>
-    <string name="wiping_wallet">Wiping Wallet</string>
-    <string name="wallet_cleared">Wallet Cleared</string>
-    <string name="clearing_preferences">Clearing Preferences</string>
-    <string name="clearing_nodes">Clearing Nodes</string>
-    <string name="clearing_logs">Clearing Logs</string>
-    <string name="logs_cleared">Logs Cleared</string>
+    <string name="wiping_wallet">正在关闭并清理钱包</string>
+    <string name="wallet_cleared">钱包数据已清理</string>
+    <string name="clearing_preferences">正在清理偏好设置</string>
+    <string name="clearing_nodes">正在清理节点</string>
+    <string name="clearing_logs">正在清理日志</string>
+    <string name="logs_cleared">日志已清理</string>
     <string name="wallet_wiped_successfully">Wallet wiped successfully</string>
-    <string name="wallet_wipe_failed">Wallet deletion failed</string>
+    <string name="wallet_wipe_failed">安全清理失败</string>
     <string name="pending_transaction_no_txid">Pending transaction has no txId</string>
     <string name="wallet_available">Wallet is available</string>
     <string name="failed_to_send_transaction">Failed to send transaction</string>
@@ -238,4 +238,7 @@
     <string name="notification_sync_completed">Syncing blocks completed%1$s</string>
     <string name="notification_transaction_received">Transaction received</string>
     <string name="blocks_left">%1$s blocks left</string>
+    <string name="clearing_keys">正在清除加密密钥</string>
+    <string name="clearing_cache">正在清理缓存</string>
+    <string name="finalizing_wipe">正在完成安全清理</string>
 </resources>
