@@ -39,6 +39,7 @@ fun CoinDetailScreen(
 ) {
     val walletState = koinInject<WalletState>()
     val coins by walletState.coins.collectAsState(arrayListOf())
+    val hideAmounts by walletState.hideAmountsFlow.collectAsState(false)
     val coinIndex = coins.indexOfFirst { it.key == coinKey }
     val coin = coins.getOrNull(coinIndex)
 
@@ -83,7 +84,7 @@ fun CoinDetailScreen(
                     )
                 }
                 Text(
-                    coin?.let { Formats.getDisplayAmount(it.amount) } ?: "____",
+                    coin?.let { if (hideAmounts) Formats.maskAmount(it.amount) else Formats.getDisplayAmount(it.amount) } ?: "____",
                     modifier = Modifier.padding(top = 12.dp),
                     style = MaterialTheme.typography.headlineSmall
                 )
