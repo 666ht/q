@@ -232,19 +232,6 @@ class WalletState {
         _syncProgress.update { if (done) null else syncProgress }
         _isSyncing.set(!done)
 
-        // Publish final wallet data as soon as synchronization reaches the tip.
-        if (done) {
-            refreshScope.launch {
-                val wallet = getWallet ?: return@launch
-                try {
-                    wallet.refreshHistory()
-                    wallet.refreshCoins()
-                    update()
-                } catch (e: Exception) {
-                    Timber.tag(TAG).e(e, "final sync data refresh error")
-                }
-            }
-        }
     }
 
     fun toggleHideAmounts() {
