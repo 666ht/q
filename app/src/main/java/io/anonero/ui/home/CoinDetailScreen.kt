@@ -34,7 +34,8 @@ fun CoinDetailScreen(
 ) {
     val walletState = koinInject<WalletState>()
     val coins by walletState.coins.collectAsState(arrayListOf())
-    val coin = coins.find { it.key == coinKey }
+    val coinIndex = coins.indexOfFirst { it.key == coinKey }
+    val coin = coins.getOrNull(coinIndex)
 
     Scaffold(
         topBar = {
@@ -57,8 +58,12 @@ fun CoinDetailScreen(
         ) {
             Column(modifier = Modifier.fillMaxWidth()) {
                 Text(
-                    "输出",
-                    color = MaterialTheme.colorScheme.primary,
+                    "输出 " + if (coinIndex >= 0) coinIndex + 1 else "",
+                    color = if (coin?.frozen == true) {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    } else {
+                        MaterialTheme.colorScheme.primary
+                    },
                     style = MaterialTheme.typography.titleMedium
                 )
                 Text(
