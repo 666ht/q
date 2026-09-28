@@ -5,15 +5,11 @@
 -->
 <data-extraction-rules>
     <cloud-backup>
-        <!-- TODO: Use <include> and <exclude> to control what is backed up.
-        <include .../>
-        <exclude .../>
-        -->
+        <!-- Wallet data must never be backed up. -->
+        <exclude domain="root" path="."/>
     </cloud-backup>
-    <!--
     <device-transfer>
-        <include .../>
-        <exclude .../>
+        <!-- Wallet data must never be transferred to another device. -->
+        <exclude domain="root" path="."/>
     </device-transfer>
-    -->
 </data-extraction-rules>
