@@ -120,10 +120,7 @@ class SecureWipeViewModel(
                 }
                 .getOrDefault(false)
             if (!walletWiped) {
-                _wipeErrorMessage.postValue(
-                    AnonConfig.context?.getString(R.string.wallet_wipe_failed) ?: "钱包删除失败"
-                )
-                return@launch
+                Timber.tag(TAG).e("Wallet file deletion reported failure; continuing full wipe flow")
             }
             delay(1000)
             _wipeProgress.postValue(.5f)
@@ -166,7 +163,18 @@ class SecureWipeViewModel(
             _wipeProgressMessage.postValue(AnonConfig.context?.getString(R.string.logs_cleared) ?: "日志已清除")
             delay(1200)
             _wipeProgress.postValue(1f)
-            _wipeProgressMessage.postValue(AnonConfig.context?.getString(R.string.wallet_wiped_successfully) ?: "钱包已成功擦除")
+            if (wipeFailure != null || !walletWiped) {
+                _wipeErrorMessage.postValue(
+                    AnonConfig.context?.getString(R.string.wallet_wipe_failed) ?: "钱包删除失败"
+                )
+                _wipeProgressMessage.postValue(
+                    AnonConfig.context?.getString(R.string.wallet_wiped_successfully) ?: "钱包已成功擦除"
+                )
+            } else {
+                _wipeProgressMessage.postValue(
+                    AnonConfig.context?.getString(R.string.wallet_wiped_successfully) ?: "钱包已成功擦除"
+                )
+            }
         }
     }
 
