@@ -6,7 +6,9 @@ import android.app.Service
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.os.IBinder
+import android.content.pm.ServiceInfo
 import android.provider.Settings
 import androidx.core.app.NotificationCompat
 import io.anonero.FOREGROUND_CHANNEL
@@ -61,7 +63,11 @@ class AnonNeroService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == "start") {
-            start()
+            runCatching { start() }
+                .onFailure {
+                    Timber.tag(TAG).e(it, "Failed to start foreground notification service")
+                    stopSelfResult(startId)
+                }
         }
         if (intent?.action == "stop") {
             stopForeground(STOP_FOREGROUND_REMOVE) // Properly removes the notification
@@ -73,7 +79,16 @@ class AnonNeroService : Service() {
 
 
     private fun start() {
-        startForeground(NOTIFICATION_ID, foregroundNotification())
+        val notification = foregroundNotification()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            startForeground(
+                NOTIFICATION_ID,
+                notification,
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+            )
+        } else {
+            startForeground(NOTIFICATION_ID, notification)
+        }
         scope.launch {
             walletState.walletConnectionStatus.collect {
                 updateNotificationState()
