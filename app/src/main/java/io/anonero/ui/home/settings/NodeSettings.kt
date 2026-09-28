@@ -391,6 +391,13 @@ fun NodeSettings(onBackPress: () -> Unit = {}, navigateTo: (Any) -> Unit = {}) {
                                     ),
                                 onDismissRequest = { showMenu = false }
                             ) {
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.resync_blockchain)) },
+                                    onClick = {
+                                        showMenu = false
+                                        navigateTo(io.anonero.ui.home.graph.routes.ResetSyncRoute)
+                                    }
+                                )
                             }
                         }
 
