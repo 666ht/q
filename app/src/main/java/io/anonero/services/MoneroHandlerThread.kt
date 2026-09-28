@@ -90,6 +90,9 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
         wallet.store()
         refresh(true)
         walletState.syncUpdate(SyncProgress(1f, 0L))
+        // Publish the final native balance/history snapshot explicitly.
+        // This is the authoritative handoff from completed native sync to the UI.
+        walletState.publishAfterSync()
         walletState.setLoading(false)
         walletState.update()
     }
