@@ -1,7 +1,6 @@
 package io.anonero.ui.home
 
 import AnonNeroTheme
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -11,8 +10,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.ButtonDefaults
+import AnonOutlineButton
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -106,10 +104,10 @@ fun CoinDetailScreen(
                     style = MaterialTheme.typography.bodyMedium
                 )
             }
-            OutlinedButton(
+            AnonOutlineButton(
                 onClick = {
-                    val selectedCoin = coin ?: return@OutlinedButton
-                    if (busy) return@OutlinedButton
+                    val selectedCoin = coin ?: return@AnonOutlineButton
+                    if (busy) return@AnonOutlineButton
                     busy = true
                     scope.launch(Dispatchers.IO) {
                         try {
@@ -123,16 +121,7 @@ fun CoinDetailScreen(
                         }
                     }
                 },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 16.dp),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.onBackground),
-                colors = ButtonDefaults.outlinedButtonColors(
-                    containerColor = MaterialTheme.colorScheme.background,
-                    contentColor = MaterialTheme.colorScheme.onBackground
-                ),
-                shape = MaterialTheme.shapes.medium,
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(12.dp)
+                modifier = Modifier.padding(bottom = 16.dp)
             ) {
                 Text(if (coin?.frozen == true) "解冻" else "冻结")
             }
