@@ -94,10 +94,14 @@ fun WalletProgressIndicator(modifier: Modifier = Modifier, refreshIndicatorProgr
                         .padding(horizontal = 16.dp),
                 )
                 if (progress.left > 50) {
+                    val blocksLeft = Formats.convertNumber(
+                        progress.left,
+                        Locale.getDefault()
+                    ) ?: ""
                     Text(
                         stringResource(
                             R.string.blocks_left,
-                            Formats.convertNumber(progress.left, Locale.getDefault()) ?: ""
+                            blocksLeft
                         ),
                         modifier = Modifier.padding(top = 8.dp),
                         style = MaterialTheme.typography.labelSmall,
