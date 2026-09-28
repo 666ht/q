@@ -1,7 +1,7 @@
 package io.anonero.ui.home.settings
 
 import AnonNeroTheme
-import AnonOutlineButton
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -94,13 +94,13 @@ fun ResetSyncPage(
                 }
             }
 
-            AnonOutlineButton(
+            OutlinedButton(
                 onClick = {
                     val restoreHeight = height.toLongOrNull() ?: defaultHeight
 
                     if (restoreHeight == null) {
                         error = "请输入有效高度"
-                        return@AnonOutlineButton
+                        return@OutlinedButton
                     }
 
                     val result = walletState.resetSyncFromHeight(restoreHeight)
