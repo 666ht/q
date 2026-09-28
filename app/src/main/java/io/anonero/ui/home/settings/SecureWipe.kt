@@ -229,7 +229,7 @@ class SecureWipeViewModel(
 
             if (wipeFailure != null || !walletWiped || !allDataCleared) {
                 _wipeErrorMessage.postValue(
-                    AnonConfig.context?.getString(R.string.wallet_wipe_failed) ?: "钱包删除失败"
+                    AnonConfig.context?.getString(R.string.wallet_wipe_failed) ?: "安全清理失败"
                 )
                 return@launch
             }
