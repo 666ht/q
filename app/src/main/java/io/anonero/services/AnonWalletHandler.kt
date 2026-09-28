@@ -209,17 +209,24 @@ class AnonWalletHandler(
         val walletManager = WalletManager.instance
         val wallet = walletManager?.wallet
 
-        runCatching { wallet?.pauseRefresh() }
-            .onFailure { Timber.tag(TAG).e(it, "Wallet pause failed; continuing secure wipe") }
-
         runCatching { wallet?.stopBackgroundSync(passPhrase) }
             .onFailure { Timber.tag(TAG).e(it, "Wallet background sync stop failed; continuing secure wipe") }
+
+        // Stop all WalletState refresh jobs before the native wallet is closed.
+        walletState.prepareForWipe()
+
+        runCatching { wallet?.setListener(null) }
+            .onFailure { Timber.tag(TAG).e(it, "Wallet listener detach failed; continuing secure wipe") }
+
+        runCatching { wallet?.pauseRefresh() }
+            .onFailure { Timber.tag(TAG).e(it, "Wallet pause failed; continuing secure wipe") }
 
         runCatching { walletManager?.setDaemon(null) }
             .onFailure { Timber.tag(TAG).e(it, "Daemon detach failed; continuing secure wipe") }
 
         runCatching { wallet?.close() }
             .onFailure { Timber.tag(TAG).e(it, "Wallet close failed; continuing secure wipe") }
+        handler = null
 
         // The native wallet must no longer be referenced before its files are removed.
         runCatching {
