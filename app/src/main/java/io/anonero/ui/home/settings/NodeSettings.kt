@@ -525,7 +525,7 @@ fun NodeListItem(
                 shape = MaterialTheme.shapes.medium,
             )
             .clickable {
-                if (!active) menu = !menu
+                menu = !menu
             },
         headlineContent = {
             Text(
@@ -534,24 +534,12 @@ fun NodeListItem(
             )
         },
         supportingContent = {
-            if (active) {
-                Column {
-                    Text(
-                        stringResource(R.string.daemon_height, daemonStatus?.daemonHeight?.toString() ?: ""),
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.padding(top = 4.dp)
-                    )
-                    TextButton(onClick = { onDisconnect(node) }) {
-                        Text(stringResource(R.string.disconnect))
-                    }
-                    TextButton(onClick = { onEdit(node) }) {
-                        Text(stringResource(R.string.edit))
-                    }
-                    TextButton(onClick = { onRemove(node) }) {
-                        Text(stringResource(R.string.remove))
-                    }
-                }
-            }
+            if (active)
+                Text(
+                    stringResource(R.string.daemon_height, daemonStatus?.daemonHeight?.toString() ?: ""),
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
         },
         trailingContent = {
             Row(
@@ -566,41 +554,44 @@ fun NodeListItem(
                             .size(12.dp)
                             .background(Color.Gray, shape = CircleShape)
                     )
-                    DropdownMenu(
-                        expanded = menu,
-                        shape = MaterialTheme.shapes.small,
-                        border = BorderStroke(
-                            1.dp,
-                            color = MaterialTheme.colorScheme.onSecondary.copy(
-                                alpha = .2f
-                            ),
-                        ),
-                        containerColor = Color.Black,
-                        onDismissRequest = { menu = false }
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.connect)) },
-                            onClick = {
-                                onConnect(node)
-                                menu = false
-                            },
-                        )
-                        HorizontalDivider()
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.edit)) },
-                            onClick = {
-                                onEdit(node)
-                                menu = false
-                            },
-                        )
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.remove)) },
-                            onClick = {
-                                onRemove(node)
-                                menu = false
-                            },
-                        )
-                    }
+                }
+                DropdownMenu(
+                    expanded = menu,
+                    shape = MaterialTheme.shapes.small,
+                    border = BorderStroke(
+                        1.dp,
+                        color = MaterialTheme.colorScheme.onSecondary.copy(alpha = .2f),
+                    ),
+                    containerColor = Color.Black,
+                    onDismissRequest = { menu = false }
+                ) {
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                if (active) stringResource(R.string.disconnect)
+                                else stringResource(R.string.connect)
+                            )
+                        },
+                        onClick = {
+                            if (active) onDisconnect(node) else onConnect(node)
+                            menu = false
+                        },
+                    )
+                    HorizontalDivider()
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.edit)) },
+                        onClick = {
+                            onEdit(node)
+                            menu = false
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.remove)) },
+                        onClick = {
+                            onRemove(node)
+                            menu = false
+                        },
+                    )
                 }
             }
         }
