@@ -92,7 +92,7 @@ fun SubAddressDetailScreen(
 
     if (labelDialog)
         SubAddressLabelDialog(
-            label = addressLabel,
+            label = displayAddressLabel,
             onSave = { label ->
                 walletState.updateAddressLabel(label, subAddress.addressIndex)
                 addressLabel = label
