@@ -49,6 +49,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.livedata.observeAsState
@@ -146,9 +147,9 @@ fun TransactionScreen(
     sharedTransitionScope: SharedTransitionScope,
 ) {
 
-    val transactionsViewModel = viewModel<TransactionsViewModel>()
-    val balance by transactionsViewModel.balance.observeAsState()
-    val transactions by transactionsViewModel.transactions.observeAsState(listOf())
+    val walletState = koinInject<WalletState>()
+    val balance by walletState.balanceInfo.collectAsState(null)
+    val transactions by walletState.transactions.collectAsState(listOf())
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior { true }
     var showExitDialog by remember { mutableStateOf(false) }
     var scanFailure by remember { mutableStateOf<String?>(null) }
@@ -159,7 +160,6 @@ fun TransactionScreen(
     var showScanner by remember { mutableStateOf(false) }
     var qrScannerParam by remember { mutableStateOf<SpendQRExchangeParam?>(null) }
     var showMenu by remember { mutableStateOf(false) }
-    val walletState = koinInject<WalletState>()
     val torService = koinInject<TorService>()
     val anonPrefs = koinInject<android.content.SharedPreferences>(named(WALLET_PREFERENCES))
     val showLockScreen by walletState.backgroundSyncFlow.asLiveData().observeAsState(walletState.backgroundSync)
