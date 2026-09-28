@@ -223,4 +223,16 @@
     <string name="share_logs">Share Logs</string>
     <string name="clear_logs">Clear Logs</string>
     <string name="battery_optimization_message">为了让 ΛИ0ИΞR0 在后台正常运行，建议关闭电池优化。你可以随时在 Android 应用设置中更改此选项。是否继续？</string>
+    <string name="notification_channel_service">Wallet Background Service</string>
+    <string name="notification_channel_transactions">Incoming Transactions</string>
+    <string name="notification_loading_wallet">Loading wallet...</string>
+    <string name="notification_wallet_locked_synced">Wallet locked: Synced: %1$d</string>
+    <string name="notification_disconnected">Disconnected</string>
+    <string name="notification_daemon_disconnected">Daemon Disconnected</string>
+    <string name="notification_wrong_version">Wrong Version</string>
+    <string name="notification_synced">Synced: %1$d</string>
+    <string name="notification_syncing">Syncing...</string>
+    <string name="notification_syncing_blocks_left">Syncing: %1$s blocks left%2$s</string>
+    <string name="notification_sync_completed">Syncing blocks completed%1$s</string>
+    <string name="notification_transaction_received">Transaction received</string>
 </resources>
