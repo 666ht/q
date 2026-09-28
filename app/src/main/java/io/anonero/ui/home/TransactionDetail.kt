@@ -79,6 +79,7 @@ fun TransactionDetailScreen(
     val walletState = koinInject<WalletState>()
     val transactions by walletState.transactions.collectAsState(listOf())
     val transactionInfo = transactions.find { it.hash == transactionId }
+    val hideAmounts by walletState.hideAmountsFlow.collectAsState(false)
     val scope = rememberCoroutineScope()
     var notesDialog by remember { mutableStateOf(false) }
     var notes by remember { mutableStateOf(TextFieldValue(text = "")) }
@@ -252,6 +253,7 @@ fun TransactionDetailScreen(
                             timePattern = "HH:mm\nMM/dd",
                             timeZone = ZoneId.of("Asia/Shanghai"),
                             upstreamLayout = true,
+                            hideAmounts = hideAmounts,
                             modifier = Modifier
                                 .clickable {
 
@@ -299,7 +301,7 @@ fun TransactionDetailScreen(
                     DetailItem(
                         title = stringResource(R.string.transaction_fee),
                         subtitle = if (transactionInfo?.fee != null) {
-                            Formats.getDisplayAmount(transactionInfo?.fee!!)
+                            if (hideAmounts) Formats.maskAmount(transactionInfo?.fee!!) else Formats.getDisplayAmount(transactionInfo?.fee!!)
                         } else {
                             "____"
                         }
