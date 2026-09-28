@@ -169,6 +169,7 @@
     <string name="clearing_logs">Clearing Logs</string>
     <string name="logs_cleared">Logs Cleared</string>
     <string name="wallet_wiped_successfully">Wallet wiped successfully</string>
+    <string name="wallet_wipe_failed">Wallet deletion failed</string>
     <string name="pending_transaction_no_txid">Pending transaction has no txId</string>
     <string name="wallet_available">Wallet is available</string>
     <string name="failed_to_send_transaction">Failed to send transaction</string>
