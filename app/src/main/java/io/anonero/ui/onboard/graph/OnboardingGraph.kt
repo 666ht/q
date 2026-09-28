@@ -229,7 +229,7 @@ fun NavGraphBuilder.onboardingGraph(
                     onboardViewModel.viewModelScope.launch {
                         if (AnonConfig.viewOnly) {
                             onboardViewModel.createViewOnly(pin)
-                            appViewModel.startServiceAndWait()
+                            appViewModel.startService()
                         } else if (onboardViewModel.getMode() == Mode.RESTORE) {
                             withContext(Dispatchers.IO) {
                                 onboardViewModel.restoreFromSeed(pin)
@@ -237,10 +237,10 @@ fun NavGraphBuilder.onboardingGraph(
                             if (!appViewModel.openWallet(pin)) {
                                 throw Exception(context.getString(R.string.unable_to_create_wallet))
                             }
-                            appViewModel.startServiceAndWait()
+                            appViewModel.startService()
                         } else {
                             onboardViewModel.create(pin)
-                            appViewModel.startServiceAndWait()
+                            appViewModel.startService()
                         }
                         delay(600)
                     }.invokeOnCompletion {
