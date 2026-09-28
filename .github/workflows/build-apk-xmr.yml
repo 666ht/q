@@ -71,16 +71,9 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Cache Gradle build outputs
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.gradle/caches/build-cache-1
-            .gradle
-            app/build
-          key: gradle-build-${{ runner.os }}-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties', 'gradle.properties', 'app/src/**') }}
-          restore-keys: |
-            gradle-build-${{ runner.os }}-
+      # setup-gradle caches the Gradle distribution, dependency cache, and build cache.
+      # Do not cache app/build directly: source changes make that cache ineffective and can
+      # restore stale intermediates that Gradle must invalidate anyway.
 
       - name: Build APK
         run: ./gradlew --no-daemon assembleAnonRelease -PbuildNumber="${{ github.run_number }}"
