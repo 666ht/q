@@ -25,6 +25,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
@@ -131,11 +132,7 @@ fun ResetSyncPage(
 
             Spacer(modifier = Modifier.weight(1f))
 
-            androidx.compose.foundation.layout.Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = androidx.compose.foundation.layout.Arrangement.Center
-            ) {
-                AnonOutlineButton(
+            AnonOutlineButton(
                 onClick = {
                     val restoreHeight = height.toLongOrNull()
                     if (restoreHeight == null) {
@@ -149,12 +146,12 @@ fun ResetSyncPage(
                         error = result.exceptionOrNull()?.message ?: "重置失败"
                     }
                 },
-                    modifier = Modifier
-                        .fillMaxWidth(.9f)
-                        .padding(bottom = 16.dp)
-                ) {
-                    Text("重置")
-                }
+                modifier = Modifier
+                    .fillMaxWidth(.9f)
+                    .align(Alignment.CenterHorizontally)
+                    .padding(bottom = 16.dp)
+            ) {
+                Text("重置")
             }
         }
     }
