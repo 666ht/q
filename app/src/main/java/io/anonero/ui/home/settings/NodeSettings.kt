@@ -571,23 +571,21 @@ fun NodeListItem(
                             menu = false
                         },
                     )
-                    if (!active) {
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.edit)) },
-                            onClick = {
-                                onEdit(node)
-                                menu = false
-                            },
-                        )
-                        HorizontalDivider()
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.remove)) },
-                            onClick = {
-                                onRemove(node)
-                                menu = false
-                            },
-                        )
-                    }
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.edit)) },
+                        onClick = {
+                            onEdit(node)
+                            menu = false
+                        },
+                    )
+                    HorizontalDivider()
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.remove)) },
+                        onClick = {
+                            onRemove(node)
+                            menu = false
+                        },
+                    )
                 }
             }
         }
