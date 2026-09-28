@@ -1,6 +1,9 @@
 package io.anonero.ui.home
 
 import AnonNeroTheme
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -8,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import AnonOutlineButton
@@ -28,6 +32,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import io.anonero.services.WalletState
@@ -35,6 +41,11 @@ import io.anonero.util.Formats
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
+
+private fun abbreviatedPubKey(value: String): String {
+    if (value.length <= 24) return value
+    return value.take(10) + "..." + value.takeLast(10)
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -49,6 +60,8 @@ fun CoinDetailScreen(
     val coin = coins.getOrNull(coinIndex)
     val scope = rememberCoroutineScope()
     var busy by remember { mutableStateOf(false) }
+    var showFullPubKey by remember { mutableStateOf(false) }
+    val context = LocalContext.current
 
     Scaffold(
         topBar = {
@@ -96,7 +109,7 @@ fun CoinDetailScreen(
                             MaterialTheme.colorScheme.primary
                         },
                         style = MaterialTheme.typography.titleMedium,
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        textAlign = TextAlign.Center
                     )
                     if (busy) {
                         CircularProgressIndicator(
@@ -112,8 +125,22 @@ fun CoinDetailScreen(
                     }
                 }
                 Text(
-                    coin?.pub_key ?: "____",
-                    modifier = Modifier.padding(top = 12.dp),
+                    text = coin?.let {
+                        if (showFullPubKey) it.pub_key else abbreviatedPubKey(it.pub_key)
+                    } ?: "____",
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 12.dp)
+                        .clickable(enabled = coin != null) {
+                            if (showFullPubKey) {
+                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                clipboard.setPrimaryClip(
+                                    ClipData.newPlainText("公钥", coin?.pub_key.orEmpty())
+                                )
+                            } else {
+                                showFullPubKey = true
+                            }
+                        },
                     style = MaterialTheme.typography.bodyMedium
                 )
             }
