@@ -388,7 +388,14 @@ class Wallet {
 
     //virtual TransactionHistory * history() const = 0;
     fun refreshHistory() {
-        history?.refreshWithNotes(this)
+        // Always create the native transaction history before refreshing it.
+        // The old implementation silently did nothing while history was null,
+        // which left every observer except screens that had already initialized
+        // history with an empty transaction list.
+        val txHistory = history ?: TransactionHistory(getHistoryJ(), accountIndex).also {
+            history = it
+        }
+        txHistory.refreshWithNotes(this)
     }
 
     external fun stopBackgroundSync(password: String?): Boolean
