@@ -56,5 +56,10 @@ class AppViewModel(private val walletState: WalletState, private val torService:
         }
     }
 
+    /** Starts the wallet handler and does not return until node setup and refresh have been started. */
+    suspend fun startServiceAndWait() {
+        walletHandler.startService()
+    }
+
 
 }
