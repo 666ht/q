@@ -1,8 +1,6 @@
 package io.anonero.ui.home.settings
 
 import AnonNeroTheme
-
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -13,20 +11,18 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
@@ -35,19 +31,43 @@ import androidx.compose.ui.unit.dp
 import io.anonero.model.WalletManager
 import io.anonero.services.WalletState
 import org.koin.compose.koinInject
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
-@OptIn(ExperimentalMaterial3Api::class)
+private const val BLOCK_TIME_SECONDS = 120L
+
 @Composable
 fun ResetSyncPage(
     onBackPress: () -> Unit = {}
 ) {
     val walletState = koinInject<WalletState>()
     val wallet = WalletManager.instance?.wallet
-    val defaultHeight = remember(wallet) {
-        wallet?.getRestoreHeight() ?: 0L
+    val currentHeight = remember(wallet) {
+        wallet?.getBlockChainHeight()?.takeIf { it > 0L } ?: 0L
     }
+    val dateFormat = remember { SimpleDateFormat("yyyy-MM-dd", Locale.US) }
+
+    fun dateForHeight(value: Long): String {
+        val secondsAgo = (currentHeight - value).coerceAtLeast(0L) * BLOCK_TIME_SECONDS
+        return dateFormat.format(Date(System.currentTimeMillis() - secondsAgo * 1000L))
+    }
+
+    fun heightForDate(value: String): Long? {
+        return try {
+            val parsed = dateFormat.parse(value)?.time ?: return null
+            val secondsAgo = ((System.currentTimeMillis() - parsed) / 1000L).coerceAtLeast(0L)
+            (currentHeight - secondsAgo / BLOCK_TIME_SECONDS).coerceAtLeast(0L)
+        } catch (_: Exception) {
+            null
+        }
+    }
+
     var height by remember {
-        mutableStateOf("")
+        mutableStateOf(wallet?.getRestoreHeight()?.toString() ?: "")
+    }
+    var date by remember {
+        mutableStateOf(wallet?.getRestoreHeight()?.let(::dateForHeight) ?: "")
     }
     var error by remember { mutableStateOf<String?>(null) }
 
@@ -68,35 +88,62 @@ fun ResetSyncPage(
                 .fillMaxSize()
                 .padding(padding)
                 .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.SpaceBetween
+            verticalArrangement = Arrangement.Top
         ) {
-            Column {
-                Spacer(modifier = Modifier.height(56.dp))
+            OutlinedTextField(
+                value = height,
+                onValueChange = {
+                    error = null
+                    height = it.filter(Char::isDigit)
+                    height.toLongOrNull()?.let { h -> date = dateForHeight(h) }
+                },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("高度恢复") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+            )
+            Text(
+                text = "日期：$date",
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(start = 4.dp, top = 6.dp)
+            )
 
-                OutlinedTextField(
-                    value = height,
-                    onValueChange = {
-                        error = null
-                        height = it.filter(Char::isDigit)
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = MaterialTheme.shapes.medium,
-                    label = { Text("高度恢复") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+            Spacer(modifier = Modifier.height(56.dp))
+
+            OutlinedTextField(
+                value = date,
+                onValueChange = {
+                    error = null
+                    date = it
+                    heightForDate(it)?.let { h -> height = h.toString() }
+                },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("日期恢复") },
+                singleLine = true
+            )
+            Text(
+                text = "高度：$height",
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(start = 4.dp, top = 6.dp)
+            )
+
+            if (error != null) {
+                Text(
+                    text = error!!,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(top = 16.dp)
                 )
-
-                if (error != null) {
-                    Text(
-                        text = error!!,
-                        modifier = Modifier.padding(top = 16.dp)
-                    )
-                }
             }
 
-            OutlinedButton(
+            Spacer(modifier = Modifier.height(32.dp))
+
+            Button(
                 onClick = {
-                    val restoreHeight = height.toLongOrNull() ?: defaultHeight
+                    val restoreHeight = height.toLongOrNull()
+                    if (restoreHeight == null) {
+                        error = "请输入有效高度或日期"
+                        return@Button
+                    }
                     val result = walletState.resetSyncFromHeight(restoreHeight)
                     if (result.isSuccess) {
                         onBackPress()
@@ -104,15 +151,7 @@ fun ResetSyncPage(
                         error = result.exceptionOrNull()?.message ?: "重置失败"
                     }
                 },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 16.dp),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.onBackground),
-                colors = ButtonDefaults.outlinedButtonColors(
-                    containerColor = MaterialTheme.colorScheme.background,
-                    contentColor = MaterialTheme.colorScheme.onBackground
-                ),
-                shape = MaterialTheme.shapes.small
+                modifier = Modifier.fillMaxWidth()
             ) {
                 Text("重置")
             }
