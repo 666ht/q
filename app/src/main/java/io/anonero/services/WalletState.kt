@@ -231,25 +231,10 @@ class WalletState {
         _syncProgress.update { if (done) null else syncProgress }
         _isSyncing.set(!done)
 
-        if (done && !_isWiping.get()) {
-            // The block counter can reach the target before the native wallet has
-            // finished its final refresh. Force one synchronous refresh so balance
-            // and transaction history are read from the final wallet state.
-            refreshScope.launch {
-                val wallet = getWallet ?: return@launch
-                runCatching {
-                    wallet.refresh()
-                    wallet.refreshHistory()
-                    wallet.refreshCoins()
-                    update()
-                }.onFailure {
-                    Timber.tag(TAG).e(it, "final wallet refresh error")
-                    // Still publish whatever final state is available.
-                    update()
-                }
-                setLoading(false)
-            }
-        }
+        // The native `refreshed()` callback is the authoritative completion
+        // point. It refreshes history/coins and publishes balance + transactions.
+        // Do not start a second synchronous refresh here: doing so can race the
+        // listener callback and leave the UI with the pre-refresh state.
     }
 
     fun toggleHideAmounts() {
