@@ -81,7 +81,6 @@ import io.anonero.services.WalletState
 import io.anonero.store.NodesRepository
 import io.anonero.ui.components.DaemonStatus
 import io.anonero.ui.components.WalletProgressIndicator
-import io.anonero.ui.home.graph.routes.ResetSyncRoute
 import io.anonero.ui.theme.DangerColor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -392,13 +391,6 @@ fun NodeSettings(onBackPress: () -> Unit = {}, navigateTo: (Any) -> Unit = {}) {
                                     ),
                                 onDismissRequest = { showMenu = false }
                             ) {
-                                DropdownMenuItem(
-                                    text = { Text(stringResource(R.string.resync_blockchain)) },
-                                    onClick = {
-                                        showMenu = false
-                                        navigateTo(ResetSyncRoute)
-                                    }
-                                )
                             }
                         }
 
@@ -444,21 +436,6 @@ fun NodeSettings(onBackPress: () -> Unit = {}, navigateTo: (Any) -> Unit = {}) {
                         HorizontalDivider()
                     }
                 }
-            item(key = "reset_sync") {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 16.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    AnonOutlineButton(
-                        modifier = Modifier.fillMaxWidth(.9f),
-                        onClick = { navigateTo(ResetSyncRoute) }
-                    ) {
-                        Text(stringResource(R.string.resync_blockchain))
-                    }
-                }
-            }
             if (availableNodes.isNotEmpty())
                 items(
                     availableNodes.size,
@@ -764,14 +741,6 @@ fun NodeForm(
                             if (node != null) R.string.connect else R.string.add_node
                         )
                     )
-                }
-                AnonOutlineButton(
-                    modifier = Modifier
-                        .fillMaxWidth(.9f)
-                        .padding(top = 8.dp),
-                    onClick = { navigateTo(ResetSyncRoute) }
-                ) {
-                    Text(stringResource(R.string.resync_blockchain))
                 }
             }
         }
