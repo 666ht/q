@@ -67,6 +67,11 @@ class MainActivity : ComponentActivity() {
     private val torService: TorService by inject()
     val anonPrefs: SharedPreferences by inject(named(WALLET_PREFERENCES))
 
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         val splashscreen = installSplashScreen()
         var isAppReady by mutableStateOf(false)
