@@ -24,12 +24,17 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import io.anonero.services.WalletState
 import io.anonero.util.Formats
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -43,6 +48,8 @@ fun CoinDetailScreen(
     val hideAmounts by walletState.hideAmountsFlow.collectAsState(false)
     val coinIndex = coins.indexOfFirst { it.key == coinKey }
     val coin = coins.getOrNull(coinIndex)
+    val scope = rememberCoroutineScope()
+    var busy by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -98,7 +105,19 @@ fun CoinDetailScreen(
                 )
             }
             OutlinedButton(
-                onClick = { },
+                onClick = {
+                    val selectedCoin = coin ?: return@OutlinedButton
+                    if (busy) return@OutlinedButton
+                    busy = true
+                    scope.launch(Dispatchers.IO) {
+                        if (selectedCoin.frozen) {
+                            walletState.thawCoin(selectedCoin.pub_key)
+                        } else {
+                            walletState.freezeCoin(selectedCoin.pub_key)
+                        }
+                        busy = false
+                    }
+                },
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(bottom = 16.dp),
