@@ -124,23 +124,10 @@ object AnonConfig {
     fun clearAllAppData(context: Context): Boolean {
         val app = context.applicationContext
 
-        val targets = listOfNotNull(
-            app.filesDir,
-            app.cacheDir,
-            app.noBackupFilesDir,
-            app.getExternalFilesDir(null),
-            app.externalCacheDir,
-            File(app.applicationInfo.dataDir, "databases"),
-            File(app.applicationInfo.dataDir, "shared_prefs"),
-            File(app.applicationInfo.dataDir, "code_cache")
-        )
-
-        var success = true
-        targets.distinctBy { it.absolutePath }.forEach { target ->
-            if (!deleteContents(target)) {
-                success = false
-            }
-        }
+        // Wipe every child of the app data root, including files/directories
+        // that are not part of the known wallet paths.
+        val dataRoot = File(app.applicationInfo.dataDir)
+        val success = deleteContents(dataRoot)
 
         walletFound = false
         return success
