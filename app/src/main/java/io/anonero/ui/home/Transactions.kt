@@ -739,6 +739,7 @@ fun TransactionItem(tx: TransactionInfo, hideAmounts: Boolean = false, modifier:
     Row(
         modifier = modifier
             .fillMaxWidth()
+            .offset(x = if (upstreamLayout) 0.dp else (-6).dp)
             .padding(
                 start = if (upstreamLayout) 8.dp else 25.dp,
                 end = 0.dp,
