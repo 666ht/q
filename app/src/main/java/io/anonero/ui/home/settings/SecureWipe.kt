@@ -154,18 +154,8 @@ class SecureWipeViewModel(
                     wipeFailure = wipeFailure ?: it
                     Timber.tag(TAG).e(it, "Secure wipe cache step failed")
                 }
-            runCatching {
-                // Clear the live preferences before deleting app-data files so
-                // restore height/passphrase state is gone from memory as well.
-                sharedPreferences.edit(commit = true) { clear() }
-                val context = AnonConfig.context?.applicationContext
-                if (context != null && !AnonConfig.clearAllAppData(context)) {
-                    throw IllegalStateException("app data remains after secure wipe")
-                }
-            }.onFailure {
-                wipeFailure = wipeFailure ?: it
-                Timber.tag(TAG).e(it, "Final app-data wipe failed")
-            }
+
+            // Clear keystore credentials before the final filesystem pass.
             runCatching {
                 KeyStoreHelper.clearWalletCredentials(
                     AnonConfig.context?.applicationContext ?: return@runCatching,
@@ -175,6 +165,35 @@ class SecureWipeViewModel(
                 wipeFailure = wipeFailure ?: it
                 Timber.tag(TAG).e(it, "Secure wipe keystore credentials failed")
             }
+
+            runCatching {
+                // Clear every preference store first, including restore height
+                // and wallet password/passphrase state.
+                sharedPreferences.edit(commit = true) { clear() }
+                val context = AnonConfig.context?.applicationContext
+                if (context != null) {
+                    AnonConfig.clearSpendCacheFiles(context)
+                    if (!AnonConfig.clearAllAppData(context)) {
+                        throw IllegalStateException("app data remains after secure wipe")
+                    }
+                }
+            }.onFailure {
+                wipeFailure = wipeFailure ?: it
+                Timber.tag(TAG).e(it, "Final app-data wipe failed")
+            }
+
+            // This is intentionally the last filesystem operation. Earlier
+            // cleanup can recreate preference files; this pass removes them again.
+            runCatching {
+                val context = AnonConfig.context?.applicationContext
+                if (context != null && !AnonConfig.clearAllAppData(context)) {
+                    throw IllegalStateException("final app-data cleanup incomplete")
+                }
+            }.onFailure {
+                wipeFailure = wipeFailure ?: it
+                Timber.tag(TAG).e(it, "Final cleanup pass failed")
+            }
+
             runCatching { AnonConfig.disposeState() }
                 .onFailure {
                     wipeFailure = wipeFailure ?: it
