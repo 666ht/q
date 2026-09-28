@@ -41,6 +41,7 @@ class WalletState {
     private val _isLoading = MutableStateFlow(false)
     private var _isSyncing = AtomicBoolean(false)
     private val _backgroundSync = MutableStateFlow(false)
+    private val _isWiping = AtomicBoolean(false)
     private val _incomingTx = MutableSharedFlow<Unit>(extraBufferCapacity = 8)
     private val _transactions = MutableStateFlow<List<TransactionInfo>>(listOf())
     private val _subAddresses = MutableStateFlow<List<Subaddress>>(listOf())
@@ -137,14 +138,18 @@ class WalletState {
     }
 
     fun prepareForWipe() {
+        _isWiping.set(true)
         _blockUpdates.set(true)
         refreshScope.coroutineContext.cancelChildren()
         _backgroundSync.value = false
     }
 
     fun setLoading(b: Boolean) {
+        if (_isWiping.get()) return
         this._isLoading.update { b }
     }
+
+    fun isWiping(): Boolean = _isWiping.get()
 
     fun emitUnlockShortcut(shortcut: LockScreenShortCut) {
         _unlockShortcut.trySend(shortcut)
