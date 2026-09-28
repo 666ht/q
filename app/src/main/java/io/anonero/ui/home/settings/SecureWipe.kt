@@ -98,6 +98,9 @@ class SecureWipeViewModel(
     private val _wipeProgress = MutableLiveData(0.1f)
     val wipeProgress: LiveData<Float> = _wipeProgress
 
+    private val _wipeErrorMessage = MutableLiveData<String?>(null)
+    val wipeErrorMessage: LiveData<String?> = _wipeErrorMessage
+
     fun wipe(passPhrase: String, activity: MainActivity?): Job {
         return viewModelScope.launch(Dispatchers.IO) {
             _wipeProgress.postValue(.1f)
@@ -110,11 +113,18 @@ class SecureWipeViewModel(
                 }
             _wipeProgress.postValue(.3f)
             var wipeFailure: Throwable? = null
-            runCatching { anonWalletHandler.wipe(passPhrase) }
+            val walletWiped = runCatching { anonWalletHandler.wipe(passPhrase) }
                 .onFailure {
                     wipeFailure = it
                     Timber.tag(TAG).e(it, "Secure wipe wallet step failed")
                 }
+                .getOrDefault(false)
+            if (!walletWiped) {
+                _wipeErrorMessage.postValue(
+                    AnonConfig.context?.getString(R.string.wallet_wipe_failed) ?: "钱包删除失败"
+                )
+                return@launch
+            }
             delay(1000)
             _wipeProgress.postValue(.5f)
             _wipeProgressMessage.postValue(AnonConfig.context?.getString(R.string.wallet_cleared) ?: "钱包已清除")
@@ -181,6 +191,7 @@ fun SecureWipe(
     val scope = rememberCoroutineScope()
     val progressMessage by secureWipeViewModel.wipeProgressMessage.observeAsState(null)
     val wipeProgress by secureWipeViewModel.wipeProgress.observeAsState(.1f)
+    val wipeErrorMessage by secureWipeViewModel.wipeErrorMessage.observeAsState(null)
     val view = LocalView.current
     val activity = LocalActivity.current
 
@@ -209,8 +220,8 @@ fun SecureWipe(
             focusRequester.requestFocus()
         }
     }
-    LaunchedEffect(progressMessage) {
-        if (progressMessage != null)
+    LaunchedEffect(progressMessage, wipeErrorMessage) {
+        if (progressMessage != null || wipeErrorMessage != null)
             requestClearScreen.invoke(false)
     }
 
@@ -373,7 +384,7 @@ fun SecureWipe(
             Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            if (progressMessage != null && error == null)
+            if (progressMessage != null && wipeErrorMessage == null && error == null)
                 Box(
                     contentAlignment = Alignment.Center
                 ) {
@@ -389,12 +400,12 @@ fun SecureWipe(
                         )
                     )
                 }
-            if (error != null) {
+            if (wipeErrorMessage != null || error != null) {
                 Box(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        error ?: "",
+                        wipeErrorMessage ?: error ?: "",
                         style = MaterialTheme.typography.labelSmall
                             .copy(
                                 color = MaterialTheme.colorScheme.error,
