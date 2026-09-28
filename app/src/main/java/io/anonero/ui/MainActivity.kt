@@ -1,17 +1,13 @@
 package io.anonero.ui
 
 import AnonNeroTheme
-import android.Manifest
 import android.content.Intent
 import android.content.SharedPreferences
-import android.content.pm.PackageManager
-import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.foundation.layout.Box
@@ -26,11 +22,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
-import androidx.core.content.ContextCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.asLiveData
-import androidx.lifecycle.lifecycleScope
-import androidx.lifecycle.whenResumed
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.rememberNavController
 import io.anonero.AnonConfig
@@ -143,48 +136,6 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-    }
-
-    private val requestPermissionLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { isGranted ->
-        if (!isGranted) {
-            Timber.tag(TAG).w("Notification permission was not granted")
-            return@registerForActivityResult
-        }
-
-        // Permission approval must not start the foreground service here.
-        // Starting it from the permission callback was coupled to the PIN unlock
-        // flow and can crash on affected Android versions.
-        Timber.tag(TAG).i("Notification permission granted")
-    }
-
-    fun startNotificationService() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
-            runCatching {
-                startAnonService(this)
-            }.onFailure {
-                Timber.tag(TAG).e(it, "Failed to start notification service")
-            }
-            return
-        }
-
-        if (ContextCompat.checkSelfPermission(
-                this, Manifest.permission.POST_NOTIFICATIONS
-            ) != PackageManager.PERMISSION_GRANTED
-        ) {
-            requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-        } else {
-            runCatching {
-                startAnonService(this)
-            }.onFailure {
-                Timber.tag(TAG).e(it, "Failed to start notification service")
-            }
-        }
-    }
-
-    fun stopNotificationService() {
-        applicationContext.stopService(Intent(applicationContext, AnonNeroService::class.java))
     }
 
     override fun onUserLeaveHint() {
