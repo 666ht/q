@@ -56,6 +56,7 @@ import io.anonero.ui.home.graph.routes.SendScreenRoute
 import io.anonero.ui.home.graph.routes.SettingsExportBackUp
 import io.anonero.ui.home.graph.routes.SettingsLogs
 import io.anonero.ui.home.graph.routes.SettingsNodeRoute
+import io.anonero.ui.home.graph.routes.ResetSyncRoute
 import io.anonero.ui.home.graph.routes.SettingsRoute
 import io.anonero.ui.home.graph.routes.SettingsViewSeedRoute
 import io.anonero.ui.home.graph.routes.SubAddressesRoute
@@ -68,6 +69,7 @@ import io.anonero.ui.home.settings.ProxySettings
 import io.anonero.ui.home.settings.SecureWipe
 import io.anonero.ui.home.settings.SeedSettingsPage
 import io.anonero.ui.home.settings.SettingsPage
+import io.anonero.ui.home.settings.ResetSyncPage
 import io.anonero.ui.home.spend.ReviewTransactionScreen
 import io.anonero.ui.onboard.graph.LandingScreenRoute
 import io.anonero.util.isIgnoringBatteryOptimizations
@@ -371,6 +373,11 @@ fun HomeScreenComposable(modifier: Modifier = Modifier, mainNavController: NavHo
                                     }
                                 }
                             }
+                        )
+                    }
+                    composable<ResetSyncRoute> {
+                        ResetSyncPage(
+                            onBackPress = { bottomNavController.popBackStack() }
                         )
                     }
                     composable<SettingsNodeRoute> {
