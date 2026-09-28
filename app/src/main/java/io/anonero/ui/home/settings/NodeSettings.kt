@@ -231,7 +231,7 @@ class NodeSettingsViewModel(
     // Add a new item
     fun addItem(item: Node) {
         viewModelScope.launch {
-            nodesRepository.addItem(item)
+            nodesRepository.addItemFirst(item)
         }
     }
 
@@ -338,9 +338,6 @@ fun NodeSettings(onBackPress: () -> Unit = {}) {
                                 nodeSettingsVM.updateItem(editingNode!!, it)
                             } else {
                                 nodeSettingsVM.addItem(it)
-                            }
-                            nodeSettingsVM.viewModelScope.launch {
-                                nodeSettingsVM.connect(it)
                             }
                         },
                         nodeSettingsVM = nodeSettingsVM
@@ -753,7 +750,7 @@ fun NodeForm(
                     }
                 },
             ) {
-                Text(stringResource(R.string.connect))
+                Text(stringResource(R.string.add_node))
             }
         }
     }
