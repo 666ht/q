@@ -6,7 +6,6 @@ import android.app.Service
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
-import android.content.SharedPreferences
 import android.os.IBinder
 import android.provider.Settings
 import androidx.core.app.NotificationCompat
@@ -15,12 +14,9 @@ import io.anonero.TX_CHANNEL
 import io.anonero.R
 import io.anonero.model.Wallet
 import io.anonero.model.WalletManager
-import io.anonero.model.node.NodeFields
 import io.anonero.store.NodesRepository
 import io.anonero.ui.MainActivity
 import io.anonero.util.Formats
-import io.anonero.util.WALLET_PREFERENCES
-import io.anonero.util.WALLET_USE_TOR
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -58,8 +54,6 @@ class AnonNeroService : Service() {
     }
     private val walletState: WalletState by inject(WalletState::class.java)
     private val torService: TorService by inject(TorService::class.java)
-    private val nodesRepository: NodesRepository by inject(NodesRepository::class.java)
-    private val prefs: SharedPreferences by inject(named(WALLET_PREFERENCES))
 
     override fun onBind(intent: Intent): IBinder? {
         return null
@@ -120,12 +114,6 @@ class AnonNeroService : Service() {
         val mNotificationManager =
             getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val wallet = WalletManager.instance?.wallet
-        val daemon = prefs.getString(NodeFields.RPC_HOST.value, "") ?: ""
-        var torSate = if (torService.socks != null) {
-            " | Tor 守护进程：${torService.socks?.port.toString()}"
-        } else {
-            ""
-        }
         if (wallet != null) {
             val isSyncing = walletState.isSyncing
             if (!isSyncing) {
@@ -134,30 +122,15 @@ class AnonNeroService : Service() {
                 } else if (!wallet.isInitialized) {
                     getString(R.string.notification_loading_wallet)
                 } else if (!isNetworkAvailable()) {
-                    // Network is offline — skip the blocking RPC call and mark
-                    // disconnected immediately so the bar shows without waiting
-                    // for a 30-second timeout
-                    walletState.setConnectionStatus(Wallet.ConnectionStatus.ConnectionStatus_Disconnected)
                     getString(R.string.notification_disconnected)
                 } else {
-                    // Network is available — probe the daemon with a live RPC call
-                    val daemonHeight = withContext(Dispatchers.IO) {
-                        wallet.getDaemonBlockChainHeight()
-                    }
-                    val liveStatus = if (daemonHeight > 0)
-                        Wallet.ConnectionStatus.ConnectionStatus_Connected
-                    else
-                        Wallet.ConnectionStatus.ConnectionStatus_Disconnected
-                    walletState.setConnectionStatus(liveStatus)
-                    when (liveStatus) {
-                        Wallet.ConnectionStatus.ConnectionStatus_Disconnected -> {
-                            getString(R.string.notification_daemon_disconnected)
-                        }
-
-                        Wallet.ConnectionStatus.ConnectionStatus_WrongVersion -> {
+                    // Do not probe the daemon here. Node connection is controlled
+                    // only by the manual Connect action in Node Settings.
+                    when (wallet.fullStatus.connectionStatus) {
+                        Wallet.ConnectionStatus.ConnectionStatus_Disconnected,
+                        null -> getString(R.string.notification_daemon_disconnected)
+                        Wallet.ConnectionStatus.ConnectionStatus_WrongVersion ->
                             getString(R.string.notification_wrong_version)
-                        }
-
                         Wallet.ConnectionStatus.ConnectionStatus_Connected -> {
                             if (wallet.getBlockChainHeight() > 1) {
                                 getString(R.string.notification_synced, wallet.getBlockChainHeight())
@@ -167,7 +140,7 @@ class AnonNeroService : Service() {
                         }
                     }
                 }
-                if (daemon.isEmpty()) {
+                if (wallet.fullStatus.connectionStatus != Wallet.ConnectionStatus.ConnectionStatus_Connected) {
                     torSate = ""
                 }
                 withContext(Dispatchers.Main) {
