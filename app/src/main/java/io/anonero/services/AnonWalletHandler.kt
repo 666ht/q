@@ -230,19 +230,17 @@ class AnonWalletHandler(
                 .onFailure { Timber.tag(TAG).e(it, "Wallet close failed") }
                 .getOrDefault(false)
             if (!closed) {
-                Timber.tag(TAG).e("Wallet native close returned false; secure wipe aborted")
-                return false
+                Timber.tag(TAG).e("Wallet native close returned false; continuing file deletion")
             }
         }
         handler = null
 
-        // Wallet.close() removes the managed native wallet handle. Drop the Kotlin
-        // manager reference as well before touching the wallet files on disk.
+        // Drop the Kotlin manager reference before touching the wallet files on disk.
         WalletManager.resetInstance()
 
         val walletDir = AnonConfig.context?.let { AnonConfig.getDefaultWalletDir(it) }
+        var deleted = walletDir?.let { !it.exists() } ?: true
         if (walletDir != null) {
-            var deleted = !walletDir.exists()
             repeat(5) {
                 if (deleted) return@repeat
                 deleted = walletDir.deleteRecursively()
@@ -252,11 +250,12 @@ class AnonWalletHandler(
             }
             if (!deleted && walletDir.exists()) {
                 Timber.tag(TAG).e("Wallet directory still exists after secure wipe: %s", walletDir)
-                return false
             }
         }
 
-        return closed
+        // The animation flow must continue even if native close reports failure.
+        // A successful wipe is determined by the wallet files actually being gone.
+        return deleted
     }
 
 }
