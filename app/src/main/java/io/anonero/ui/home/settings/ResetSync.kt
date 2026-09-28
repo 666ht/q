@@ -1,7 +1,6 @@
 package io.anonero.ui.home.settings
 
 import AnonNeroTheme
-import AnonOutlineButton
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -25,7 +24,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
@@ -131,28 +129,6 @@ fun ResetSyncPage(
             }
 
             Spacer(modifier = Modifier.weight(1f))
-
-            AnonOutlineButton(
-                onClick = {
-                    val restoreHeight = height.toLongOrNull()
-                    if (restoreHeight == null) {
-                        error = "请输入有效高度或日期"
-                        return@AnonOutlineButton
-                    }
-                    val result = walletState.resetSyncFromHeight(restoreHeight)
-                    if (result.isSuccess) {
-                        onBackPress()
-                    } else {
-                        error = result.exceptionOrNull()?.message ?: "重置失败"
-                    }
-                },
-                modifier = Modifier
-                    .fillMaxWidth(.9f)
-                    .align(Alignment.CenterHorizontally)
-                    .padding(bottom = 16.dp)
-            ) {
-                Text("重置")
-            }
         }
     }
 }
