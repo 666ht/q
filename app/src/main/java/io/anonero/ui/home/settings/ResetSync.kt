@@ -93,6 +93,8 @@ fun ResetSyncPage(
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.Top
         ) {
+            Spacer(modifier = Modifier.height(56.dp))
+
             OutlinedTextField(
                 value = height,
                 onValueChange = {
@@ -100,17 +102,12 @@ fun ResetSyncPage(
                     height = it.filter(Char::isDigit)
                     height.toLongOrNull()?.let { h -> date = dateForHeight(h) }
                 },
+                shape = MaterialTheme.shapes.medium,
                 modifier = Modifier.fillMaxWidth(),
                 label = { Text("高度恢复") },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
             )
-            Text(
-                text = "日期：$date",
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.padding(start = 4.dp, top = 6.dp)
-            )
-
             Spacer(modifier = Modifier.height(56.dp))
 
             OutlinedTextField(
@@ -120,16 +117,11 @@ fun ResetSyncPage(
                     date = it
                     heightForDate(it)?.let { h -> height = h.toString() }
                 },
+                shape = MaterialTheme.shapes.medium,
                 modifier = Modifier.fillMaxWidth(),
                 label = { Text("日期恢复") },
                 singleLine = true
             )
-            Text(
-                text = "高度：$height",
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.padding(start = 4.dp, top = 6.dp)
-            )
-
             if (error != null) {
                 Text(
                     text = error!!,
