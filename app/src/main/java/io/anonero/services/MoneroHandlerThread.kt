@@ -89,7 +89,6 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
         wallet.setSynchronized()
         wallet.store()
         refresh(true)
-        walletState.publishAfterSync()
         walletState.syncUpdate(SyncProgress(1f, 0L))
         walletState.setLoading(false)
         walletState.update()
