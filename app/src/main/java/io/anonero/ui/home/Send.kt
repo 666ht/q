@@ -269,6 +269,7 @@ fun SendScreen(
     val scope = rememberCoroutineScope()
     val sendViewModel = koinViewModel<SendViewModel>()
     val unlockedBalance by sendViewModel.balance.observeAsState(0L)
+    val hideAmounts by walletState.hideAmountsFlow.collectAsState(false)
     val paymentUriFromScanner by sendViewModel.paymentUri.observeAsState(null)
     val spendType by sendViewModel.spendType.observeAsState(SpendType.NORMAL)
     val coins by sendViewModel.coins.observeAsState(emptySet())
@@ -279,9 +280,7 @@ fun SendScreen(
     val showIndefiniteLoading by walletState.isLoading.asLiveData().observeAsState(false)
 
 
-    val unLockedAmount = Formats.getDisplayAmount(
-        unlockedBalance ?: 0L
-    )
+    val unLockedAmount = if (hideAmounts) Formats.maskAmount(unlockedBalance ?: 0L) else Formats.getDisplayAmount(unlockedBalance ?: 0L)
 
     LaunchedEffect(paymentUri) {
         if (paymentUri != null && paymentUri.coins.isNotEmpty()) {
