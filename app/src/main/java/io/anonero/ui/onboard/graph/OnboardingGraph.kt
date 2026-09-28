@@ -41,7 +41,6 @@ import io.anonero.ui.onboard.SetupNodeComposable
 import io.anonero.ui.onboard.SetupPassphrase
 import io.anonero.ui.onboard.restore.RestorePreview
 import io.anonero.ui.onboard.viewonly.RestoreFromKeys
-import io.anonero.ui.viewmodels.AppViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -205,7 +204,6 @@ fun NavGraphBuilder.onboardingGraph(
         composable<OnboardPinScreen> {
             var showErrorMessage by remember { mutableStateOf<String?>(null) }
             val context = LocalContext.current
-            val appViewModel: AppViewModel = koinViewModel()
             OnboardErrorDialog(
                 showErrorMessage = showErrorMessage,
                 isRestoreMode = onboardViewModel.getMode() == Mode.RESTORE,
@@ -229,18 +227,15 @@ fun NavGraphBuilder.onboardingGraph(
                     onboardViewModel.viewModelScope.launch {
                         if (AnonConfig.viewOnly) {
                             onboardViewModel.createViewOnly(pin)
-                            appViewModel.startService()
                         } else if (onboardViewModel.getMode() == Mode.RESTORE) {
                             withContext(Dispatchers.IO) {
                                 onboardViewModel.restoreFromSeed(pin)
                             }
-                            if (!appViewModel.openWallet(pin)) {
+                            if (!onboardViewModel.openWallet(pin)) {
                                 throw Exception(context.getString(R.string.unable_to_create_wallet))
                             }
-                            appViewModel.startService()
                         } else {
                             onboardViewModel.create(pin)
-                            appViewModel.startService()
                         }
                         delay(600)
                     }.invokeOnCompletion {
