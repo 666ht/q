@@ -44,11 +44,19 @@ import kotlinx.coroutines.launch
 @Composable
 fun SubAddressLabelDialog(label: String, onSave: (String) -> Unit, onCancel: () -> Unit = {}) {
 
+    val localizedLabel = remember(label) {
+        when {
+            label.matches(Regex("(?i)^primary\\s+address(?:\\s*[#＃]?\\s*\\d+)?$")) -> "主地址"
+            label.matches(Regex("(?i)^subaddress(?:\\s*[#＃]?\\s*\\d+)?$")) -> "子地址"
+            else -> label
+        }
+    }
+
     var labelString by remember {
         mutableStateOf(
             TextFieldValue(
-                text = label,
-                selection = TextRange(label.length)
+                text = localizedLabel,
+                selection = TextRange(localizedLabel.length)
             )
         )
     }
