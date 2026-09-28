@@ -12,7 +12,11 @@ import io.anonero.model.node.DaemonInfo
 import io.anonero.ui.util.getAllUsedSubAddresses
 import io.anonero.ui.util.getLatestSubAddress
 import io.anonero.ui.home.LockScreenShortCut
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -51,6 +55,7 @@ class WalletState {
     private val _unlockShortcut = Channel<LockScreenShortCut>(capacity = 1)
     val unlockShortcut = _unlockShortcut.receiveAsFlow()
     private val bgSyncMutex = Mutex()
+    private val refreshScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     val transactions: Flow<List<TransactionInfo>> = _transactions
 
@@ -194,7 +199,14 @@ class WalletState {
         if (previous == Wallet.ConnectionStatus.ConnectionStatus_Disconnected &&
             status == Wallet.ConnectionStatus.ConnectionStatus_Connected) {
             setLoading(true)
-            getWallet?.startRefresh()
+            refreshScope.launch {
+                try {
+                    getWallet?.startRefresh()
+                } catch (e: Exception) {
+                    Timber.tag(TAG).e(e, "startRefresh error")
+                    setLoading(false)
+                }
+            }
         }
     }
 
@@ -270,10 +282,23 @@ class WalletState {
             return;
         }
         if (getWallet?.fullStatus?.connectionStatus == Wallet.ConnectionStatus.ConnectionStatus_Connected) {
-            setLoading(true);
-            getWallet?.startRefresh();
-        };
-        getWallet?.refreshHistory()
+            setLoading(true)
+            refreshScope.launch {
+                try {
+                    getWallet?.startRefresh()
+                } catch (e: Exception) {
+                    Timber.tag(TAG).e(e, "refresh error")
+                    setLoading(false)
+                }
+            }
+        }
+        refreshScope.launch {
+            try {
+                getWallet?.refreshHistory()
+            } catch (e: Exception) {
+                Timber.tag(TAG).e(e, "refreshHistory error")
+            }
+        }
     }
 
     fun resyncBlockchain(): Result<Boolean> {
