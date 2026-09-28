@@ -230,7 +230,7 @@
     <string name="notification_disconnected">已断开连接</string>
     <string name="notification_daemon_disconnected">守护进程已断开连接</string>
     <string name="notification_wrong_version">版本不匹配</string>
-    <string name="notification_synced">已同步：%1$d</string>
+    <string name="notification_synced">区块高度：%1$d</string>
     <string name="notification_syncing">正在同步...</string>
     <string name="notification_syncing_blocks_left">正在同步：剩余 %1$s 个区块%2$s</string>
     <string name="notification_sync_completed">区块同步完成%1$s</string>
