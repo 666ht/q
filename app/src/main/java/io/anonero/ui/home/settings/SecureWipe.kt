@@ -128,7 +128,7 @@ class SecureWipeViewModel(
             delay(1200)
             _wipeProgress.postValue(.6f)
             _wipeProgressMessage.postValue(AnonConfig.context?.getString(R.string.clearing_preferences) ?: "正在清除偏好设置")
-            runCatching { sharedPreferences.edit { clear() } }
+            runCatching { sharedPreferences.edit(commit = true) { clear() } }
                 .onFailure {
                     wipeFailure = wipeFailure ?: it
                     Timber.tag(TAG).e(it, "Secure wipe preferences step failed")
@@ -154,6 +154,15 @@ class SecureWipeViewModel(
                     wipeFailure = wipeFailure ?: it
                     Timber.tag(TAG).e(it, "Secure wipe cache step failed")
                 }
+            runCatching {
+                val context = AnonConfig.context?.applicationContext
+                if (context != null && !AnonConfig.clearAllAppData(context)) {
+                    throw IllegalStateException("app data remains after secure wipe")
+                }
+            }.onFailure {
+                wipeFailure = wipeFailure ?: it
+                Timber.tag(TAG).e(it, "Final app-data wipe failed")
+            }
             runCatching { AnonConfig.disposeState() }
                 .onFailure {
                     wipeFailure = wipeFailure ?: it
