@@ -344,7 +344,8 @@ fun NodeSettings(onBackPress: () -> Unit = {}, navigateTo: (Any) -> Unit = {}) {
                                 nodeSettingsVM.addItem(it)
                             }
                         },
-                        nodeSettingsVM = nodeSettingsVM
+                        nodeSettingsVM = nodeSettingsVM,
+                        navigateTo = navigateTo
                     )
                 }
             }
@@ -606,7 +607,8 @@ fun NodeForm(
     node: Node? = null,
     onBackPress: () -> Unit = {},
     onConnect: (node: Node) -> Unit = {},
-    nodeSettingsVM: NodeSettingsViewModel
+    nodeSettingsVM: NodeSettingsViewModel,
+    navigateTo: (Any) -> Unit = {}
 ) {
     val connectionError by nodeSettingsVM.connectionError.observeAsState(null)
     var rpcHost by remember(node) { mutableStateOf(node?.host ?: "") }
