@@ -216,8 +216,22 @@ class WalletState {
         _syncProgress.update { if (done) null else syncProgress }
         _isSyncing.set(!done)
         if (done) {
-            update()
-            setLoading(false)
+            // The native refresh callback can mark block sync complete before the
+            // wallet history/balance has been reflected in the UI state. Re-read
+            // both after synchronization so the final state is not left stale.
+            refreshScope.launch {
+                val wallet = getWallet
+                if (wallet?.isInitialized == true) {
+                    runCatching {
+                        wallet.refreshHistory()
+                        wallet.refreshCoins()
+                    }.onFailure {
+                        Timber.tag(TAG).e(it, "final wallet refresh after sync failed")
+                    }
+                }
+                update()
+                setLoading(false)
+            }
         }
     }
 
