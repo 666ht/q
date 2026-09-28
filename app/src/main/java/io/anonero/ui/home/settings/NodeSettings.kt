@@ -743,22 +743,34 @@ fun NodeForm(
                 .padding(bottom = 8.dp),
             contentAlignment = Alignment.Center
         ) {
-            AnonOutlineButton(
-                modifier = Modifier
-                    .fillMaxWidth(.9f),
-                onClick = {
-                    val node = nodeSettingsVM.validate(rpcHost, rpcUsername, rpcPassPhrase)
-                    if (node != null) {
-                        onConnect(node)
-                        onBackPress.invoke()
-                    }
-                },
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Text(
-                    stringResource(
-                        if (node != null) R.string.connect else R.string.add_node
+                AnonOutlineButton(
+                    modifier = Modifier.fillMaxWidth(.9f),
+                    onClick = {
+                        val node = nodeSettingsVM.validate(rpcHost, rpcUsername, rpcPassPhrase)
+                        if (node != null) {
+                            onConnect(node)
+                            onBackPress.invoke()
+                        }
+                    },
+                ) {
+                    Text(
+                        stringResource(
+                            if (node != null) R.string.connect else R.string.add_node
+                        )
                     )
-                )
+                }
+                AnonOutlineButton(
+                    modifier = Modifier
+                        .fillMaxWidth(.9f)
+                        .padding(top = 8.dp),
+                    onClick = { navigateTo(ResetSyncRoute) }
+                ) {
+                    Text(stringResource(R.string.resync_blockchain))
+                }
             }
         }
     }
