@@ -212,9 +212,9 @@ class AnonWalletHandler(
         val walletManager = WalletManager.instance
         val wallet = walletManager?.wallet
 
-        runCatching { wallet?.stopBackgroundSync(passPhrase) }
-            .onFailure { Timber.tag(TAG).e(it, "Wallet background sync stop failed; continuing secure wipe") }
-
+        // Do not call native stopBackgroundSync here. The wipe passphrase is the
+        // app's wipe credential, not the wallet password, and this JNI call can
+        // touch the wallet after the refresh machinery has already started closing.
         // Stop all WalletState refresh jobs before the native wallet is closed.
         walletState.prepareForWipe()
         _scope.coroutineContext.cancelChildren()
