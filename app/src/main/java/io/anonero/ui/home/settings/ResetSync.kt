@@ -1,6 +1,7 @@
 package io.anonero.ui.home.settings
 
 import AnonNeroTheme
+import AnonOutlineButton
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -11,7 +12,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import io.anonero.model.WalletManager
 import io.anonero.services.WalletState
 import org.koin.compose.koinInject
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ResetSyncPage(
@@ -72,35 +73,34 @@ fun ResetSyncPage(
             Column {
                 Spacer(modifier = Modifier.height(56.dp))
 
-            OutlinedTextField(
-                value = height,
-                onValueChange = {
-                    error = null
-                    height = it.filter(Char::isDigit)
-                },
-                modifier = Modifier.fillMaxWidth(),
-                shape = MaterialTheme.shapes.medium,
-                label = { Text("高度恢复") },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-            )
-
-            if (error != null) {
-                Text(
-                    text = error!!,
-                    modifier = Modifier.padding(top = 16.dp)
+                OutlinedTextField(
+                    value = height,
+                    onValueChange = {
+                        error = null
+                        height = it.filter(Char::isDigit)
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.medium,
+                    label = { Text("高度恢复") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                 )
+
+                if (error != null) {
+                    Text(
+                        text = error!!,
+                        modifier = Modifier.padding(top = 16.dp)
+                    )
+                }
             }
 
-            }
-
-            Button(
+            AnonOutlineButton(
                 onClick = {
                     val restoreHeight = height.toLongOrNull() ?: defaultHeight
 
                     if (restoreHeight == null) {
                         error = "请输入有效高度"
-                        return@Button
+                        return@AnonOutlineButton
                     }
 
                     val result = walletState.resetSyncFromHeight(restoreHeight)
