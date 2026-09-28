@@ -11,6 +11,7 @@ import android.os.IBinder
 import android.content.pm.ServiceInfo
 import android.provider.Settings
 import androidx.core.app.NotificationCompat
+import androidx.core.app.ServiceCompat
 import io.anonero.FOREGROUND_CHANNEL
 import io.anonero.TX_CHANNEL
 import io.anonero.R
@@ -81,7 +82,8 @@ class AnonNeroService : Service() {
     private fun start() {
         val notification = foregroundNotification()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(
+            ServiceCompat.startForeground(
+                this,
                 NOTIFICATION_ID,
                 notification,
                 ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
