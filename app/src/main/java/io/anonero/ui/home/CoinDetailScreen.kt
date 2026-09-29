@@ -139,18 +139,7 @@ fun CoinDetailScreen(
                         text = coin?.let { if (pubKeyState == 1) it.pub_key else abbreviatedValue(it.pub_key) } ?: "____",
                         modifier = Modifier
                             .weight(1f)
-                            .clickable(enabled = coin != null) {
-                                when (pubKeyState) {
-                                    0 -> pubKeyState = 1
-                                    1 -> {
-                                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                        clipboard.setPrimaryClip(ClipData.newPlainText("公钥", coin?.pub_key.orEmpty()))
-                                        pubKeyState = 2
-                                    }
-                                    else -> pubKeyState = 0
-                                }
-                            },
-                        softWrap = true,
+                            softWrap = true,
                         textAlign = TextAlign.End,
                         style = MaterialTheme.typography.titleMedium
                     )
@@ -166,18 +155,7 @@ fun CoinDetailScreen(
                         text = coin?.let { if (hashState == 1) it.hash else abbreviatedValue(it.hash) } ?: "____",
                         modifier = Modifier
                             .weight(1f)
-                            .clickable(enabled = coin != null) {
-                                when (hashState) {
-                                    0 -> hashState = 1
-                                    1 -> {
-                                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                        clipboard.setPrimaryClip(ClipData.newPlainText("哈希", coin?.hash.orEmpty()))
-                                        hashState = 2
-                                    }
-                                    else -> hashState = 0
-                                }
-                            },
-                        softWrap = true,
+                            softWrap = true,
                         textAlign = TextAlign.End,
                         style = MaterialTheme.typography.titleMedium
                     )
@@ -193,18 +171,7 @@ fun CoinDetailScreen(
                         text = outputAddress?.let { if (addressState == 1) it else abbreviatedValue(it) } ?: "____",
                         modifier = Modifier
                             .weight(1f)
-                            .clickable(enabled = outputAddress != null) {
-                                when (addressState) {
-                                    0 -> addressState = 1
-                                    1 -> {
-                                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                        clipboard.setPrimaryClip(ClipData.newPlainText("地址", outputAddress.orEmpty()))
-                                        addressState = 2
-                                    }
-                                    else -> addressState = 0
-                                }
-                            },
-                        softWrap = true,
+                            softWrap = true,
                         textAlign = TextAlign.End,
                         style = MaterialTheme.typography.titleMedium
                     )
