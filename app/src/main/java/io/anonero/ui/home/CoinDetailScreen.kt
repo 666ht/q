@@ -38,9 +38,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 
-private fun abbreviatedValue(value: String): String {
-    if (value.length <= 24) return value
-    return value.take(24) + "..." + value.takeLast(24)
+private fun abbreviatedValue(value: String, maxChars: Int): String {
+    if (value.length <= maxChars) return value
+    val available = (maxChars - 3).coerceAtLeast(2)
+    val left = available / 2
+    val right = available - left
+    return value.take(left) + "..." + value.takeLast(right)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -132,7 +135,7 @@ fun CoinDetailScreen(
                 ) {
                     Text("公钥", modifier = Modifier.size(width = 40.dp, height = 24.dp), style = MaterialTheme.typography.titleMedium)
                     Text(
-                        text = coin?.let { if (pubKeyState == 1) it.pub_key else abbreviatedValue(it.pub_key) } ?: "____",
+                        text = coin?.let { if (pubKeyState == 1) it.pub_key else abbreviatedValue(it.pub_key, 32) } ?: "____",
                         modifier = Modifier.weight(1f),
                         textAlign = TextAlign.End,
                         style = MaterialTheme.typography.titleMedium
@@ -147,7 +150,7 @@ fun CoinDetailScreen(
                 ) {
                     Text("哈希", modifier = Modifier.size(width = 40.dp, height = 24.dp), style = MaterialTheme.typography.titleMedium)
                     Text(
-                        text = coin?.let { if (hashState == 1) it.hash else abbreviatedValue(it.hash) } ?: "____",
+                        text = coin?.let { if (hashState == 1) it.hash else abbreviatedValue(it.hash, 32) } ?: "____",
                         modifier = Modifier.weight(1f),
                         textAlign = TextAlign.End,
                         style = MaterialTheme.typography.titleMedium
@@ -162,7 +165,7 @@ fun CoinDetailScreen(
                 ) {
                     Text("地址", modifier = Modifier.size(width = 40.dp, height = 24.dp), style = MaterialTheme.typography.titleMedium)
                     Text(
-                        text = outputAddress?.let { if (addressState == 1) it else abbreviatedValue(it) } ?: "____",
+                        text = outputAddress?.let { if (addressState == 1) it else abbreviatedValue(it, 32) } ?: "____",
                         modifier = Modifier.weight(1f),
                         textAlign = TextAlign.End,
                         style = MaterialTheme.typography.titleMedium
