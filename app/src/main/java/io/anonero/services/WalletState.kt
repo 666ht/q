@@ -112,10 +112,7 @@ class WalletState {
             }
             val oldTxCount = _transactions.value.size
             val updatedTxs = (wallet.history?.all
-                ?.sortedWith(
-                    compareByDescending<TransactionInfo> { it.timestamp }
-                        .thenByDescending { it.hash ?: "" }
-                )
+                ?.sortedWith(compareByDescending<TransactionInfo> { it.timestamp }.thenByDescending { it.hash ?: "" })
                 ?: listOf())
                 .fastDistinctBy { it.getListKey() }
             _transactions.update { updatedTxs }
@@ -147,26 +144,13 @@ class WalletState {
     }
 
     fun isWiping(): Boolean = _isWiping.get()
-
     fun isResetSyncInProgress(): Boolean = _resetSyncInProgress.get()
-
     fun getResetSyncHeight(): Long = _resetSyncHeight.get()
 
-    fun beginRestoreSync() {
-        _restoreSyncInProgress.set(true)
-    }
-
-    // Explicit restore-sync entry point used by the wallet restore service.
-    // Keep the state transition in WalletState so restore owns one refresh lifecycle.
-    fun startRestoreSync() {
-        _restoreSyncInProgress.set(true)
-    }
-
+    fun beginRestoreSync() { _restoreSyncInProgress.set(true) }
+    fun startRestoreSync() { _restoreSyncInProgress.set(true) }
     fun isRestoreSyncInProgress(): Boolean = _restoreSyncInProgress.get()
-
-    fun finishRestoreSync() {
-        _restoreSyncInProgress.set(false)
-    }
+    fun finishRestoreSync() { _restoreSyncInProgress.set(false) }
 
     fun finishResetSync() {
         _resetSyncInProgress.set(false)
@@ -188,11 +172,11 @@ class WalletState {
             if (wallet.startBackgroundSync()) return true
             _backgroundSync.value = false
             Timber.tag(TAG).e("startBackgroundSync returned false")
-            return false
+            false
         } catch (e: Exception) {
             _backgroundSync.value = false
             Timber.tag(TAG).e(e, "startBackgroundSync error")
-            return false
+            false
         } finally {
             _blockUpdates.set(false)
         }
@@ -212,13 +196,11 @@ class WalletState {
                 update()
                 wallet.startRefresh()
                 Timber.tag(TAG).i("Exited background sync")
-                return true
-            }
-            Timber.tag(TAG).e("stopBackgroundSync returned false")
-            return false
+                true
+            } else false
         } catch (e: Exception) {
             Timber.tag(TAG).e(e, "stopBackgroundSync error")
-            return false
+            false
         } finally {
             _blockUpdates.set(false)
         }
@@ -227,16 +209,14 @@ class WalletState {
     fun setConnectionStatus(status: Wallet.ConnectionStatus) {
         val previous = _previousConnectionStatus.getAndSet(status)
         _connectionStatus.update { status }
-        if (!_resetSyncInProgress.get() &&
-            !_restoreSyncInProgress.get() &&
+        if (!_resetSyncInProgress.get() && !_restoreSyncInProgress.get() &&
             previous == Wallet.ConnectionStatus.ConnectionStatus_Disconnected &&
             status == Wallet.ConnectionStatus.ConnectionStatus_Connected &&
             getWallet?.isSynchronized == true) {
             setLoading(true)
             refreshScope.launch {
-                try {
-                    getWallet?.startRefresh()
-                } catch (e: Exception) {
+                try { getWallet?.startRefresh() }
+                catch (e: Exception) {
                     Timber.tag(TAG).e(e, "startRefresh error")
                     setLoading(false)
                 }
@@ -252,73 +232,39 @@ class WalletState {
         val done = syncProgress.progress >= 1f || syncProgress.left <= 0L
         _syncProgress.update { if (done) null else syncProgress }
         _isSyncing.set(!done)
-        if (done) {
-            // The native refresh has reached the daemon height. Mark the
-            // connection as connected as upstream does, otherwise the home
-            // progress indicator remains visible forever because it sees a
-            // null/disconnected connection state.
-            _connectionStatus.update {
-                Wallet.ConnectionStatus.ConnectionStatus_Connected
-            }
-        }
+        if (done) _connectionStatus.update { Wallet.ConnectionStatus.ConnectionStatus_Connected }
     }
 
-    /**
-     * Publish the native wallet data at the exact end of a completed refresh.
-     * This deliberately bypasses the normal update() gate because background-sync
-     * state must not prevent the final balance/history from reaching the UI.
-     */
     fun publishAfterSync(): Boolean {
         if (_isWiping.get()) return false
         val wallet = getWallet ?: return false
-        if (!wallet.isInitialized) {
-            Timber.tag(TAG).w("publishAfterSync: wallet is not initialized")
-            return false
-        }
+        if (!wallet.isInitialized) return false
         return try {
-            // The native refresh has completed, but TransactionHistory is a Java
-            // cache. Refresh it explicitly before reading it into StateFlow.
             wallet.refreshHistory()
             val balance = wallet.balance
             val unlocked = if (AnonConfig.viewOnly) wallet.viewOnlyBalance() else wallet.unlockedBalance
             val status = wallet.fullStatus
-            val updatedTxs = (wallet.history?.all?.sortedByDescending { it.timestamp }
-                ?: emptyList()).fastDistinctBy { it.getListKey() }
-
+            val updatedTxs = (wallet.history?.all?.sortedByDescending { it.timestamp } ?: emptyList())
+                .fastDistinctBy { it.getListKey() }
             _balanceInfo.value = balance
             _unLockedBalance.value = unlocked
             _walletStatus.value = status
             _transactions.value = updatedTxs
-
-            // Keep the other wallet collections consistent with the final sync
-            // snapshot without going through update(), which may be gated.
             if (!backgroundSync) {
-                // Coins is a lazy Java cache; refresh it before reading all,
-                // otherwise the first publishAfterSync after wallet open writes
-                // an empty list and the UTXO screen stays blank.
                 wallet.coins?.refresh()
                 _nextAddress.value = wallet.getLatestSubAddress()
                 _subAddresses.value = wallet.getAllUsedSubAddresses().reversed()
                 _coins.value = (wallet.coins?.all ?: emptyList()).fastFilter { !it.spent }
             }
-
-            val address = try {
-                WalletManager.instance?.getDaemonAddress()
-            } catch (_: Exception) {
-                null
-            }
+            val address = try { WalletManager.instance?.getDaemonAddress() } catch (_: Exception) { null }
             address?.let {
                 _connectedDaemon.value = DaemonInfo(
                     it,
-                    connectionStatus = status.connectionStatus
-                        ?: Wallet.ConnectionStatus.ConnectionStatus_Disconnected,
+                    connectionStatus = status.connectionStatus ?: Wallet.ConnectionStatus.ConnectionStatus_Disconnected,
                     WalletManager.instance?.getBlockchainHeight() ?: -1L
                 )
             }
-            Timber.tag(TAG).i(
-                "publishAfterSync: balance=%s unlocked=%s transactions=%s",
-                balance, unlocked, updatedTxs.size
-            )
+            Timber.tag(TAG).i("publishAfterSync: balance=%s unlocked=%s transactions=%s", balance, unlocked, updatedTxs.size)
             true
         } catch (e: Exception) {
             Timber.tag(TAG).e(e, "publishAfterSync failed")
@@ -329,51 +275,27 @@ class WalletState {
     fun getAddressForCoin(txHash: String?): String? {
         if (txHash.isNullOrEmpty()) return null
         val tx = _transactions.value.firstOrNull { it.hash == txHash } ?: return null
-        return try {
-            getWallet?.getSubaddress(tx.accountIndex, tx.addressIndex)
-        } catch (e: Exception) {
-            Timber.tag(TAG).w(e, "getAddressForCoin failed")
-            null
-        }
+        return try { getWallet?.getSubaddress(tx.accountIndex, tx.addressIndex) } catch (e: Exception) { null }
     }
 
     fun freezeCoin(publicKey: String): Result<Boolean> {
         return try {
             val wallet = getWallet ?: return Result.failure(Exception("Wallet not initialized"))
             val coins = wallet.coins ?: return Result.failure(Exception("Coins not initialized"))
-            coins.setFrozen(publicKey)
-            wallet.store()
-            coins.refresh()
-            update()
-            Result.success(true)
-        } catch (e: Exception) {
-            Timber.tag(TAG).e(e, "freeze coin error")
-            Result.failure(e)
-        }
+            coins.setFrozen(publicKey); wallet.store(); coins.refresh(); update(); Result.success(true)
+        } catch (e: Exception) { Result.failure(e) }
     }
 
     fun thawCoin(publicKey: String): Result<Boolean> {
         return try {
             val wallet = getWallet ?: return Result.failure(Exception("Wallet not initialized"))
             val coins = wallet.coins ?: return Result.failure(Exception("Coins not initialized"))
-            coins.thaw(publicKey)
-            wallet.store()
-            coins.refresh()
-            update()
-            Result.success(true)
-        } catch (e: Exception) {
-            Timber.tag(TAG).e(e, "thaw coin error")
-            Result.failure(e)
-        }
+            coins.thaw(publicKey); wallet.store(); coins.refresh(); update(); Result.success(true)
+        } catch (e: Exception) { Result.failure(e) }
     }
 
-    fun toggleHideAmounts() {
-        hideAmountsFlow.update { !it }
-    }
-
-    fun setBackGroundSync(startBackgroundSync: Boolean) {
-        _backgroundSync.update { startBackgroundSync }
-    }
+    fun toggleHideAmounts() { hideAmountsFlow.update { !it } }
+    fun setBackGroundSync(startBackgroundSync: Boolean) { _backgroundSync.update { startBackgroundSync } }
 
     fun getNewAddress() {
         getWallet?.let {
@@ -387,18 +309,13 @@ class WalletState {
 
     fun setTransactionNote(note: String, transactionInfo: TransactionInfo) {
         getWallet?.let {
-            it.setUserNote(transactionInfo.hash, note)
-            it.store()
-            it.refreshHistory()
-            update()
+            it.setUserNote(transactionInfo.hash, note); it.store(); it.refreshHistory(); update()
         }
     }
 
     fun updateAddressLabel(label: String, addressIndex: Int) {
         getWallet?.let {
-            it.setSubaddressLabel(addressIndex, label)
-            it.store()
-            it.refreshHistory()
+            it.setSubaddressLabel(addressIndex, label); it.store(); it.refreshHistory()
             it.getAllUsedSubAddresses().let { allItems ->
                 val refreshed = allItems.reversed()
                 _subAddresses.update { current ->
@@ -416,34 +333,19 @@ class WalletState {
     fun refresh() {
         val wallet = getWallet ?: return
         if (!wallet.isInitialized) return
-
-        // Native wallet refresh is not re-entrant. During blockchain sync the
-        // existing refresh must be allowed to finish; starting another refresh
-        // from the UI can block the native wallet and make the screen appear
-        // frozen. The active sync callback will publish the final data.
-        if (_isSyncing.get() || wallet.isSynchronized.not()) {
+        if (_isSyncing.get() || !wallet.isSynchronized) {
             Timber.tag(TAG).d("refresh ignored while wallet sync is active")
             return
         }
-
         if (wallet.fullStatus.connectionStatus == Wallet.ConnectionStatus.ConnectionStatus_Connected) {
             setLoading(true)
             refreshScope.launch {
-                try {
-                    wallet.startRefresh()
-                } catch (e: Exception) {
-                    Timber.tag(TAG).e(e, "refresh error")
-                    setLoading(false)
-                }
+                try { wallet.startRefresh() }
+                catch (e: Exception) { Timber.tag(TAG).e(e, "refresh error"); setLoading(false) }
             }
         }
-
         refreshScope.launch {
-            try {
-                wallet.refreshHistory()
-            } catch (e: Exception) {
-                Timber.tag(TAG).e(e, "refreshHistory error")
-            }
+            try { wallet.refreshHistory() } catch (e: Exception) { Timber.tag(TAG).e(e, "refreshHistory error") }
         }
     }
 
@@ -454,19 +356,16 @@ class WalletState {
                 return Result.failure(Exception(AnonConfig.context?.getString(R.string.resync_daemon_required) ?: "Please connect to daemon for resync"))
             }
             if (height < 0L) return Result.failure(IllegalArgumentException("Invalid restore height"))
-            // This rescan owns the refresh lifecycle until the native wallet
-            // reports completion. Do not let connection callbacks start a
-            // second refresh while the requested restore height is active.
             _resetSyncInProgress.set(true)
             _resetSyncHeight.set(height)
             wallet.pauseRefresh()
             wallet.setRestoreHeight(height)
-            wallet.store()
             setLoading(true)
-            wallet.rescanBlockchainAsync()
+            wallet.startRefresh()
             Result.success(true)
         } catch (e: Exception) {
             _resetSyncInProgress.set(false)
+            _resetSyncHeight.set(-1L)
             Timber.tag(TAG).e(e, "reset sync error")
             Result.failure(e)
         }
