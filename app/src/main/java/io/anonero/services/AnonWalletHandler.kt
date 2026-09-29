@@ -122,11 +122,21 @@ class AnonWalletHandler(
             if (wallet.isInitialized) {
                 wallet.refreshHistory()
                 wallet.setTrustedDaemon(true)
-                // Opening an existing wallet must resume normal refresh from
-                // the wallet's persisted scan height. A restore height being
-                // present does not mean this is a newly restored wallet.
-                // Rescanning here would make every app launch start over.
-                wallet.startRefresh()
+
+                if (restoreHeight != 0L) {
+                    // RESTORE_HEIGHT is a one-time marker for a newly restored
+                    // wallet. Rescan once from that height, then consume the
+                    // marker so later app launches resume from the persisted
+                    // native scan height instead of starting over.
+                    wallet.rescanBlockchainAsync()
+                    prefs.edit {
+                        remove(io.anonero.util.RESTORE_HEIGHT)
+                    }
+                } else {
+                    // Existing wallet: resume from the native wallet's
+                    // persisted scan height.
+                    wallet.startRefresh()
+                }
                 walletState.update()
             }
         } catch (e: Exception) {
