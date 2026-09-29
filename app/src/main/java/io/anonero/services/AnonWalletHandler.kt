@@ -129,8 +129,6 @@ class AnonWalletHandler(
                     // second explicit rescan, which can make restore appear to
                     // require two synchronization passes.
                     walletState.startRestoreSync()
-                    wallet.setRestoreHeight(restoreHeight)
-                    wallet.store()
                     wallet.startRefresh()
                     prefs.edit {
                         remove(io.anonero.util.RESTORE_HEIGHT)
