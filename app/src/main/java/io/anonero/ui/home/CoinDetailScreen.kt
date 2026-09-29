@@ -139,7 +139,8 @@ fun CoinDetailScreen(
                         text = coin?.let { if (pubKeyState == 1) it.pub_key else abbreviatedValue(it.pub_key) } ?: "____",
                         modifier = Modifier
                             .weight(1f)
-                            softWrap = true,
+                            softWrap = false,
+                            overflow = TextOverflow.Clip,
                         textAlign = TextAlign.End,
                         style = MaterialTheme.typography.titleMedium
                     )
@@ -155,7 +156,8 @@ fun CoinDetailScreen(
                         text = coin?.let { if (hashState == 1) it.hash else abbreviatedValue(it.hash) } ?: "____",
                         modifier = Modifier
                             .weight(1f)
-                            softWrap = true,
+                            softWrap = false,
+                            overflow = TextOverflow.Clip,
                         textAlign = TextAlign.End,
                         style = MaterialTheme.typography.titleMedium
                     )
@@ -171,7 +173,8 @@ fun CoinDetailScreen(
                         text = outputAddress?.let { if (addressState == 1) it else abbreviatedValue(it) } ?: "____",
                         modifier = Modifier
                             .weight(1f)
-                            softWrap = true,
+                            softWrap = false,
+                            overflow = TextOverflow.Clip,
                         textAlign = TextAlign.End,
                         style = MaterialTheme.typography.titleMedium
                     )
