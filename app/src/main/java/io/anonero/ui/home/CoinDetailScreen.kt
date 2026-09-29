@@ -151,7 +151,7 @@ fun CoinDetailScreen(
                                 }
                             },
                         softWrap = true,
-                        textAlign = TextAlign.Start,
+                        textAlign = TextAlign.End,
                         style = MaterialTheme.typography.titleMedium
                     )
                 }
@@ -178,7 +178,7 @@ fun CoinDetailScreen(
                                 }
                             },
                         softWrap = true,
-                        textAlign = TextAlign.Start,
+                        textAlign = TextAlign.End,
                         style = MaterialTheme.typography.titleMedium
                     )
                 }
@@ -205,7 +205,7 @@ fun CoinDetailScreen(
                                 }
                             },
                         softWrap = true,
-                        textAlign = TextAlign.Start,
+                        textAlign = TextAlign.End,
                         style = MaterialTheme.typography.titleMedium
                     )
                 }
