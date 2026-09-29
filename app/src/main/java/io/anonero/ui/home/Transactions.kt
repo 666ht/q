@@ -750,16 +750,7 @@ fun TransactionItem(tx: TransactionInfo, hideAmounts: Boolean = false, modifier:
                 top = 20.dp,
                 bottom = 20.dp
             )
-            .then(
-                if (showBorder) {
-                    Modifier.border(
-                        border = BorderStroke(1.dp, Color.Black),
-                        shape = MaterialTheme.shapes.medium
-                    )
-                } else {
-                    Modifier
-                }
-            )
+            .then(Modifier)
             .padding(
                 start = 12.dp,
                 end = 4.dp,
