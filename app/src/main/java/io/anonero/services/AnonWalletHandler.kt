@@ -122,17 +122,11 @@ class AnonWalletHandler(
             if (wallet.isInitialized) {
                 wallet.refreshHistory()
                 wallet.setTrustedDaemon(true)
-                if (restoreHeight != 0L) {
-                    // Restored wallet: startRefresh() only scans incremental
-                    // blocks from the cached height. After restore the cache
-                    // may already report daemon height, so no blocks are
-                    // scanned and balance/history stay empty. Force a full
-                    // rescan from the restore height to actually discover
-                    // outputs on first sync.
-                    wallet.rescanBlockchainAsync()
-                } else {
-                    wallet.startRefresh()
-                }
+                // Opening an existing wallet must resume normal refresh from
+                // the wallet's persisted scan height. A restore height being
+                // present does not mean this is a newly restored wallet.
+                // Rescanning here would make every app launch start over.
+                wallet.startRefresh()
                 walletState.update()
             }
         } catch (e: Exception) {
