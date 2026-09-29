@@ -201,39 +201,28 @@ fun CoinDetailScreen(
                         style = MaterialTheme.typography.titleMedium
                     )
                 }
-                Row(
+                Text(
+                    text = outputAddress?.let {
+                        if (addressState == 1) it else abbreviatedValue(it)
+                    } ?: "____",
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "地址",
-                        modifier = Modifier.size(width = 52.dp, height = 24.dp),
-                        style = MaterialTheme.typography.titleMedium
-                    )
-                    Text(
-                        text = outputAddress?.let {
-                            if (addressState == 1) it else abbreviatedValue(it)
-                        } ?: "____",
-                        modifier = Modifier
-                            .weight(1f)
-                            .clickable(enabled = outputAddress != null) {
-                                when (addressState) {
-                                    0 -> addressState = 1
-                                    1 -> {
-                                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                        clipboard.setPrimaryClip(ClipData.newPlainText("地址", outputAddress.orEmpty()))
-                                        addressState = 2
-                                    }
-                                    else -> addressState = 0
+                        .padding(top = 8.dp)
+                        .clickable(enabled = outputAddress != null) {
+                            when (addressState) {
+                                0 -> addressState = 1
+                                1 -> {
+                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                    clipboard.setPrimaryClip(ClipData.newPlainText("地址", outputAddress.orEmpty()))
+                                    addressState = 2
                                 }
-                            },
-                        maxLines = 1,
-                        textAlign = TextAlign.Start,
-                        style = MaterialTheme.typography.titleMedium
-                    )
-                }
+                                else -> addressState = 0
+                            }
+                        },
+                    maxLines = 1,
+                    textAlign = TextAlign.Center,
+                    style = MaterialTheme.typography.titleMedium
+                )
             }
             AnonOutlineButton(
                 onClick = {
