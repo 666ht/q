@@ -285,6 +285,17 @@ class WalletState {
         }
     }
 
+    fun getAddressForCoin(txHash: String?): String? {
+        if (txHash.isNullOrEmpty()) return null
+        val tx = _transactions.value.firstOrNull { it.hash == txHash } ?: return null
+        return try {
+            getWallet?.getSubaddress(tx.accountIndex, tx.addressIndex)
+        } catch (e: Exception) {
+            Timber.tag(TAG).w(e, "getAddressForCoin failed")
+            null
+        }
+    }
+
     fun freezeCoin(publicKey: String): Result<Boolean> {
         return try {
             val wallet = getWallet ?: return Result.failure(Exception("Wallet not initialized"))
