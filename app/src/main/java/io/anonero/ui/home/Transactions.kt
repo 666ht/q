@@ -742,7 +742,7 @@ fun TransactionScreen(
                                 onClick = { onItemClick(transaction) },
                                 modifier = Modifier
                                     .zIndex(if (it == 0) 3f else 0f)
-                                    .offset(y = if (it == 0) (-65).dp else 0.dp)
+                                    .offset(y = (-(it + 1) * 65).dp)
                                     .sharedElement(
                                         sharedTransitionScope.rememberSharedContentState(
                                             key = transaction.hash.orEmpty(),
