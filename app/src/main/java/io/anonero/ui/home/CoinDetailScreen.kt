@@ -12,8 +12,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import AnonOutlineButton
@@ -135,14 +133,13 @@ fun CoinDetailScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.Top
                 ) {
                     Text("公钥", modifier = Modifier.size(width = 40.dp, height = 24.dp), style = MaterialTheme.typography.titleMedium)
                     Text(
                         text = coin?.let { if (pubKeyState == 1) it.pub_key else abbreviatedValue(it.pub_key) } ?: "____",
                         modifier = Modifier
                             .weight(1f)
-                            .horizontalScroll(rememberScrollState())
                             .clickable(enabled = coin != null) {
                                 when (pubKeyState) {
                                     0 -> pubKeyState = 1
@@ -154,7 +151,7 @@ fun CoinDetailScreen(
                                     else -> pubKeyState = 0
                                 }
                             },
-                        maxLines = 1,
+                        softWrap = true,
                         textAlign = TextAlign.Start,
                         style = MaterialTheme.typography.titleMedium
                     )
@@ -163,14 +160,13 @@ fun CoinDetailScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.Top
                 ) {
                     Text("哈希", modifier = Modifier.size(width = 40.dp, height = 24.dp), style = MaterialTheme.typography.titleMedium)
                     Text(
                         text = coin?.let { if (hashState == 1) it.hash else abbreviatedValue(it.hash) } ?: "____",
                         modifier = Modifier
                             .weight(1f)
-                            .horizontalScroll(rememberScrollState())
                             .clickable(enabled = coin != null) {
                                 when (hashState) {
                                     0 -> hashState = 1
@@ -182,7 +178,7 @@ fun CoinDetailScreen(
                                     else -> hashState = 0
                                 }
                             },
-                        maxLines = 1,
+                        softWrap = true,
                         textAlign = TextAlign.Start,
                         style = MaterialTheme.typography.titleMedium
                     )
@@ -191,14 +187,13 @@ fun CoinDetailScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.Top
                 ) {
                     Text("地址", modifier = Modifier.size(width = 40.dp, height = 24.dp), style = MaterialTheme.typography.titleMedium)
                     Text(
                         text = outputAddress?.let { if (addressState == 1) it else abbreviatedValue(it) } ?: "____",
                         modifier = Modifier
                             .weight(1f)
-                            .horizontalScroll(rememberScrollState())
                             .clickable(enabled = outputAddress != null) {
                                 when (addressState) {
                                     0 -> addressState = 1
@@ -210,7 +205,7 @@ fun CoinDetailScreen(
                                     else -> addressState = 0
                                 }
                             },
-                        maxLines = 1,
+                        softWrap = true,
                         textAlign = TextAlign.Start,
                         style = MaterialTheme.typography.titleMedium
                     )
