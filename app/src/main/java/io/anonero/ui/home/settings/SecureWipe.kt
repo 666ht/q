@@ -107,7 +107,7 @@ class SecureWipeViewModel(
         return viewModelScope.launch(Dispatchers.IO) {
             _wipeProgress.postValue(.1f)
             _wipeProgressMessage.postValue(
-                "正在关闭并清理钱包"
+                "正在删除钱包"
             )
             _wipeProgress.postValue(.3f)
             var wipeFailure: Throwable? = null
@@ -122,10 +122,10 @@ class SecureWipeViewModel(
             }
             delay(1000)
             _wipeProgress.postValue(.5f)
-            _wipeProgressMessage.postValue("钱包数据已清理")
+            _wipeProgressMessage.postValue("钱包已清除")
             delay(1200)
             _wipeProgress.postValue(.6f)
-            _wipeProgressMessage.postValue("正在清理偏好设置")
+            _wipeProgressMessage.postValue("正在清除偏好设置")
             runCatching { sharedPreferences.edit(commit = true) { clear() } }
                 .onFailure {
                     wipeFailure = wipeFailure ?: it
@@ -133,14 +133,14 @@ class SecureWipeViewModel(
                 }
             delay(800)
             _wipeProgress.postValue(.7f)
-            _wipeProgressMessage.postValue("正在清理节点")
+            _wipeProgressMessage.postValue("正在清除节点")
             runCatching { nodesRepository.clearAll() }
                 .onFailure {
                     wipeFailure = wipeFailure ?: it
                     Timber.tag(TAG).e(it, "Secure wipe nodes step failed")
                 }
             delay(1200)
-            _wipeProgressMessage.postValue("正在清理日志")
+            _wipeProgressMessage.postValue("正在清除日志")
             delay(1000)
             runCatching { logRepository.clear() }
                 .onFailure {
@@ -166,7 +166,7 @@ class SecureWipeViewModel(
             }
 
             _wipeProgress.postValue(.85f)
-            _wipeProgressMessage.postValue("正在清理缓存")
+            _wipeProgressMessage.postValue("正在清除缓存")
             runCatching {
                 // Clear every preference store first, including restore height
                 // and wallet password/passphrase state.
@@ -203,7 +203,7 @@ class SecureWipeViewModel(
 
             _wipeProgress.postValue(.95f)
             _wipeProgressMessage.postValue(
-                "正在完成安全清理"
+                "钱包删除成功"
             )
             delay(300)
 
