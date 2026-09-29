@@ -40,7 +40,7 @@ import org.koin.compose.koinInject
 
 private fun abbreviatedValue(value: String): String {
     if (value.length <= 24) return value
-    return value.take(12) + "..." + value.takeLast(12)
+    return value.take(24) + "..." + value.takeLast(24)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
