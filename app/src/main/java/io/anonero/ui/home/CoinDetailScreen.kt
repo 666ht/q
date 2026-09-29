@@ -5,6 +5,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -111,7 +112,7 @@ fun CoinDetailScreen(
                         modifier = Modifier.fillMaxWidth(),
                         color = outputColor,
                         style = MaterialTheme.typography.titleMedium,
-                        textAlign = TextAlign.Center
+                        textAlign = TextAlign.Start
                     )
                     Text(
                         "输出 " + if (coinIndex >= 0) coinIndex + 1 else "",
