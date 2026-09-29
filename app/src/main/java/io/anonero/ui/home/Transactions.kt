@@ -760,31 +760,37 @@ fun TransactionItem(tx: TransactionInfo, hideAmounts: Boolean = false, modifier:
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
+        if (confirmations < 10) {
+            Box(
+                modifier = Modifier
+                    .size(28.dp)
+                    .padding(top = 2.dp)
+            ) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(28.dp),
+                    strokeWidth = 2.dp,
+                    progress = { ((confirmations.toFloat()) / 10f) }
+                )
+                Text(
+                    text = "$confirmations",
+                    modifier = Modifier.align(Alignment.Center),
+                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 9.sp)
+                )
+            }
+        }
         if (rightAlignAmount) {
             Spacer(modifier = Modifier.weight(1f))
         }
-        Box(modifier = Modifier.offset(x = 6.dp).padding(top = 2.dp)) {
-                if (confirmations >= 10)
-                    Icon(
-                        if (isIncoming) AnonIcons.ArrowDownLeft else AnonIcons.ArrowUpRight,
-                        modifier = Modifier.size(if (upstreamLayout) 32.dp else 25.dp),
-                        tint = if (isIncoming) MaterialTheme.colorScheme.primary else LocalContentColor.current,
-                        contentDescription = ""
-                    )
-                else
-                    Box(modifier = Modifier.size(28.dp)) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(28.dp),
-                            strokeWidth = 2.dp,
-                            progress = { ((confirmations.toFloat()) / 10f) }
-                        )
-                        Text(
-                            text = "$confirmations",
-                            modifier = Modifier.align(Alignment.Center),
-                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 9.sp)
-                        )
-                    }
+        if (confirmations >= 10) {
+            Box(modifier = Modifier.offset(x = 6.dp).padding(top = 2.dp)) {
+                Icon(
+                    if (isIncoming) AnonIcons.ArrowDownLeft else AnonIcons.ArrowUpRight,
+                    modifier = Modifier.size(if (upstreamLayout) 32.dp else 25.dp),
+                    tint = if (isIncoming) MaterialTheme.colorScheme.primary else LocalContentColor.current,
+                    contentDescription = ""
+                )
             }
+        }
         Spacer(modifier = Modifier.size(10.dp))
         Text(
             if (hideAmounts) Formats.maskAmount(amount)
