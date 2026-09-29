@@ -765,7 +765,7 @@ fun TransactionItem(tx: TransactionInfo, hideAmounts: Boolean = false, modifier:
         if (rightAlignAmount) {
             Spacer(modifier = Modifier.weight(1f))
         }
-        Box(modifier = Modifier.offset(x = 3.dp).padding(top = 2.dp)) {
+        Box(modifier = Modifier.offset(x = 4.dp).padding(top = 2.dp)) {
                 if (confirmations >= 10)
                     Icon(
                         if (isIncoming) AnonIcons.ArrowDownLeft else AnonIcons.ArrowUpRight,
