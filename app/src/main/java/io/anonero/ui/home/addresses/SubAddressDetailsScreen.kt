@@ -5,8 +5,11 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContentScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -33,6 +36,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
@@ -191,6 +195,41 @@ fun SubAddressDetailScreen(
                                 )
                             }
                         },
+                    )
+                }
+            }
+            item {
+                val latest = transactions.maxByOrNull { it.timestamp }
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 20.dp)
+                        .border(
+                            border = BorderStroke(1.dp, Color.Black),
+                            shape = MaterialTheme.shapes.medium
+                        )
+                        .padding(horizontal = 12.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Box(modifier = Modifier.padding(top = 2.dp)) {
+                        Icon(
+                            AnonIcons.ArrowDownLeft,
+                            modifier = Modifier.size(32.dp),
+                            tint = MaterialTheme.colorScheme.primary,
+                            contentDescription = null
+                        )
+                    }
+                    Text(
+                        if (hideAmounts) Formats.maskAmount(subAddress.totalAmount)
+                        else Formats.getDisplayAmount(subAddress.totalAmount),
+                        modifier = Modifier.weight(1f),
+                        textAlign = TextAlign.Center,
+                        style = MaterialTheme.typography.titleLarge
+                    )
+                    Text(
+                        latest?.let { Formats.formatTransactionTime(it.timestamp) } ?: "",
+                        style = MaterialTheme.typography.labelSmall
                     )
                 }
             }
