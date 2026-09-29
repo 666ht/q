@@ -116,9 +116,12 @@ fun CoinDetailScreen(
                     )
                     Text(
                         "输出 " + if (coinIndex >= 0) coinIndex + 1 else "",
-                        modifier = Modifier.align(Alignment.CenterStart),
+                        modifier = Modifier
+                            .align(Alignment.CenterStart)
+                            .size(width = 52.dp, height = 24.dp),
                         color = outputColor,
-                        style = MaterialTheme.typography.titleMedium
+                        style = MaterialTheme.typography.titleMedium,
+                        textAlign = TextAlign.Start
                     )
                     if (busy) {
                         CircularProgressIndicator(
