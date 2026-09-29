@@ -124,16 +124,14 @@ class AnonWalletHandler(
                 wallet.setTrustedDaemon(true)
 
                 if (restoreHeight != 0L) {
-                    // A restored wallet may already contain a previous sync state.
-                    // Setting the restore height alone does not rewind that state;
-                    // the restore flow must explicitly rescan once from the
-                    // requested height. The guard prevents the connection callback
-                    // from starting a second normal refresh.
+                    // Monero's native refresh uses the configured restore height.
+                    // Start one normal refresh from that height; do not launch a
+                    // second explicit rescan, which can make restore appear to
+                    // require two synchronization passes.
                     walletState.startRestoreSync()
-                    wallet.pauseRefresh()
                     wallet.setRestoreHeight(restoreHeight)
                     wallet.store()
-                    wallet.rescanBlockchainAsync()
+                    wallet.startRefresh()
                     prefs.edit {
                         remove(io.anonero.util.RESTORE_HEIGHT)
                     }
