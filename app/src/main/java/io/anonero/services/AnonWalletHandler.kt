@@ -115,13 +115,24 @@ class AnonWalletHandler(
                 wallet.refreshHistory()
             }
             wallet.init(0)
-            if (prefs.getLong(io.anonero.util.RESTORE_HEIGHT, 0L) != 0L) {
-                wallet.setRestoreHeight(prefs.getLong(io.anonero.util.RESTORE_HEIGHT, 0L))
+            val restoreHeight = prefs.getLong(io.anonero.util.RESTORE_HEIGHT, 0L)
+            if (restoreHeight != 0L) {
+                wallet.setRestoreHeight(restoreHeight)
             }
             if (wallet.isInitialized) {
                 wallet.refreshHistory()
                 wallet.setTrustedDaemon(true)
-                wallet.startRefresh()
+                if (restoreHeight != 0L) {
+                    // Restored wallet: startRefresh() only scans incremental
+                    // blocks from the cached height. After restore the cache
+                    // may already report daemon height, so no blocks are
+                    // scanned and balance/history stay empty. Force a full
+                    // rescan from the restore height to actually discover
+                    // outputs on first sync.
+                    wallet.rescanBlockchainAsync()
+                } else {
+                    wallet.startRefresh()
+                }
                 walletState.update()
             }
         } catch (e: Exception) {
