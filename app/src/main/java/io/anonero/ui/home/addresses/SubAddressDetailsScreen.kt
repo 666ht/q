@@ -167,23 +167,13 @@ fun SubAddressDetailScreen(
                                 vertical = 6.dp
                             ),
                         headlineContent = {
-                            Row(
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text(
-                                    displayAddressLabel,
-                                    modifier = Modifier.clickable {
-                                        labelDialog = true
-                                    },
-                                    color = MaterialTheme.colorScheme.primary,
-                                )
-                                Text(
-                                    if (hideAmounts) Formats.maskAmount(subAddress.totalAmount) else Formats.getDisplayAmount(subAddress.totalAmount),
-                                    color = MaterialTheme.colorScheme.primary,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                            }
+                            Text(
+                                displayAddressLabel,
+                                modifier = Modifier.clickable {
+                                    labelDialog = true
+                                },
+                                color = MaterialTheme.colorScheme.primary,
+                            )
                         },
                         supportingContent = {
                             SelectionContainer {
