@@ -135,7 +135,7 @@ fun CoinDetailScreen(
                         .padding(top = 12.dp),
                     verticalAlignment = Alignment.Top
                 ) {
-                    Text("公钥", modifier = Modifier.size(width = 40.dp, height = 24.dp), style = MaterialTheme.typography.titleMedium)
+                    Text("公钥", modifier = Modifier.size(width = 40.dp, height = 24.dp), color = outputColor, style = MaterialTheme.typography.titleMedium)
                     Text(
                         text = coin?.let { if (pubKeyState == 1) it.pub_key else abbreviatedValue(it.pub_key) } ?: "____",
                         modifier = Modifier
@@ -162,7 +162,7 @@ fun CoinDetailScreen(
                         .padding(top = 8.dp),
                     verticalAlignment = Alignment.Top
                 ) {
-                    Text("哈希", modifier = Modifier.size(width = 40.dp, height = 24.dp), style = MaterialTheme.typography.titleMedium)
+                    Text("哈希", modifier = Modifier.size(width = 40.dp, height = 24.dp), color = outputColor, style = MaterialTheme.typography.titleMedium)
                     Text(
                         text = coin?.let { if (hashState == 1) it.hash else abbreviatedValue(it.hash) } ?: "____",
                         modifier = Modifier
@@ -189,7 +189,7 @@ fun CoinDetailScreen(
                         .padding(top = 8.dp),
                     verticalAlignment = Alignment.Top
                 ) {
-                    Text("地址", modifier = Modifier.size(width = 40.dp, height = 24.dp), style = MaterialTheme.typography.titleMedium)
+                    Text("地址", modifier = Modifier.size(width = 40.dp, height = 24.dp), color = outputColor, style = MaterialTheme.typography.titleMedium)
                     Text(
                         text = outputAddress?.let { if (addressState == 1) it else abbreviatedValue(it) } ?: "____",
                         modifier = Modifier
