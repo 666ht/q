@@ -135,7 +135,6 @@ fun CoinDetailScreen(
                         modifier = Modifier
                             .weight(1f)
                             .clickable { pubKeyState = if (pubKeyState == 1) 0 else 1 },
-                        softWrap = true,
                         textAlign = TextAlign.End,
                         style = MaterialTheme.typography.titleMedium
                     )
@@ -152,7 +151,6 @@ fun CoinDetailScreen(
                         modifier = Modifier
                             .weight(1f)
                             .clickable { hashState = if (hashState == 1) 0 else 1 },
-                        softWrap = true,
                         textAlign = TextAlign.End,
                         style = MaterialTheme.typography.titleMedium
                     )
@@ -169,7 +167,6 @@ fun CoinDetailScreen(
                         modifier = Modifier
                             .weight(1f)
                             .clickable { addressState = if (addressState == 1) 0 else 1 },
-                        softWrap = true,
                         textAlign = TextAlign.End,
                         style = MaterialTheme.typography.titleMedium
                     )
