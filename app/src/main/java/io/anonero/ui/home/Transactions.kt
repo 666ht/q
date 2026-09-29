@@ -722,7 +722,7 @@ fun TransactionScreen(
                                     }
                                     .sharedElement(
                                         sharedTransitionScope.rememberSharedContentState(
-                                            key = transactions.first().hash,
+                                            key = transactions.first().hash.orEmpty(),
                                         ),
                                         animatedVisibilityScope = animatedContentScope
                                     )
@@ -745,7 +745,7 @@ fun TransactionScreen(
                                     }
                                     .sharedElement(
                                         sharedTransitionScope.rememberSharedContentState(
-                                            key = transaction.hash,
+                                            key = transaction.hash.orEmpty(),
                                         ),
                                         animatedVisibilityScope = animatedContentScope
                                     )
