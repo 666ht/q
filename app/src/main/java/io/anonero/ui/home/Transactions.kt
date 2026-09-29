@@ -716,7 +716,7 @@ fun TransactionScreen(
                             hideAmounts = hideAmounts,
                             showBorder = it != 1,
                             modifier = Modifier
-                                .offset(y = if (it == 1) (-60).dp else 0.dp)
+                                .offset(y = 0.dp)
                                 .clickable {
                                     onItemClick(transactions[it])
                                 }
