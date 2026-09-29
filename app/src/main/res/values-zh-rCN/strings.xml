@@ -64,8 +64,8 @@
     <string name="set_transaction_description">交易备注</string>
     <string name="save">保存</string>
     <string name="dismiss">取消</string>
-    <string name="transaction_id">交易ID</string>
-    <string name="transaction_fee">手续费</string>
+    <string name="transaction_id">交易哈希</string>
+    <string name="transaction_fee">旷工费</string>
     <string name="transaction_key">交易密钥</string>
     <string name="confirmation_block">确认区块</string>
     <string name="time">时间</string>
