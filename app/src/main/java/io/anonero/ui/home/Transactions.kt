@@ -72,6 +72,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.SecureFlagPolicy
@@ -717,6 +718,7 @@ fun TransactionScreen(
                                 hideAmounts = hideAmounts,
                                 showBorder = false,
                                 modifier = Modifier
+                                    .zIndex(2f)
                                     .clickable {
                                         onItemClick(transactions.first())
                                     }
