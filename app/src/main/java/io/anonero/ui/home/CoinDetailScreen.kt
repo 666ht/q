@@ -99,36 +99,38 @@ fun CoinDetailScreen(
                     color = outputColor,
                     style = MaterialTheme.typography.titleMedium
                 )
-                Row(
+                Box(
                     modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
+                    contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        "输出 " + if (coinIndex >= 0) coinIndex + 1 else "",
-                        modifier = Modifier.weight(1f),
-                        color = outputColor,
-                        style = MaterialTheme.typography.titleMedium
-                    )
                     Text(
                         coin?.let {
                             if (hideAmounts) Formats.maskAmount(it.amount)
                             else Formats.getDisplayAmount(it.amount)
                         } ?: "____",
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.fillMaxWidth(),
                         color = outputColor,
                         style = MaterialTheme.typography.titleMedium,
                         textAlign = TextAlign.Center
                     )
+                    Text(
+                        "输出 " + if (coinIndex >= 0) coinIndex + 1 else "",
+                        modifier = Modifier.align(Alignment.CenterStart),
+                        color = outputColor,
+                        style = MaterialTheme.typography.titleMedium
+                    )
                     if (busy) {
                         CircularProgressIndicator(
                             modifier = Modifier
-                                .padding(start = 8.dp)
+                                .align(Alignment.CenterEnd)
                                 .size(28.dp),
                             strokeWidth = 2.dp
                         )
                     } else {
                         androidx.compose.foundation.layout.Spacer(
-                            modifier = Modifier.size(36.dp)
+                            modifier = Modifier
+                                .align(Alignment.CenterEnd)
+                                .size(28.dp)
                         )
                     }
                 }
