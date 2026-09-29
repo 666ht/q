@@ -75,6 +75,12 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
         )
 
         if (status === Wallet.ConnectionStatus.ConnectionStatus_Disconnected || status == null) {
+            // A manual reset-height rescan owns the refresh lifecycle. A
+            // transient disconnect must not replace it with a normal refresh.
+            if (walletState.isResetSyncInProgress()) {
+                Timber.tag(name).i("reset-height rescan waiting for connection")
+                return
+            }
             walletState.publishAfterSync()
             wallet.startRefresh()
             wallet.refreshAsync()
@@ -97,6 +103,7 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
         wallet.setSynchronized()
         wallet.store()
         val published = walletState.publishAfterSync()
+        walletState.finishResetSync()
 
         walletState.syncUpdate(SyncProgress(1f, 0L))
         walletState.setLoading(false)
