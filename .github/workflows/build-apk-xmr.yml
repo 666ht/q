@@ -64,10 +64,11 @@ jobs:
             $ANDROID_SDK_ROOT/platforms/android-35
             $ANDROID_SDK_ROOT/build-tools/36.0.0
             $ANDROID_SDK_ROOT/ndk/29.0.13599879
-          key: android-sdk-35-build-tools-36.0.0-ndk-29.0.13599879-${{ runner.os }}
+            $ANDROID_SDK_ROOT/cmake/3.22.1
+          key: android-sdk-35-build-tools-36.0.0-ndk-29.0.13599879-cmake-3.22.1-v2-${{ runner.os }}
 
       - name: Install Android SDK components
-        run: sdkmanager "platforms;android-35" "build-tools;36.0.0" "platform-tools" "ndk;29.0.13599879"
+        run: sdkmanager "platforms;android-35" "build-tools;36.0.0" "platform-tools" "ndk;29.0.13599879" "cmake;3.22.1"
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
