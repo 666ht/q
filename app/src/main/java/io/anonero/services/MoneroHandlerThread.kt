@@ -113,9 +113,13 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
     private fun tryRestartConnection() {
         // Do not call wallet.init(0) here. startService() already initialized
         // the daemon connection; re-initializing interrupts the in-progress
-        // blockchain scan and causes an infinite refresh loop where
-        // isSynchronized never becomes true and balance/history never publish.
+        // blockchain scan.
+        // startRefresh() alone may not trigger an immediate refresh if the
+        // background thread is already running; refreshAsync() forces the
+        // next refresh cycle to start now instead of waiting for the auto-
+        // refresh interval, so isSynchronized can become true on first sync.
         wallet.startRefresh()
+        wallet.refreshAsync()
         walletState.update()
     }
 
