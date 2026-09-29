@@ -220,7 +220,7 @@ fun CoinDetailScreen(
                                 }
                             },
                         maxLines = 1,
-                        textAlign = TextAlign.End,
+                        textAlign = TextAlign.Start,
                         style = MaterialTheme.typography.titleMedium
                     )
                 }
