@@ -709,24 +709,48 @@ fun TransactionScreen(
                 item(key = "transaction_offset") {
                     Spacer(modifier = Modifier.size(40.dp))
                 }
-                items(transactions.size, key = { transactions[it].getListKey() }) {
-                    with(sharedTransitionScope) {
-                        TransactionItem(
-                            transactions[it],
-                            hideAmounts = hideAmounts,
-                            showBorder = it != 1,
-                            modifier = Modifier
-                                .offset(y = if (it == 1) (-65).dp else 0.dp)
-                                .clickable {
-                                    onItemClick(transactions[it])
-                                }
-                                .sharedElement(
-                                    sharedTransitionScope.rememberSharedContentState(
-                                        key = "${transactions[it].hash}",
-                                    ),
-                                    animatedVisibilityScope = animatedContentScope
-                                )
-                        )
+                if (transactions.isNotEmpty()) {
+                    stickyHeader(key = "transaction_first") {
+                        with(sharedTransitionScope) {
+                            TransactionItem(
+                                transactions.first(),
+                                hideAmounts = hideAmounts,
+                                showBorder = false,
+                                modifier = Modifier
+                                    .clickable {
+                                        onItemClick(transactions.first())
+                                    }
+                                    .sharedElement(
+                                        sharedTransitionScope.rememberSharedContentState(
+                                            key = transactions.first().hash,
+                                        ),
+                                        animatedVisibilityScope = animatedContentScope
+                                    )
+                            )
+                        }
+                    }
+                    items(
+                        count = (transactions.size - 1).coerceAtLeast(0),
+                        key = { index -> transactions[index + 1].getListKey() }
+                    ) {
+                        val transaction = transactions[it + 1]
+                        with(sharedTransitionScope) {
+                            TransactionItem(
+                                transaction,
+                                hideAmounts = hideAmounts,
+                                showBorder = false,
+                                modifier = Modifier
+                                    .clickable {
+                                        onItemClick(transaction)
+                                    }
+                                    .sharedElement(
+                                        sharedTransitionScope.rememberSharedContentState(
+                                            key = transaction.hash,
+                                        ),
+                                        animatedVisibilityScope = animatedContentScope
+                                    )
+                            )
+                        }
                     }
                 }
             }
