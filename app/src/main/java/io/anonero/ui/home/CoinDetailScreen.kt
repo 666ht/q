@@ -86,6 +86,13 @@ fun CoinDetailScreen(
             verticalArrangement = Arrangement.SpaceBetween
         ) {
             Column(modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    text = "全局索引  " + (coin?.unlockTime ?: "____"),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 12.dp),
+                    style = MaterialTheme.typography.bodyMedium
+                )
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
