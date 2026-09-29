@@ -239,7 +239,7 @@ class AnonNeroService : Service() {
         )
 
         return NotificationCompat.Builder(this.applicationContext, FOREGROUND_CHANNEL)
-            .setSmallIcon(R.drawable.ic_tor)
+            .setSmallIcon(R.drawable.anon_notification)
             .setOngoing(true)
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
             .setAutoCancel(false)
