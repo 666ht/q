@@ -712,7 +712,10 @@ fun TransactionScreen(
                 items(transactions.size, key = { transactions[it].getListKey() }) {
                     with(sharedTransitionScope) {
                         TransactionItem(
-                            transactions[it], hideAmounts = hideAmounts, modifier = Modifier
+                            transactions[it],
+                            hideAmounts = hideAmounts,
+                            showBorder = it != 1,
+                            modifier = Modifier
                                 .offset(y = if (it == 1) (-60).dp else 0.dp)
                                 .clickable {
                                     onItemClick(transactions[it])
@@ -733,7 +736,7 @@ fun TransactionScreen(
 
 
 @Composable
-fun TransactionItem(tx: TransactionInfo, hideAmounts: Boolean = false, modifier: Modifier = Modifier, rightAlignAmount: Boolean = true, showTime: Boolean = false, timePattern: String = "dd/MM\nHH:mm", timeZone: ZoneId = ZoneId.systemDefault(), upstreamLayout: Boolean = false) {
+fun TransactionItem(tx: TransactionInfo, hideAmounts: Boolean = false, modifier: Modifier = Modifier, rightAlignAmount: Boolean = true, showTime: Boolean = false, timePattern: String = "dd/MM\nHH:mm", timeZone: ZoneId = ZoneId.systemDefault(), upstreamLayout: Boolean = false, showBorder: Boolean = true) {
     val isIncoming = tx.direction == TransactionInfo.Direction.Direction_In
     val amount = if (isIncoming) tx.amount else tx.amount
     val confirmations = tx.confirmations
@@ -747,12 +750,15 @@ fun TransactionItem(tx: TransactionInfo, hideAmounts: Boolean = false, modifier:
                 top = 20.dp,
                 bottom = 20.dp
             )
-            .border(
-                border = BorderStroke(
-                    1.dp,
-                    Color.Black
-                ),
-                shape = MaterialTheme.shapes.medium
+            .then(
+                if (showBorder) {
+                    Modifier.border(
+                        border = BorderStroke(1.dp, Color.Black),
+                        shape = MaterialTheme.shapes.medium
+                    )
+                } else {
+                    Modifier
+                }
             )
             .padding(
                 start = 12.dp,
