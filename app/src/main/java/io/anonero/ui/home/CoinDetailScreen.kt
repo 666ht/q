@@ -100,42 +100,34 @@ fun CoinDetailScreen(
                     color = outputColor,
                     style = MaterialTheme.typography.titleMedium
                 )
-                Box(
+                androidx.compose.foundation.layout.Row(
                     modifier = Modifier.fillMaxWidth(),
-                    contentAlignment = Alignment.Center
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
+                    Text(
+                        "输出 " + if (coinIndex >= 0) coinIndex + 1 else "",
+                        modifier = Modifier.size(width = 52.dp, height = 24.dp),
+                        color = outputColor,
+                        style = MaterialTheme.typography.titleMedium,
+                        textAlign = TextAlign.Start
+                    )
                     Text(
                         coin?.let {
                             if (hideAmounts) Formats.maskAmount(it.amount)
                             else Formats.getDisplayAmount(it.amount)
                         } ?: "____",
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.weight(1f),
                         color = outputColor,
                         style = MaterialTheme.typography.titleMedium,
                         textAlign = TextAlign.Center
                     )
-                    Text(
-                        "输出 " + if (coinIndex >= 0) coinIndex + 1 else "",
-                        modifier = Modifier
-                            .align(Alignment.CenterStart)
-                            .size(width = 52.dp, height = 24.dp),
-                        color = outputColor,
-                        style = MaterialTheme.typography.titleMedium,
-                        textAlign = TextAlign.Start
-                    )
                     if (busy) {
                         CircularProgressIndicator(
-                            modifier = Modifier
-                                .align(Alignment.CenterEnd)
-                                .size(28.dp),
+                            modifier = Modifier.size(28.dp),
                             strokeWidth = 2.dp
                         )
                     } else {
-                        Spacer(
-                            modifier = Modifier
-                                .align(Alignment.CenterEnd)
-                                .size(28.dp)
-                        )
+                        Spacer(modifier = Modifier.size(28.dp))
                     }
                 }
                 androidx.compose.foundation.layout.Row(
