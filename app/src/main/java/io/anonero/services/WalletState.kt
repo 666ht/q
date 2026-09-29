@@ -107,9 +107,13 @@ class WalletState {
                 }
             }
             val oldTxCount = _transactions.value.size
-            val updatedTxs = (wallet.history?.all?.sortedWith(comparator = { o1, o2 ->
-                o2.timestamp.compareTo(o1.timestamp)
-            }) ?: listOf()).fastDistinctBy { it.getListKey() }
+            val updatedTxs = (wallet.history?.all
+                ?.sortedWith(
+                    compareByDescending<TransactionInfo> { it.timestamp }
+                        .thenByDescending { it.hash ?: "" }
+                )
+                ?: listOf())
+                .fastDistinctBy { it.getListKey() }
             _transactions.update { updatedTxs }
             if (oldTxCount > 0 && updatedTxs.size > oldTxCount) {
                 val hasNewIncoming = updatedTxs.take(updatedTxs.size - oldTxCount).any {
