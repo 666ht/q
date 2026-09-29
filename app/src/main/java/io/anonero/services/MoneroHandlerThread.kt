@@ -15,9 +15,7 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
         super.start()
     }
 
-    override fun run() {
-
-    }
+    override fun run() {}
 
     override fun moneySpent(txId: String?, amount: Long) {
         if (walletState.isWiping()) return
@@ -91,13 +89,12 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
 
         val heightDiff = daemonHeight - chainHeight
         if (heightDiff >= 2) {
-            // During wallet restore, a native refreshed callback can arrive
-            // before the restore-height scan has actually reached the daemon.
-            // Do not restart refresh here, or restore can begin a second pass.
             if (walletState.isRestoreSyncInProgress()) {
-                if (!wallet.isSynchronized) {
-                    updateSyncProgress(chainHeight)
-                }
+                // A restore refresh can report a partial height before the
+                // requested restore-height scan has finished. Continue the
+                // native refresh, but never call init(0): that would discard
+                // the restore-height start point and cause a second full sync.
+                wallet.startRefresh()
                 walletState.update()
                 return
             }
