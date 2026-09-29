@@ -152,6 +152,12 @@ class WalletState {
         _restoreSyncInProgress.set(true)
     }
 
+    // Explicit restore-sync entry point used by the wallet restore service.
+    // Keep the state transition in WalletState so restore owns one refresh lifecycle.
+    fun startRestoreSync() {
+        _restoreSyncInProgress.set(true)
+    }
+
     fun isRestoreSyncInProgress(): Boolean = _restoreSyncInProgress.get()
 
     fun finishRestoreSync() {
