@@ -192,7 +192,12 @@ fun SubAddressDetailScreen(
                 with(sharedTransitionScope) {
                     val transaction = transactions[it]
                     TransactionItem(
-                        transaction,
+                        tx = transaction,
+                        rightAlignAmount = false,
+                        showTime = true,
+                        timePattern = "HH:mm\nMM/dd",
+                        timeZone = java.time.ZoneId.of("Asia/Shanghai"),
+                        upstreamLayout = true,
                         hideAmounts = hideAmounts,
                         modifier = Modifier
                             .clickable {
