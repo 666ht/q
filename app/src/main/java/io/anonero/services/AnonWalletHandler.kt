@@ -129,7 +129,7 @@ class AnonWalletHandler(
                     // the restore flow must explicitly rescan once from the
                     // requested height. The guard prevents the connection callback
                     // from starting a second normal refresh.
-                    walletState.beginRestoreSync()
+                    walletState.startRestoreSync()
                     wallet.pauseRefresh()
                     wallet.setRestoreHeight(restoreHeight)
                     wallet.store()
