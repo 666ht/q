@@ -126,15 +126,14 @@ fun CoinDetailScreen(
                 androidx.compose.foundation.layout.Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = 12.dp),
+                        .padding(top = 12.dp)
+                        .clickable { pubKeyState = if (pubKeyState == 1) 0 else 1 },
                     verticalAlignment = Alignment.Top
                 ) {
                     Text("公钥", modifier = Modifier.size(width = 40.dp, height = 24.dp), style = MaterialTheme.typography.titleMedium)
                     Text(
                         text = coin?.let { if (pubKeyState == 1) it.pub_key else abbreviatedValue(it.pub_key) } ?: "____",
-                        modifier = Modifier
-                            .weight(1f)
-                            .clickable { pubKeyState = if (pubKeyState == 1) 0 else 1 },
+                        modifier = Modifier.weight(1f),
                         textAlign = TextAlign.End,
                         style = MaterialTheme.typography.titleMedium
                     )
@@ -142,15 +141,14 @@ fun CoinDetailScreen(
                 androidx.compose.foundation.layout.Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = 8.dp),
+                        .padding(top = 8.dp)
+                        .clickable { hashState = if (hashState == 1) 0 else 1 },
                     verticalAlignment = Alignment.Top
                 ) {
                     Text("哈希", modifier = Modifier.size(width = 40.dp, height = 24.dp), style = MaterialTheme.typography.titleMedium)
                     Text(
                         text = coin?.let { if (hashState == 1) it.hash else abbreviatedValue(it.hash) } ?: "____",
-                        modifier = Modifier
-                            .weight(1f)
-                            .clickable { hashState = if (hashState == 1) 0 else 1 },
+                        modifier = Modifier.weight(1f),
                         textAlign = TextAlign.End,
                         style = MaterialTheme.typography.titleMedium
                     )
@@ -158,15 +156,14 @@ fun CoinDetailScreen(
                 androidx.compose.foundation.layout.Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = 8.dp),
+                        .padding(top = 8.dp)
+                        .clickable { addressState = if (addressState == 1) 0 else 1 },
                     verticalAlignment = Alignment.Top
                 ) {
                     Text("地址", modifier = Modifier.size(width = 40.dp, height = 24.dp), style = MaterialTheme.typography.titleMedium)
                     Text(
                         text = outputAddress?.let { if (addressState == 1) it else abbreviatedValue(it) } ?: "____",
-                        modifier = Modifier
-                            .weight(1f)
-                            .clickable { addressState = if (addressState == 1) 0 else 1 },
+                        modifier = Modifier.weight(1f),
                         textAlign = TextAlign.End,
                         style = MaterialTheme.typography.titleMedium
                     )
