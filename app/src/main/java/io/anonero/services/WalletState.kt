@@ -122,6 +122,7 @@ class WalletState {
                 if (hasNewIncoming) _incomingTx.tryEmit(Unit)
             }
             if (!backgroundSync) {
+                wallet.coins?.refresh()
                 _nextAddress.update { wallet.getLatestSubAddress() }
                 _subAddresses.update { wallet.getAllUsedSubAddresses().reversed() }
                 _coins.update { (wallet.coins?.all ?: listOf()).fastFilter { !it.spent } }
@@ -260,6 +261,10 @@ class WalletState {
             // Keep the other wallet collections consistent with the final sync
             // snapshot without going through update(), which may be gated.
             if (!backgroundSync) {
+                // Coins is a lazy Java cache; refresh it before reading all,
+                // otherwise the first publishAfterSync after wallet open writes
+                // an empty list and the UTXO screen stays blank.
+                wallet.coins?.refresh()
                 _nextAddress.value = wallet.getLatestSubAddress()
                 _subAddresses.value = wallet.getAllUsedSubAddresses().reversed()
                 _coins.value = (wallet.coins?.all ?: emptyList()).fastFilter { !it.spent }
