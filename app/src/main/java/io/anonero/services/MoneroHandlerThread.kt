@@ -88,12 +88,24 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
         if (!wallet.isSynchronized) {
             updateSyncProgress(chainHeight)
         }
+
+        // The first completed refresh is the point at which the native wallet
+        // has finished scanning. Publish the native balance/history snapshot
+        // directly into the UI StateFlow here. A plain update() can miss the
+        // first-sync data because it can observe the old cached history.
         wallet.setSynchronized()
         wallet.store()
-        refresh(true)
+        val published = walletState.publishAfterSync()
+
         walletState.syncUpdate(SyncProgress(1f, 0L))
         walletState.setLoading(false)
-        walletState.update()
+
+        if (!published) {
+            // Keep the existing fallback path for transient native-state
+            // failures; the next wallet callback can still publish the data.
+            refresh(true)
+            walletState.update()
+        }
     }
 
     private fun tryRestartConnection() {
