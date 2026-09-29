@@ -25,9 +25,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -59,10 +58,10 @@ fun CoinDetailScreen(
     val coinIndex = coins.indexOfFirst { it.key == coinKey }
     val coin = coins.getOrNull(coinIndex)
     val scope = rememberCoroutineScope()
-    var busy by remember { mutableStateOf(false) }
-    var showFullPubKey by remember { mutableStateOf(false) }
-    var showFullHash by remember { mutableStateOf(false) }
-    var showFullAddress by remember { mutableStateOf(false) }
+    var busy by mutableStateOf(false)
+    var pubKeyState by mutableStateOf(0)
+    var hashState by mutableStateOf(0)
+    var addressState by mutableStateOf(0)
     val outputAddress = coin?.let { walletState.getAddressForCoin(it.hash) }
     val context = LocalContext.current
 
@@ -72,7 +71,10 @@ fun CoinDetailScreen(
                 title = { Text("冻结") },
                 navigationIcon = {
                     IconButton(onClick = onBackPress) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+                        androidx.compose.material3.Icon(
+                            androidx.compose.material.icons.Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = null
+                        )
                     }
                 }
             )
@@ -147,16 +149,19 @@ fun CoinDetailScreen(
                     )
                     Text(
                         text = coin?.let {
-                            if (showFullPubKey) it.pub_key else abbreviatedValue(it.pub_key)
+                            if (pubKeyState == 1) it.pub_key else abbreviatedValue(it.pub_key)
                         } ?: "____",
                         modifier = Modifier
                             .weight(1f)
                             .clickable(enabled = coin != null) {
-                                if (showFullPubKey) {
-                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                    clipboard.setPrimaryClip(ClipData.newPlainText("公钥", coin?.pub_key.orEmpty()))
-                                } else {
-                                    showFullPubKey = true
+                                when (pubKeyState) {
+                                    0 -> pubKeyState = 1
+                                    1 -> {
+                                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                        clipboard.setPrimaryClip(ClipData.newPlainText("公钥", coin?.pub_key.orEmpty()))
+                                        pubKeyState = 2
+                                    }
+                                    else -> pubKeyState = 0
                                 }
                             },
                         maxLines = 1,
@@ -177,16 +182,19 @@ fun CoinDetailScreen(
                     )
                     Text(
                         text = coin?.let {
-                            if (showFullHash) it.hash else abbreviatedValue(it.hash)
+                            if (hashState == 1) it.hash else abbreviatedValue(it.hash)
                         } ?: "____",
                         modifier = Modifier
                             .weight(1f)
-                            .clickable(enabled = coin?.hash != null) {
-                                if (showFullHash) {
-                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                    clipboard.setPrimaryClip(ClipData.newPlainText("哈希", coin?.hash.orEmpty()))
-                                } else {
-                                    showFullHash = true
+                            .clickable(enabled = coin != null) {
+                                when (hashState) {
+                                    0 -> hashState = 1
+                                    1 -> {
+                                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                        clipboard.setPrimaryClip(ClipData.newPlainText("哈希", coin?.hash.orEmpty()))
+                                        hashState = 2
+                                    }
+                                    else -> hashState = 0
                                 }
                             },
                         maxLines = 1,
@@ -207,16 +215,19 @@ fun CoinDetailScreen(
                     )
                     Text(
                         text = outputAddress?.let {
-                            if (showFullAddress) it else abbreviatedValue(it)
+                            if (addressState == 1) it else abbreviatedValue(it)
                         } ?: "____",
                         modifier = Modifier
                             .weight(1f)
                             .clickable(enabled = outputAddress != null) {
-                                if (showFullAddress) {
-                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                    clipboard.setPrimaryClip(ClipData.newPlainText("地址", outputAddress.orEmpty()))
-                                } else {
-                                    showFullAddress = true
+                                when (addressState) {
+                                    0 -> addressState = 1
+                                    1 -> {
+                                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                        clipboard.setPrimaryClip(ClipData.newPlainText("地址", outputAddress.orEmpty()))
+                                        addressState = 2
+                                    }
+                                    else -> addressState = 0
                                 }
                             },
                         maxLines = 1,
