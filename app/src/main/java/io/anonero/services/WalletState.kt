@@ -225,7 +225,8 @@ class WalletState {
         if (!_resetSyncInProgress.get() &&
             !_restoreSyncInProgress.get() &&
             previous == Wallet.ConnectionStatus.ConnectionStatus_Disconnected &&
-            status == Wallet.ConnectionStatus.ConnectionStatus_Connected) {
+            status == Wallet.ConnectionStatus.ConnectionStatus_Connected &&
+            getWallet?.isSynchronized == true) {
             setLoading(true)
             refreshScope.launch {
                 try {
