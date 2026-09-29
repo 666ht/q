@@ -7,7 +7,7 @@ import android.content.Context
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -128,83 +128,61 @@ fun CoinDetailScreen(
                             strokeWidth = 2.dp
                         )
                     } else {
-                        androidx.compose.foundation.layout.Spacer(
+                        Spacer(
                             modifier = Modifier
                                 .align(Alignment.CenterEnd)
                                 .size(28.dp)
                         )
                     }
                 }
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "公钥",
-                        modifier = Modifier.size(width = 52.dp, height = 24.dp),
-                        style = MaterialTheme.typography.titleMedium
-                    )
-                    Text(
-                        text = coin?.let {
-                            if (pubKeyState == 1) it.pub_key else abbreviatedValue(it.pub_key)
-                        } ?: "____",
-                        modifier = Modifier
-                            .weight(1f)
-                            .clickable(enabled = coin != null) {
-                                when (pubKeyState) {
-                                    0 -> pubKeyState = 1
-                                    1 -> {
-                                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                        clipboard.setPrimaryClip(ClipData.newPlainText("公钥", coin?.pub_key.orEmpty()))
-                                        pubKeyState = 2
-                                    }
-                                    else -> pubKeyState = 0
-                                }
-                            },
-                        maxLines = 1,
-                        textAlign = TextAlign.Center,
-                        style = MaterialTheme.typography.titleMedium
-                    )
-                }
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "哈希",
-                        modifier = Modifier.size(width = 52.dp, height = 24.dp),
-                        style = MaterialTheme.typography.titleMedium
-                    )
-                    Text(
-                        text = coin?.let {
-                            if (hashState == 1) it.hash else abbreviatedValue(it.hash)
-                        } ?: "____",
-                        modifier = Modifier
-                            .weight(1f)
-                            .clickable(enabled = coin != null) {
-                                when (hashState) {
-                                    0 -> hashState = 1
-                                    1 -> {
-                                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                        clipboard.setPrimaryClip(ClipData.newPlainText("哈希", coin?.hash.orEmpty()))
-                                        hashState = 2
-                                    }
-                                    else -> hashState = 0
-                                }
-                            },
-                        maxLines = 1,
-                        textAlign = TextAlign.Center,
-                        style = MaterialTheme.typography.titleMedium
-                    )
-                }
                 Text(
-                    text = outputAddress?.let {
+                    text = "公钥  " + (coin?.let {
+                        if (pubKeyState == 1) it.pub_key else abbreviatedValue(it.pub_key)
+                    } ?: "____"),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 12.dp)
+                        .clickable(enabled = coin != null) {
+                            when (pubKeyState) {
+                                0 -> pubKeyState = 1
+                                1 -> {
+                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                    clipboard.setPrimaryClip(ClipData.newPlainText("公钥", coin?.pub_key.orEmpty()))
+                                    pubKeyState = 2
+                                }
+                                else -> pubKeyState = 0
+                            }
+                        },
+                    maxLines = 1,
+                    textAlign = TextAlign.Center,
+                    style = MaterialTheme.typography.titleMedium
+                )
+                Text(
+                    text = "哈希  " + (coin?.let {
+                        if (hashState == 1) it.hash else abbreviatedValue(it.hash)
+                    } ?: "____"),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp)
+                        .clickable(enabled = coin != null) {
+                            when (hashState) {
+                                0 -> hashState = 1
+                                1 -> {
+                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                    clipboard.setPrimaryClip(ClipData.newPlainText("哈希", coin?.hash.orEmpty()))
+                                    hashState = 2
+                                }
+                                else -> hashState = 0
+                            }
+                        },
+                    maxLines = 1,
+                    textAlign = TextAlign.Center,
+                    style = MaterialTheme.typography.titleMedium
+                )
+                Text(
+                    text = "地址  " + (outputAddress?.let {
                         if (addressState == 1) it else abbreviatedValue(it)
-                    } ?: "____",
+                    } ?: "____"),
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 8.dp)
