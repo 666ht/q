@@ -212,61 +212,11 @@ class WalletState {
     }
 
     fun syncUpdate(syncProgress: SyncProgress) {
-        val done = syncProgress.progress >= 1f || syncProgress.left <= 0L
+        val done = syncProgress.progress == 1f || syncProgress.left == 0L
         _syncProgress.update { if (done) null else syncProgress }
         _isSyncing.set(!done)
-    }
-
-    /**
-     * Publish the native wallet data at the exact end of a completed refresh.
-     * This deliberately bypasses the normal update() gate because background-sync
-     * state must not prevent the final balance/history from reaching the UI.
-     */
-    fun publishAfterSync(): Boolean {
-        if (_isWiping.get()) return false
-        val wallet = getWallet ?: return false
-        if (!wallet.isInitialized) {
-            Timber.tag(TAG).w("publishAfterSync: wallet is not initialized")
-            return false
-        }
-        return try {
-            // The native refresh has completed, but TransactionHistory is a Java
-            // cache. Refresh it explicitly before reading it into StateFlow.
-            wallet.refreshHistory()
-            wallet.refreshCoins()
-            val balance = wallet.balance
-            val unlocked = if (AnonConfig.viewOnly) wallet.viewOnlyBalance() else wallet.unlockedBalance
-            val status = wallet.fullStatus
-            val updatedTxs = (wallet.history?.all?.sortedByDescending { it.timestamp }
-                ?: emptyList()).fastDistinctBy { it.getListKey() }
-
-            _balanceInfo.value = balance
-            _unLockedBalance.value = unlocked
-            _walletStatus.value = status
-            _transactions.value = updatedTxs
-            _coins.value = (wallet.coins?.all ?: listOf()).fastFilter { !it.spent }
-
-            val address = try {
-                WalletManager.instance?.getDaemonAddress()
-            } catch (_: Exception) {
-                null
-            }
-            address?.let {
-                _connectedDaemon.value = DaemonInfo(
-                    it,
-                    connectionStatus = status.connectionStatus
-                        ?: Wallet.ConnectionStatus.ConnectionStatus_Disconnected,
-                    WalletManager.instance?.getBlockchainHeight() ?: -1L
-                )
-            }
-            Timber.tag(TAG).i(
-                "publishAfterSync: balance=%s unlocked=%s transactions=%s coins=%s",
-                balance, unlocked, updatedTxs.size, wallet.coins?.getCount() ?: 0
-            )
-            true
-        } catch (e: Exception) {
-            Timber.tag(TAG).e(e, "publishAfterSync failed")
-            false
+        if (done) {
+            _connectionStatus.update { Wallet.ConnectionStatus.ConnectionStatus_Connected }
         }
     }
 
