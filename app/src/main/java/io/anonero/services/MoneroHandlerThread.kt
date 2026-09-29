@@ -76,37 +76,17 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
 
         val heightDiff = daemonHeight - chainHeight
         if (heightDiff >= 2) {
-            // Do not publish completion while the native wallet is still behind.
-            updateSyncProgress(chainHeight)
             tryRestartConnection()
-            return
-        }
-
-        try {
-            wallet.setSynchronized()
-            walletState.syncUpdate(SyncProgress(1f, 0L))
-
-            // The native refresh is complete. Refresh the Java caches and publish
-            // their values even when the regular update gate is active.
-            wallet.refreshHistory()
-            wallet.refreshCoins()
-            if (!walletState.publishAfterSync()) {
-                Timber.tag(name).w("publishAfterSync returned false; using fallback update")
-                walletState.update()
+        } else {
+            if (!wallet.isSynchronized) {
+                updateSyncProgress(wallet.getBlockChainHeight())
             }
-        } catch (e: Exception) {
-            Timber.tag(name).e(e, "sync completion publish failed")
-            walletState.update()
-        } finally {
-            // Never leave the UI in the loading state after refreshed() returns.
+            wallet.setSynchronized()
+            wallet.store()
+            refresh(true)
             walletState.setLoading(false)
         }
-
-        try {
-            wallet.store()
-        } catch (e: Exception) {
-            Timber.tag(name).e(e, "wallet store after sync failed")
-        }
+        walletState.update()
     }
 
     private fun tryRestartConnection() {
