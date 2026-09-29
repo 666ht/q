@@ -42,6 +42,7 @@ class WalletState {
     private val _isLoading = MutableStateFlow(false)
     private var _isSyncing = AtomicBoolean(false)
     private var _resetSyncInProgress = AtomicBoolean(false)
+    private var _restoreSyncInProgress = AtomicBoolean(false)
     private val _backgroundSync = MutableStateFlow(false)
     private val _isWiping = AtomicBoolean(false)
     private val _incomingTx = MutableSharedFlow<Unit>(extraBufferCapacity = 8)
@@ -147,6 +148,16 @@ class WalletState {
 
     fun isResetSyncInProgress(): Boolean = _resetSyncInProgress.get()
 
+    fun beginRestoreSync() {
+        _restoreSyncInProgress.set(true)
+    }
+
+    fun isRestoreSyncInProgress(): Boolean = _restoreSyncInProgress.get()
+
+    fun finishRestoreSync() {
+        _restoreSyncInProgress.set(false)
+    }
+
     fun finishResetSync() {
         _resetSyncInProgress.set(false)
     }
@@ -206,6 +217,7 @@ class WalletState {
         val previous = _previousConnectionStatus.getAndSet(status)
         _connectionStatus.update { status }
         if (!_resetSyncInProgress.get() &&
+            !_restoreSyncInProgress.get() &&
             previous == Wallet.ConnectionStatus.ConnectionStatus_Disconnected &&
             status == Wallet.ConnectionStatus.ConnectionStatus_Connected) {
             setLoading(true)
