@@ -1,7 +1,7 @@
 package io.anonero.model
 
 data class CoinsInfo(
-    val unlockTime: Long,
+    val globalOutputIndex: Long,
     val spent: Boolean,
     val key: String,
     val amount: Long,
