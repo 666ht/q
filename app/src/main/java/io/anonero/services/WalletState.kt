@@ -41,6 +41,7 @@ class WalletState {
     val hideAmountsFlow = MutableStateFlow(false)
     private val _isLoading = MutableStateFlow(false)
     private var _isSyncing = AtomicBoolean(false)
+    private var _resetSyncInProgress = AtomicBoolean(false)
     private val _backgroundSync = MutableStateFlow(false)
     private val _isWiping = AtomicBoolean(false)
     private val _incomingTx = MutableSharedFlow<Unit>(extraBufferCapacity = 8)
@@ -198,7 +199,8 @@ class WalletState {
     fun setConnectionStatus(status: Wallet.ConnectionStatus) {
         val previous = _previousConnectionStatus.getAndSet(status)
         _connectionStatus.update { status }
-        if (previous == Wallet.ConnectionStatus.ConnectionStatus_Disconnected &&
+        if (!_resetSyncInProgress.get() &&
+            previous == Wallet.ConnectionStatus.ConnectionStatus_Disconnected &&
             status == Wallet.ConnectionStatus.ConnectionStatus_Connected) {
             setLoading(true)
             refreshScope.launch {
@@ -422,10 +424,15 @@ class WalletState {
                 return Result.failure(Exception(AnonConfig.context?.getString(R.string.resync_daemon_required) ?: "Please connect to daemon for resync"))
             }
             if (height < 0L) return Result.failure(IllegalArgumentException("Invalid restore height"))
+            // This rescan owns the refresh lifecycle until the native wallet
+            // reports completion. Do not let connection callbacks start a
+            // second refresh while the requested restore height is active.
+            _resetSyncInProgress.set(true)
+            wallet.pauseRefresh()
             wallet.setRestoreHeight(height)
             wallet.store()
-            wallet.rescanBlockchainAsync()
             setLoading(true)
+            wallet.rescanBlockchainAsync()
             Result.success(true)
         } catch (e: Exception) {
             Timber.tag(TAG).e(e, "reset sync error")
