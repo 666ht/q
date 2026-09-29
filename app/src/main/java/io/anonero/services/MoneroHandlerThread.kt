@@ -75,31 +75,20 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
         )
 
         if (status === Wallet.ConnectionStatus.ConnectionStatus_Disconnected || status == null) {
-            // A manual reset-height rescan owns the refresh lifecycle. A
-            // transient disconnect must not replace it with a normal refresh.
-            if (walletState.isResetSyncInProgress() || walletState.isRestoreSyncInProgress()) {
-                Timber.tag(name).i("manual restore-height rescan waiting for connection")
-                return
-            }
-            walletState.publishAfterSync()
-            wallet.startRefresh()
-            wallet.refreshAsync()
-            walletState.update()
+            tryRestartConnection()
             return
         }
 
-        // Do not restart a restore/refresh just because the daemon has
-        // advanced a few blocks while the wallet is scanning. The native
-        // refresh/rescan must complete from the wallet's configured restore
-        // height instead of being interrupted and started again.
+        val heightDiff = daemonHeight - chainHeight
+        if (heightDiff >= 2) {
+            tryRestartConnection()
+            return
+        }
+
         if (!wallet.isSynchronized) {
             updateSyncProgress(chainHeight)
         }
 
-        // The first completed refresh is the point at which the native wallet
-        // has finished scanning. Publish the native balance/history snapshot
-        // directly into the UI StateFlow here. A plain update() can miss the
-        // first-sync data because it can observe the old cached history.
         wallet.setSynchronized()
         wallet.store()
         val published = walletState.publishAfterSync()
@@ -110,11 +99,15 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
         walletState.setLoading(false)
 
         if (!published) {
-            // Keep the existing fallback path for transient native-state
-            // failures; the next wallet callback can still publish the data.
             refresh(true)
             walletState.update()
         }
+    }
+
+    private fun tryRestartConnection() {
+        wallet.init(0)
+        wallet.startRefresh()
+        walletState.update()
     }
 
     private fun refresh(walletSynced: Boolean) {
