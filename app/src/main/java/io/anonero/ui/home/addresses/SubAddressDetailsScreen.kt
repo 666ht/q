@@ -5,6 +5,8 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContentScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -163,23 +165,13 @@ fun SubAddressDetailScreen(
                                 vertical = 6.dp
                             ),
                         headlineContent = {
-                            Row(
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text(
-                                    displayAddressLabel,
-                                    modifier = Modifier.clickable {
-                                        labelDialog = true
-                                    },
-                                    color = MaterialTheme.colorScheme.primary,
-                                )
-                                Text(
-                                    if (hideAmounts) Formats.maskAmount(subAddress.totalAmount) else Formats.getDisplayAmount(subAddress.totalAmount),
-                                    color = MaterialTheme.colorScheme.primary,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                            }
+                            Text(
+                                displayAddressLabel,
+                                modifier = Modifier.clickable {
+                                    labelDialog = true
+                                },
+                                color = MaterialTheme.colorScheme.primary,
+                            )
                         },
                         supportingContent = {
                             SelectionContainer {
@@ -191,6 +183,34 @@ fun SubAddressDetailScreen(
                                 )
                             }
                         },
+                    )
+                }
+            }
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 8.dp, end = 0.dp, top = 20.dp, bottom = 20.dp)
+                        .border(
+                            border = BorderStroke(1.dp, androidx.compose.ui.graphics.Color.Black),
+                            shape = MaterialTheme.shapes.medium
+                        )
+                        .padding(start = 12.dp, end = 4.dp, top = 12.dp, bottom = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Icon(
+                        AnonIcons.ArrowDownLeft,
+                        modifier = Modifier.size(32.dp),
+                        tint = MaterialTheme.colorScheme.primary,
+                        contentDescription = null
+                    )
+                    Text(
+                        if (hideAmounts) Formats.maskAmount(subAddress.totalAmount)
+                        else Formats.getDisplayAmount(subAddress.totalAmount),
+                        modifier = Modifier.weight(1f),
+                        textAlign = TextAlign.Center,
+                        style = MaterialTheme.typography.titleLarge
                     )
                 }
             }
