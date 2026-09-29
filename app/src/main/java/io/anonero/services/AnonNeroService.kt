@@ -6,6 +6,7 @@ import android.app.Service
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
 import android.os.Build
 import android.os.IBinder
 import android.content.pm.ServiceInfo
@@ -16,9 +17,11 @@ import io.anonero.TX_CHANNEL
 import io.anonero.R
 import io.anonero.model.Wallet
 import io.anonero.model.WalletManager
+import io.anonero.model.node.NodeFields
 import io.anonero.store.NodesRepository
 import io.anonero.ui.MainActivity
 import io.anonero.util.Formats
+import io.anonero.util.WALLET_PREFERENCES
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -56,6 +59,7 @@ class AnonNeroService : Service() {
     }
     private val walletState: WalletState by inject(WalletState::class.java)
     private val torService: TorService by inject(TorService::class.java)
+    private val prefs: SharedPreferences by inject(named(WALLET_PREFERENCES))
 
     override fun onBind(intent: Intent): IBinder? {
         return null
@@ -129,6 +133,12 @@ class AnonNeroService : Service() {
         val mNotificationManager =
             getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val wallet = WalletManager.instance?.wallet
+        val daemon = prefs.getString(NodeFields.RPC_HOST.value, "") ?: ""
+        var torSate = if (torService.socks != null) {
+            " | Tor 守护进程：${torService.socks?.port.toString()}"
+        } else {
+            ""
+        }
         if (wallet != null) {
             val isSyncing = walletState.isSyncing
             if (!isSyncing) {
@@ -155,8 +165,7 @@ class AnonNeroService : Service() {
                         }
                     }
                 }
-                var torSate = ""
-                if (wallet.fullStatus.connectionStatus != Wallet.ConnectionStatus.ConnectionStatus_Connected) {
+                if (daemon.isEmpty()) {
                     torSate = ""
                 }
                 withContext(Dispatchers.Main) {
