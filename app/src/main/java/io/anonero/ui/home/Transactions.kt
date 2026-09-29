@@ -701,7 +701,7 @@ fun TransactionScreen(
                             style = MaterialTheme.typography.displaySmall,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(top = 6.dp, end = 4.dp),
+                                .padding(top = 8.dp, end = 4.dp),
                             textAlign = TextAlign.End
                         )
                     }
