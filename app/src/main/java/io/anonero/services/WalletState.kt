@@ -145,6 +145,12 @@ class WalletState {
 
     fun isWiping(): Boolean = _isWiping.get()
 
+    fun isResetSyncInProgress(): Boolean = _resetSyncInProgress.get()
+
+    fun finishResetSync() {
+        _resetSyncInProgress.set(false)
+    }
+
     fun emitUnlockShortcut(shortcut: LockScreenShortCut) {
         _unlockShortcut.trySend(shortcut)
     }
@@ -435,6 +441,7 @@ class WalletState {
             wallet.rescanBlockchainAsync()
             Result.success(true)
         } catch (e: Exception) {
+            _resetSyncInProgress.set(false)
             Timber.tag(TAG).e(e, "reset sync error")
             Result.failure(e)
         }
