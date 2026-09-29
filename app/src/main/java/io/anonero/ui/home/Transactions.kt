@@ -799,6 +799,7 @@ fun TransactionItem(tx: TransactionInfo, hideAmounts: Boolean = false, modifier:
                 Box(
                     modifier = Modifier
                         .size(28.dp)
+                        .offset(x = (-8).dp)
                         .padding(top = 2.dp)
                 ) {
                     CircularProgressIndicator(
