@@ -42,7 +42,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 
-private fun abbreviatedPubKey(value: String): String {
+private fun abbreviatedValue(value: String): String {
     if (value.length <= 24) return value
     return value.take(10) + "..." + value.takeLast(10)
 }
@@ -61,6 +61,9 @@ fun CoinDetailScreen(
     val scope = rememberCoroutineScope()
     var busy by remember { mutableStateOf(false) }
     var showFullPubKey by remember { mutableStateOf(false) }
+    var showFullHash by remember { mutableStateOf(false) }
+    var showFullAddress by remember { mutableStateOf(false) }
+    val outputAddress = coin?.let { walletState.getAddressForCoin(it.hash) }
     val context = LocalContext.current
 
     Scaffold(
@@ -125,20 +128,52 @@ fun CoinDetailScreen(
                     }
                 }
                 Text(
-                    text = coin?.let {
-                        if (showFullPubKey) it.pub_key else abbreviatedPubKey(it.pub_key)
-                    } ?: "____",
+                    text = "公钥  " + (coin?.let {
+                        if (showFullPubKey) it.pub_key else abbreviatedValue(it.pub_key)
+                    } ?: "____"),
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 12.dp)
                         .clickable(enabled = coin != null) {
                             if (showFullPubKey) {
                                 val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                clipboard.setPrimaryClip(
-                                    ClipData.newPlainText("公钥", coin?.pub_key.orEmpty())
-                                )
+                                clipboard.setPrimaryClip(ClipData.newPlainText("公钥", coin?.pub_key.orEmpty()))
                             } else {
                                 showFullPubKey = true
+                            }
+                        },
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                Text(
+                    text = "哈希  " + (coin?.let {
+                        if (showFullHash) it.hash else abbreviatedValue(it.hash)
+                    } ?: "____"),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp)
+                        .clickable(enabled = coin?.hash != null) {
+                            if (showFullHash) {
+                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                clipboard.setPrimaryClip(ClipData.newPlainText("哈希", coin?.hash.orEmpty()))
+                            } else {
+                                showFullHash = true
+                            }
+                        },
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                Text(
+                    text = "地址  " + (outputAddress?.let {
+                        if (showFullAddress) it else abbreviatedValue(it)
+                    } ?: "____"),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp)
+                        .clickable(enabled = outputAddress != null) {
+                            if (showFullAddress) {
+                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                clipboard.setPrimaryClip(ClipData.newPlainText("地址", outputAddress.orEmpty()))
+                            } else {
+                                showFullAddress = true
                             }
                         },
                     style = MaterialTheme.typography.bodyMedium
