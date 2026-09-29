@@ -190,15 +190,18 @@ fun SubAddressDetailScreen(
             }
             items(transactions.size) {
                 with(sharedTransitionScope) {
+                    val transaction = transactions[it]
                     TransactionItem(
-                        transactions[it],
+                        transaction,
                         hideAmounts = hideAmounts,
                         modifier = Modifier
                             .clickable {
-                                onTransactionClick(transactions[it])
+                                transaction.hash?.let {
+                                    onTransactionClick(transaction)
+                                }
                             }
                             .sharedElement(
-                                sharedTransitionScope.rememberSharedContentState(key = "${transactions[it].hash}"),
+                                sharedTransitionScope.rememberSharedContentState(key = "${transaction.hash}"),
                                 animatedVisibilityScope = animatedContentScope
                             )
                     )
