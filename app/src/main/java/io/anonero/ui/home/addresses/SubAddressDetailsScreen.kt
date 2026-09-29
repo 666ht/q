@@ -188,41 +188,6 @@ fun SubAddressDetailScreen(
                     )
                 }
             }
-            item {
-                val latest = transactions.maxByOrNull { it.timestamp }
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 20.dp)
-                        .border(
-                            border = BorderStroke(1.dp, Color.Black),
-                            shape = MaterialTheme.shapes.medium
-                        )
-                        .padding(horizontal = 12.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Box(modifier = Modifier.padding(top = 2.dp)) {
-                        Icon(
-                            AnonIcons.ArrowDownLeft,
-                            modifier = Modifier.size(32.dp),
-                            tint = MaterialTheme.colorScheme.primary,
-                            contentDescription = null
-                        )
-                    }
-                    Text(
-                        if (hideAmounts) Formats.maskAmount(subAddress.totalAmount)
-                        else Formats.getDisplayAmount(subAddress.totalAmount),
-                        modifier = Modifier.weight(1f),
-                        textAlign = TextAlign.Center,
-                        style = MaterialTheme.typography.titleLarge
-                    )
-                    Text(
-                        latest?.let { Formats.formatTransactionTime(it.timestamp) } ?: "",
-                        style = MaterialTheme.typography.labelSmall
-                    )
-                }
-            }
             items(transactions.size) {
                 with(sharedTransitionScope) {
                     TransactionItem(
