@@ -30,6 +30,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import timber.log.Timber
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 
 data class SyncProgress(val progress: Float, val left: Long)
@@ -42,6 +43,7 @@ class WalletState {
     private val _isLoading = MutableStateFlow(false)
     private var _isSyncing = AtomicBoolean(false)
     private var _resetSyncInProgress = AtomicBoolean(false)
+    private val _resetSyncHeight = AtomicLong(-1L)
     private var _restoreSyncInProgress = AtomicBoolean(false)
     private val _backgroundSync = MutableStateFlow(false)
     private val _isWiping = AtomicBoolean(false)
@@ -148,6 +150,8 @@ class WalletState {
 
     fun isResetSyncInProgress(): Boolean = _resetSyncInProgress.get()
 
+    fun getResetSyncHeight(): Long = _resetSyncHeight.get()
+
     fun beginRestoreSync() {
         _restoreSyncInProgress.set(true)
     }
@@ -166,6 +170,7 @@ class WalletState {
 
     fun finishResetSync() {
         _resetSyncInProgress.set(false)
+        _resetSyncHeight.set(-1L)
     }
 
     fun emitUnlockShortcut(shortcut: LockScreenShortCut) {
@@ -453,6 +458,7 @@ class WalletState {
             // reports completion. Do not let connection callbacks start a
             // second refresh while the requested restore height is active.
             _resetSyncInProgress.set(true)
+            _resetSyncHeight.set(height)
             wallet.pauseRefresh()
             wallet.setRestoreHeight(height)
             wallet.store()
