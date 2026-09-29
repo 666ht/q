@@ -153,7 +153,7 @@ fun CoinDetailScreen(
                                 }
                             },
                         maxLines = 1,
-                        textAlign = TextAlign.Start,
+                        textAlign = TextAlign.End,
                         style = MaterialTheme.typography.titleMedium
                     )
                 }
@@ -180,7 +180,7 @@ fun CoinDetailScreen(
                                 }
                             },
                         maxLines = 1,
-                        textAlign = TextAlign.Start,
+                        textAlign = TextAlign.End,
                         style = MaterialTheme.typography.titleMedium
                     )
                 }
@@ -207,7 +207,7 @@ fun CoinDetailScreen(
                                 }
                             },
                         maxLines = 1,
-                        textAlign = TextAlign.Start,
+                        textAlign = TextAlign.End,
                         style = MaterialTheme.typography.titleMedium
                     )
                 }
