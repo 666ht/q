@@ -84,11 +84,7 @@ fun SubAddressDetailScreen(
         SubAddressDetail(subAddress)
     }
     val transactions by subAddressDetailVm.transactions.observeAsState(listOf())
-    val hideAmounts by walletState.hideAmountsFlow.asLiveData().observeAsState(false)
-    var addressLabel by remember { mutableStateOf(subAddress.label) }
-    val displayAddressLabel = remember(addressLabel, subAddress.addressIndex) {
-        subAddress.withLabel(addressLabel).displayLabel
-    }
+    var addressLabel by remember { mutableStateOf(subAddress.displayLabel) }
     BackHandler {
         onBackPress()
     }
@@ -97,7 +93,7 @@ fun SubAddressDetailScreen(
 
     if (labelDialog)
         SubAddressLabelDialog(
-            label = displayAddressLabel,
+            label = addressLabel,
             onSave = { label ->
                 walletState.updateAddressLabel(label, subAddress.addressIndex)
                 addressLabel = label
