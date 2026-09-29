@@ -717,11 +717,9 @@ fun TransactionScreen(
                                 transactions.first(),
                                 hideAmounts = hideAmounts,
                                 showBorder = false,
+                                onClick = { onItemClick(transactions.first()) },
                                 modifier = Modifier
                                     .zIndex(2f)
-                                    .clickable {
-                                        onItemClick(transactions.first())
-                                    }
                                     .sharedElement(
                                         sharedTransitionScope.rememberSharedContentState(
                                             key = transactions.first().hash.orEmpty(),
@@ -741,12 +739,10 @@ fun TransactionScreen(
                                 transaction,
                                 hideAmounts = hideAmounts,
                                 showBorder = false,
+                                onClick = { onItemClick(transaction) },
                                 modifier = Modifier
                                     .zIndex(if (it == 0) 3f else 0f)
                                     .offset(y = if (it == 0) (-65).dp else 0.dp)
-                                    .clickable {
-                                        onItemClick(transaction)
-                                    }
                                     .sharedElement(
                                         sharedTransitionScope.rememberSharedContentState(
                                             key = transaction.hash.orEmpty(),
@@ -764,7 +760,7 @@ fun TransactionScreen(
 
 
 @Composable
-fun TransactionItem(tx: TransactionInfo, hideAmounts: Boolean = false, modifier: Modifier = Modifier, rightAlignAmount: Boolean = true, showTime: Boolean = false, timePattern: String = "dd/MM\nHH:mm", timeZone: ZoneId = ZoneId.systemDefault(), upstreamLayout: Boolean = false, showBorder: Boolean = true) {
+fun TransactionItem(tx: TransactionInfo, hideAmounts: Boolean = false, modifier: Modifier = Modifier, onClick: (() -> Unit)? = null, rightAlignAmount: Boolean = true, showTime: Boolean = false, timePattern: String = "dd/MM\nHH:mm", timeZone: ZoneId = ZoneId.systemDefault(), upstreamLayout: Boolean = false, showBorder: Boolean = true) {
     val isIncoming = tx.direction == TransactionInfo.Direction.Direction_In
     val amount = if (isIncoming) tx.amount else tx.amount
     val confirmations = tx.confirmations
@@ -788,53 +784,65 @@ fun TransactionItem(tx: TransactionInfo, hideAmounts: Boolean = false, modifier:
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Start
     ) {
-        if (confirmations < 10) {
-            Box(
-                modifier = Modifier
-                    .size(28.dp)
-                    .padding(top = 2.dp)
-            ) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(28.dp),
-                    strokeWidth = 2.dp,
-                    progress = { ((confirmations.toFloat()) / 10f) }
-                )
-                Text(
-                    text = "$confirmations",
-                    modifier = Modifier.align(Alignment.Center),
-                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 9.sp)
-                )
+        // Click target is wrapped to the content row only (excludes vertical padding).
+        // The first two transaction rows visually overlap by 65dp; if clickable
+        // covered the full item height the higher-zIndex row would swallow taps
+        // for the overlapping area, making the other row unclickable.
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(if (onClick != null) Modifier.clickable { onClick() } else Modifier),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Start
+        ) {
+            if (confirmations < 10) {
+                Box(
+                    modifier = Modifier
+                        .size(28.dp)
+                        .padding(top = 2.dp)
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(28.dp),
+                        strokeWidth = 2.dp,
+                        progress = { ((confirmations.toFloat()) / 10f) }
+                    )
+                    Text(
+                        text = "$confirmations",
+                        modifier = Modifier.align(Alignment.Center),
+                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 9.sp)
+                    )
+                }
             }
-        }
-        if (rightAlignAmount) {
-            Spacer(modifier = Modifier.weight(1f))
-        }
-        if (confirmations >= 10) {
-            Box(modifier = Modifier.offset(x = 6.dp).padding(top = 2.dp)) {
-                Icon(
-                    if (isIncoming) AnonIcons.ArrowDownLeft else AnonIcons.ArrowUpRight,
-                    modifier = Modifier.size(if (upstreamLayout) 32.dp else 25.dp),
-                    tint = if (isIncoming) MaterialTheme.colorScheme.primary else LocalContentColor.current,
-                    contentDescription = ""
-                )
+            if (rightAlignAmount) {
+                Spacer(modifier = Modifier.weight(1f))
             }
-        }
-        Spacer(modifier = Modifier.size(10.dp))
-        Text(
-            if (hideAmounts) Formats.maskAmount(amount)
-            else Formats.getDisplayAmount(amount),
-            modifier = if (!rightAlignAmount && upstreamLayout) Modifier.weight(1f) else Modifier,
-            textAlign = if (rightAlignAmount) TextAlign.End else TextAlign.Center,
-            style = MaterialTheme.typography.titleLarge
-        )
-        if (!rightAlignAmount && !upstreamLayout) {
-            Spacer(modifier = Modifier.size(12.dp))
-        }
-        if (showTime) {
+            if (confirmations >= 10) {
+                Box(modifier = Modifier.offset(x = 6.dp).padding(top = 2.dp)) {
+                    Icon(
+                        if (isIncoming) AnonIcons.ArrowDownLeft else AnonIcons.ArrowUpRight,
+                        modifier = Modifier.size(if (upstreamLayout) 32.dp else 25.dp),
+                        tint = if (isIncoming) MaterialTheme.colorScheme.primary else LocalContentColor.current,
+                        contentDescription = ""
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.size(10.dp))
             Text(
-                Formats.formatTransactionTime(tx.timestamp, timePattern, timeZone),
-                style = MaterialTheme.typography.labelSmall
+                if (hideAmounts) Formats.maskAmount(amount)
+                else Formats.getDisplayAmount(amount),
+                modifier = if (!rightAlignAmount && upstreamLayout) Modifier.weight(1f) else Modifier,
+                textAlign = if (rightAlignAmount) TextAlign.End else TextAlign.Center,
+                style = MaterialTheme.typography.titleLarge
             )
+            if (!rightAlignAmount && !upstreamLayout) {
+                Spacer(modifier = Modifier.size(12.dp))
+            }
+            if (showTime) {
+                Text(
+                    Formats.formatTransactionTime(tx.timestamp, timePattern, timeZone),
+                    style = MaterialTheme.typography.labelSmall
+                )
+            }
         }
     }
     }
