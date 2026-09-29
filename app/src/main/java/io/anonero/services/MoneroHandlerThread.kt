@@ -76,7 +76,9 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
 
         if (status === Wallet.ConnectionStatus.ConnectionStatus_Disconnected || status == null) {
             walletState.publishAfterSync()
-            tryRestartConnection()
+            wallet.startRefresh()
+            wallet.refreshAsync()
+            walletState.update()
             return
         }
 
