@@ -123,19 +123,15 @@ class AnonWalletHandler(
                 wallet.refreshHistory()
                 wallet.setTrustedDaemon(true)
 
+                // The restore height is configured on the native wallet before
+                // the single refresh below. Do not call rescanBlockchainAsync()
+                // here: the connection callback can also startRefresh(), which
+                // would launch a second scan.
+                wallet.startRefresh()
                 if (restoreHeight != 0L) {
-                    // RESTORE_HEIGHT is a one-time marker for a newly restored
-                    // wallet. Rescan once from that height, then consume the
-                    // marker so later app launches resume from the persisted
-                    // native scan height instead of starting over.
-                    wallet.rescanBlockchainAsync()
                     prefs.edit {
                         remove(io.anonero.util.RESTORE_HEIGHT)
                     }
-                } else {
-                    // Existing wallet: resume from the native wallet's
-                    // persisted scan height.
-                    wallet.startRefresh()
                 }
                 walletState.update()
             }
