@@ -1,9 +1,6 @@
 package io.anonero.ui.home
 
 import AnonNeroTheme
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -32,7 +29,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -64,7 +60,6 @@ fun CoinDetailScreen(
     var hashState by remember { mutableStateOf(0) }
     var addressState by remember { mutableStateOf(0) }
     val outputAddress = coin?.let { walletState.getAddressForCoin(it.hash) }
-    val context = LocalContext.current
     val outputColor = if (coin?.frozen == true) {
         MaterialTheme.colorScheme.onSurfaceVariant
     } else {
@@ -139,7 +134,8 @@ fun CoinDetailScreen(
                         text = coin?.let { if (pubKeyState == 1) it.pub_key else abbreviatedValue(it.pub_key) } ?: "____",
                         modifier = Modifier
                             .weight(1f)
-                            softWrap = true,
+                            .clickable { pubKeyState = if (pubKeyState == 1) 0 else 1 },
+                        softWrap = true,
                         textAlign = TextAlign.End,
                         style = MaterialTheme.typography.titleMedium
                     )
@@ -155,7 +151,8 @@ fun CoinDetailScreen(
                         text = coin?.let { if (hashState == 1) it.hash else abbreviatedValue(it.hash) } ?: "____",
                         modifier = Modifier
                             .weight(1f)
-                            softWrap = true,
+                            .clickable { hashState = if (hashState == 1) 0 else 1 },
+                        softWrap = true,
                         textAlign = TextAlign.End,
                         style = MaterialTheme.typography.titleMedium
                     )
@@ -171,7 +168,8 @@ fun CoinDetailScreen(
                         text = outputAddress?.let { if (addressState == 1) it else abbreviatedValue(it) } ?: "____",
                         modifier = Modifier
                             .weight(1f)
-                            softWrap = true,
+                            .clickable { addressState = if (addressState == 1) 0 else 1 },
+                        softWrap = true,
                         textAlign = TextAlign.End,
                         style = MaterialTheme.typography.titleMedium
                     )
