@@ -9,6 +9,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -18,6 +19,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -35,6 +37,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
@@ -60,8 +63,8 @@ class SubAddressDetail(subAddress: Subaddress) : ViewModel() {
     val transactions = walletState.transactions
         .map {
             it.filter { txInfo ->
-                return@filter txInfo.addressIndex == subAddress.addressIndex
-                        && txInfo.direction == TransactionInfo.Direction.Direction_In
+                return@filter txInfo.addressIndex == subAddress.addressIndex &&
+                        txInfo.direction == TransactionInfo.Direction.Direction_In
             }
         }.asLiveData()
 }
@@ -106,13 +109,9 @@ fun SubAddressDetailScreen(
 
     if (showQR) {
         ModalBottomSheet(
-            scrimColor = MaterialTheme.colorScheme.background.copy(
-                alpha = 0.5f
-            ),
+            scrimColor = MaterialTheme.colorScheme.background.copy(alpha = 0.5f),
             containerColor = MaterialTheme.colorScheme.background,
-            onDismissRequest = {
-                showQR = false
-            }
+            onDismissRequest = { showQR = false }
         ) {
             Column(
                 Modifier.fillMaxWidth(),
@@ -121,30 +120,23 @@ fun SubAddressDetailScreen(
             ) {
                 QrCodeView(
                     data = subAddress.address,
-                    modifier = Modifier
-                        .size(300.dp)
-                        .padding(20.dp)
+                    modifier = Modifier.size(300.dp).padding(20.dp)
                 )
             }
         }
     }
+
     Scaffold(
         topBar = {
             TopAppBar(
                 navigationIcon = {
-                    IconButton(
-                        onClick = onBackPress
-                    ) {
+                    IconButton(onClick = onBackPress) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
                     }
                 },
                 title = {},
                 actions = {
-                    IconButton(
-                        onClick = {
-                            showQR = true
-                        }
-                    ) {
+                    IconButton(onClick = { showQR = true }) {
                         Icon(AnonIcons.QrCode, contentDescription = null)
                     }
                 }
@@ -160,16 +152,11 @@ fun SubAddressDetailScreen(
                                 sharedTransitionScope.rememberSharedContentState(key = "${subAddress.address}:${subAddress.addressIndex}"),
                                 animatedVisibilityScope = animatedContentScope
                             )
-                            .padding(
-                                horizontal = 4.dp,
-                                vertical = 6.dp
-                            ),
+                            .padding(horizontal = 4.dp, vertical = 6.dp),
                         headlineContent = {
                             Text(
                                 displayAddressLabel,
-                                modifier = Modifier.clickable {
-                                    labelDialog = true
-                                },
+                                modifier = Modifier.clickable { labelDialog = true },
                                 color = MaterialTheme.colorScheme.primary,
                             )
                         },
@@ -187,30 +174,37 @@ fun SubAddressDetailScreen(
                 }
             }
             item {
+                val latest = transactions.maxByOrNull { it.timestamp }
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(start = 8.dp, end = 0.dp, top = 20.dp, bottom = 20.dp)
+                        .padding(horizontal = 12.dp, vertical = 20.dp)
                         .border(
-                            border = BorderStroke(1.dp, androidx.compose.ui.graphics.Color.Black),
+                            border = BorderStroke(1.dp, Color.Black),
                             shape = MaterialTheme.shapes.medium
                         )
-                        .padding(start = 12.dp, end = 4.dp, top = 12.dp, bottom = 12.dp),
+                        .padding(horizontal = 12.dp, vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Icon(
-                        AnonIcons.ArrowDownLeft,
-                        modifier = Modifier.size(32.dp),
-                        tint = MaterialTheme.colorScheme.primary,
-                        contentDescription = null
-                    )
+                    Box(modifier = Modifier.padding(top = 2.dp)) {
+                        Icon(
+                            AnonIcons.ArrowDownLeft,
+                            modifier = Modifier.size(32.dp),
+                            tint = MaterialTheme.colorScheme.primary,
+                            contentDescription = null
+                        )
+                    }
                     Text(
                         if (hideAmounts) Formats.maskAmount(subAddress.totalAmount)
                         else Formats.getDisplayAmount(subAddress.totalAmount),
                         modifier = Modifier.weight(1f),
                         textAlign = TextAlign.Center,
                         style = MaterialTheme.typography.titleLarge
+                    )
+                    Text(
+                        latest?.let { Formats.formatTransactionTime(it.timestamp) } ?: "",
+                        style = MaterialTheme.typography.labelSmall
                     )
                 }
             }
@@ -220,9 +214,7 @@ fun SubAddressDetailScreen(
                         transactions[it],
                         hideAmounts = hideAmounts,
                         modifier = Modifier
-                            .clickable {
-                                onTransactionClick(transactions[it])
-                            }
+                            .clickable { onTransactionClick(transactions[it]) }
                             .sharedElement(
                                 sharedTransitionScope.rememberSharedContentState(key = "${transactions[it].hash}"),
                                 animatedVisibilityScope = animatedContentScope
@@ -238,7 +230,5 @@ fun SubAddressDetailScreen(
 @Preview(device = "id:pixel_7_pro")
 @Composable
 private fun SubAddressScreenPrev() {
-    AnonNeroTheme {
-
-    }
+    AnonNeroTheme {}
 }
