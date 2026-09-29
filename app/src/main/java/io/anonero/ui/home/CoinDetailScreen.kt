@@ -5,7 +5,6 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -13,6 +12,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import AnonOutlineButton
@@ -141,19 +142,20 @@ fun CoinDetailScreen(
                         text = coin?.let { if (pubKeyState == 1) it.pub_key else abbreviatedValue(it.pub_key) } ?: "____",
                         modifier = Modifier
                             .weight(1f)
+                            .horizontalScroll(rememberScrollState())
                             .clickable(enabled = coin != null) {
                                 when (pubKeyState) {
                                     0 -> pubKeyState = 1
                                     1 -> {
                                         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                        clipboard.setPrimaryClip(ClipData.newPlainText("公钥", coin?.pub_key.orEmpty()))
+                                        clipboard.setPrimaryClip(ClipData.newPlainClip("公钥", coin?.pub_key.orEmpty()))
                                         pubKeyState = 2
                                     }
                                     else -> pubKeyState = 0
                                 }
                             },
                         maxLines = 1,
-                        textAlign = TextAlign.End,
+                        textAlign = TextAlign.Start,
                         style = MaterialTheme.typography.titleMedium
                     )
                 }
@@ -168,19 +170,20 @@ fun CoinDetailScreen(
                         text = coin?.let { if (hashState == 1) it.hash else abbreviatedValue(it.hash) } ?: "____",
                         modifier = Modifier
                             .weight(1f)
+                            .horizontalScroll(rememberScrollState())
                             .clickable(enabled = coin != null) {
                                 when (hashState) {
                                     0 -> hashState = 1
                                     1 -> {
                                         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                        clipboard.setPrimaryClip(ClipData.newPlainText("哈希", coin?.hash.orEmpty()))
+                                        clipboard.setPrimaryClip(ClipData.newPlainClip("哈希", coin?.hash.orEmpty()))
                                         hashState = 2
                                     }
                                     else -> hashState = 0
                                 }
                             },
                         maxLines = 1,
-                        textAlign = TextAlign.End,
+                        textAlign = TextAlign.Start,
                         style = MaterialTheme.typography.titleMedium
                     )
                 }
@@ -195,19 +198,20 @@ fun CoinDetailScreen(
                         text = outputAddress?.let { if (addressState == 1) it else abbreviatedValue(it) } ?: "____",
                         modifier = Modifier
                             .weight(1f)
+                            .horizontalScroll(rememberScrollState())
                             .clickable(enabled = outputAddress != null) {
                                 when (addressState) {
                                     0 -> addressState = 1
                                     1 -> {
                                         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                        clipboard.setPrimaryClip(ClipData.newPlainText("地址", outputAddress.orEmpty()))
+                                        clipboard.setPrimaryClip(ClipData.newPlainClip("地址", outputAddress.orEmpty()))
                                         addressState = 2
                                     }
                                     else -> addressState = 0
                                 }
                             },
                         maxLines = 1,
-                        textAlign = TextAlign.End,
+                        textAlign = TextAlign.Start,
                         style = MaterialTheme.typography.titleMedium
                     )
                 }
