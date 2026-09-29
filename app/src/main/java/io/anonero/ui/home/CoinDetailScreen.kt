@@ -25,10 +25,11 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -58,10 +59,10 @@ fun CoinDetailScreen(
     val coinIndex = coins.indexOfFirst { it.key == coinKey }
     val coin = coins.getOrNull(coinIndex)
     val scope = rememberCoroutineScope()
-    var busy by mutableStateOf(false)
-    var pubKeyState by mutableStateOf(0)
-    var hashState by mutableStateOf(0)
-    var addressState by mutableStateOf(0)
+    var busy by remember { mutableStateOf(false) }
+    var pubKeyState by remember { mutableStateOf(0) }
+    var hashState by remember { mutableStateOf(0) }
+    var addressState by remember { mutableStateOf(0) }
     val outputAddress = coin?.let { walletState.getAddressForCoin(it.hash) }
     val context = LocalContext.current
 
@@ -71,10 +72,7 @@ fun CoinDetailScreen(
                 title = { Text("冻结") },
                 navigationIcon = {
                     IconButton(onClick = onBackPress) {
-                        androidx.compose.material3.Icon(
-                            androidx.compose.material.icons.Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = null
-                        )
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
                     }
                 }
             )
