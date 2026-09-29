@@ -65,6 +65,11 @@ fun CoinDetailScreen(
     var addressState by remember { mutableStateOf(0) }
     val outputAddress = coin?.let { walletState.getAddressForCoin(it.hash) }
     val context = LocalContext.current
+    val outputColor = if (coin?.frozen == true) {
+        MaterialTheme.colorScheme.onSurfaceVariant
+    } else {
+        MaterialTheme.colorScheme.primary
+    }
 
     Scaffold(
         topBar = {
@@ -91,6 +96,7 @@ fun CoinDetailScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(bottom = 12.dp),
+                    color = outputColor,
                     style = MaterialTheme.typography.titleMedium
                 )
                 Row(
@@ -100,11 +106,7 @@ fun CoinDetailScreen(
                     Text(
                         "输出 " + if (coinIndex >= 0) coinIndex + 1 else "",
                         modifier = Modifier.weight(1f),
-                        color = if (coin?.frozen == true) {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        } else {
-                            MaterialTheme.colorScheme.primary
-                        },
+                        color = outputColor,
                         style = MaterialTheme.typography.titleMedium
                     )
                     Text(
@@ -113,11 +115,7 @@ fun CoinDetailScreen(
                             else Formats.getDisplayAmount(it.amount)
                         } ?: "____",
                         modifier = Modifier.weight(1f),
-                        color = if (coin?.frozen == true) {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        } else {
-                            MaterialTheme.colorScheme.primary
-                        },
+                        color = outputColor,
                         style = MaterialTheme.typography.titleMedium,
                         textAlign = TextAlign.Center
                     )
