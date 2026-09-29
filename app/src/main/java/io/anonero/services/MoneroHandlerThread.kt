@@ -45,7 +45,17 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
         val deamonHeight = wallet.getDaemonBlockChainHeight()
         val left = deamonHeight - syncHeight
         if (syncHeight < 0 || left < 0) return
-        val progress = if (wallet.getDaemonBlockChainTargetHeight().toDouble() == 0.0) {
+        val resetHeight = walletState.getResetSyncHeight()
+        val progress = if (walletState.isResetSyncInProgress() && resetHeight >= 0L) {
+            val total = deamonHeight - resetHeight
+            if (total <= 0L) {
+                1f
+            } else {
+                ((height - resetHeight).toDouble() / total.toDouble())
+                    .coerceIn(0.0, 1.0)
+                    .toFloat()
+            }
+        } else if (wallet.getDaemonBlockChainTargetHeight().toDouble() == 0.0) {
             1f
         } else {
             (height.toDouble() / wallet.getDaemonBlockChainTargetHeight().toDouble()).toFloat()
