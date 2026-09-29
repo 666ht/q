@@ -144,7 +144,7 @@ fun CoinDetailScreen(
                                     0 -> pubKeyState = 1
                                     1 -> {
                                         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                        clipboard.setPrimaryClip(ClipData.newPlainClip("公钥", coin?.pub_key.orEmpty()))
+                                        clipboard.setPrimaryClip(ClipData.newPlainText("公钥", coin?.pub_key.orEmpty()))
                                         pubKeyState = 2
                                     }
                                     else -> pubKeyState = 0
@@ -171,7 +171,7 @@ fun CoinDetailScreen(
                                     0 -> hashState = 1
                                     1 -> {
                                         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                        clipboard.setPrimaryClip(ClipData.newPlainClip("哈希", coin?.hash.orEmpty()))
+                                        clipboard.setPrimaryClip(ClipData.newPlainText("哈希", coin?.hash.orEmpty()))
                                         hashState = 2
                                     }
                                     else -> hashState = 0
@@ -198,7 +198,7 @@ fun CoinDetailScreen(
                                     0 -> addressState = 1
                                     1 -> {
                                         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                        clipboard.setPrimaryClip(ClipData.newPlainClip("地址", outputAddress.orEmpty()))
+                                        clipboard.setPrimaryClip(ClipData.newPlainText("地址", outputAddress.orEmpty()))
                                         addressState = 2
                                     }
                                     else -> addressState = 0
