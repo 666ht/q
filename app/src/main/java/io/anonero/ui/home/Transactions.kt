@@ -713,6 +713,7 @@ fun TransactionScreen(
                     with(sharedTransitionScope) {
                         TransactionItem(
                             transactions[it], hideAmounts = hideAmounts, modifier = Modifier
+                                .offset(y = if (it == 1) (-60).dp else 0.dp)
                                 .clickable {
                                     onItemClick(transactions[it])
                                 }
