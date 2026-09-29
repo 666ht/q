@@ -112,7 +112,7 @@ fun CoinDetailScreen(
                         modifier = Modifier.fillMaxWidth(),
                         color = outputColor,
                         style = MaterialTheme.typography.titleMedium,
-                        textAlign = TextAlign.Start
+                        textAlign = TextAlign.Center
                     )
                     Text(
                         "输出 " + if (coinIndex >= 0) coinIndex + 1 else "",
