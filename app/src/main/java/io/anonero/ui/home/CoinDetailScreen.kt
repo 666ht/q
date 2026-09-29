@@ -91,14 +91,6 @@ fun CoinDetailScreen(
             verticalArrangement = Arrangement.SpaceBetween
         ) {
             Column(modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    text = "全局索引  " + (coin?.globalOutputIndex ?: "____"),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 12.dp),
-                    color = outputColor,
-                    style = MaterialTheme.typography.titleMedium
-                )
                 androidx.compose.foundation.layout.Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
@@ -129,6 +121,13 @@ fun CoinDetailScreen(
                         Spacer(modifier = Modifier.size(28.dp))
                     }
                 }
+                Text(
+                    text = "全局索引  " + (coin?.globalOutputIndex ?: "____"),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 12.dp),
+                    style = MaterialTheme.typography.titleMedium
+                )
                 androidx.compose.foundation.layout.Row(
                     modifier = Modifier
                         .fillMaxWidth()
