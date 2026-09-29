@@ -75,12 +75,14 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
         )
 
         if (status === Wallet.ConnectionStatus.ConnectionStatus_Disconnected || status == null) {
+            walletState.publishAfterSync()
             tryRestartConnection()
             return
         }
 
         val heightDiff = daemonHeight - chainHeight
         if (heightDiff >= 2) {
+            walletState.publishAfterSync()
             tryRestartConnection()
             return
         }
@@ -109,7 +111,10 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
     }
 
     private fun tryRestartConnection() {
-        wallet.init(0)
+        // Do not call wallet.init(0) here. startService() already initialized
+        // the daemon connection; re-initializing interrupts the in-progress
+        // blockchain scan and causes an infinite refresh loop where
+        // isSynchronized never becomes true and balance/history never publish.
         wallet.startRefresh()
         walletState.update()
     }
