@@ -87,11 +87,11 @@ fun CoinDetailScreen(
         ) {
             Column(modifier = Modifier.fillMaxWidth()) {
                 Text(
-                    text = "全局索引  " + (coin?.unlockTime ?: "____"),
+                    text = "全局索引  " + (coin?.globalOutputIndex ?: "____"),
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(bottom = 12.dp),
-                    style = MaterialTheme.typography.bodyMedium
+                    style = MaterialTheme.typography.titleMedium
                 )
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -134,57 +134,96 @@ fun CoinDetailScreen(
                         )
                     }
                 }
-                Text(
-                    text = "公钥  " + (coin?.let {
-                        if (showFullPubKey) it.pub_key else abbreviatedValue(it.pub_key)
-                    } ?: "____"),
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = 12.dp)
-                        .clickable(enabled = coin != null) {
-                            if (showFullPubKey) {
-                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                clipboard.setPrimaryClip(ClipData.newPlainText("公钥", coin?.pub_key.orEmpty()))
-                            } else {
-                                showFullPubKey = true
-                            }
-                        },
-                    style = MaterialTheme.typography.bodyMedium
-                )
-                Text(
-                    text = "哈希  " + (coin?.let {
-                        if (showFullHash) it.hash else abbreviatedValue(it.hash)
-                    } ?: "____"),
+                        .padding(top = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "公钥",
+                        modifier = Modifier.size(width = 52.dp, height = 24.dp),
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    Text(
+                        text = coin?.let {
+                            if (showFullPubKey) it.pub_key else abbreviatedValue(it.pub_key)
+                        } ?: "____",
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable(enabled = coin != null) {
+                                if (showFullPubKey) {
+                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                    clipboard.setPrimaryClip(ClipData.newPlainText("公钥", coin?.pub_key.orEmpty()))
+                                } else {
+                                    showFullPubKey = true
+                                }
+                            },
+                        maxLines = 1,
+                        textAlign = TextAlign.Center,
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                }
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = 8.dp)
-                        .clickable(enabled = coin?.hash != null) {
-                            if (showFullHash) {
-                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                clipboard.setPrimaryClip(ClipData.newPlainText("哈希", coin?.hash.orEmpty()))
-                            } else {
-                                showFullHash = true
-                            }
-                        },
-                    style = MaterialTheme.typography.bodyMedium
-                )
-                Text(
-                    text = "地址  " + (outputAddress?.let {
-                        if (showFullAddress) it else abbreviatedValue(it)
-                    } ?: "____"),
+                        .padding(top = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "哈希",
+                        modifier = Modifier.size(width = 52.dp, height = 24.dp),
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    Text(
+                        text = coin?.let {
+                            if (showFullHash) it.hash else abbreviatedValue(it.hash)
+                        } ?: "____",
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable(enabled = coin?.hash != null) {
+                                if (showFullHash) {
+                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                    clipboard.setPrimaryClip(ClipData.newPlainText("哈希", coin?.hash.orEmpty()))
+                                } else {
+                                    showFullHash = true
+                                }
+                            },
+                        maxLines = 1,
+                        textAlign = TextAlign.Center,
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                }
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = 8.dp)
-                        .clickable(enabled = outputAddress != null) {
-                            if (showFullAddress) {
-                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                clipboard.setPrimaryClip(ClipData.newPlainText("地址", outputAddress.orEmpty()))
-                            } else {
-                                showFullAddress = true
-                            }
-                        },
-                    style = MaterialTheme.typography.bodyMedium
-                )
+                        .padding(top = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "地址",
+                        modifier = Modifier.size(width = 52.dp, height = 24.dp),
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    Text(
+                        text = outputAddress?.let {
+                            if (showFullAddress) it else abbreviatedValue(it)
+                        } ?: "____",
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable(enabled = outputAddress != null) {
+                                if (showFullAddress) {
+                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                    clipboard.setPrimaryClip(ClipData.newPlainText("地址", outputAddress.orEmpty()))
+                                } else {
+                                    showFullAddress = true
+                                }
+                            },
+                        maxLines = 1,
+                        textAlign = TextAlign.Center,
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                }
             }
             AnonOutlineButton(
                 onClick = {
