@@ -229,13 +229,10 @@ class WalletState {
     }
 
     fun syncUpdate(syncProgress: SyncProgress) {
-        // Do not treat left == 0 as completion by itself. The native wallet
-        // must report a completed refresh first; otherwise a height of 0/0 or
-        // a transient daemon-height race can make the UI claim "synced".
-        val done = syncProgress.progress >= 1f
-        _syncProgress.update { if (done) null else syncProgress }
-        _isSyncing.set(!done)
-        if (done) _connectionStatus.update { Wallet.ConnectionStatus.ConnectionStatus_Connected }
+        // Progress is only a progress report. Completion is driven exclusively
+        // by finishSync() after native wallet2 reports synchronized.
+        _syncProgress.value = syncProgress
+        _isSyncing.set(true)
     }
 
     fun finishSync() {
