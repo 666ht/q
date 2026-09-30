@@ -99,44 +99,22 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
             return
         }
 
-        // The native callback is also emitted when doRefresh() skipped the
-        // wallet scan because the daemon was not ready. Never treat that as
-        // "sync complete", especially during restore, or the one-time restore
-        // rescan can be consumed before it actually runs.
-        if (daemonHeight <= 1L || daemonTarget <= 1L || daemonHeight < daemonTarget) {
-            wallet.refreshAsync()
-            return
-        }
-
-        // Keep scanning until the wallet has actually caught up with the daemon.
-        // A native refresh callback is not itself a completion signal.
-        val heightDiff = daemonHeight - chainHeight
-        if (heightDiff >= 2L) {
-            wallet.refreshAsync()
-            return
-        }
-
-        // Restore/reset rescans must also be acknowledged by native wallet2.
-        // Height equality alone can describe the old cache while the restore
-        // rescan has not finished publishing its wallet state yet.
-        val restoreOrReset = walletState.isRestoreSyncInProgress() || walletState.isResetSyncInProgress()
-        if (restoreOrReset && !wallet.nativeSynchronized) {
-            Timber.tag(name).i(
-                "restore/reset refresh finished without native synchronized state; waiting for next native refresh"
-            )
+        // A native refresh callback does not mean the wallet scan completed.
+        // Do not start another refresh from inside the callback. Native wallet2
+        // keeps the existing refresh worker alive and will perform its next
+        // normal cycle.
+        if (!wallet.nativeSynchronized) {
             if (!wallet.isSynchronized) {
                 updateSyncProgress(chainHeight)
             }
-            wallet.refreshAsync()
+            Timber.tag(name).i(
+                "refreshed() native sync incomplete; waiting for existing refresh worker"
+            )
             return
         }
 
-        if (!wallet.isSynchronized) {
-            updateSyncProgress(chainHeight)
-        }
-
-        // This refresh pass has actually caught up. Mark the Java state synced,
-        // then publish native balance/history only after the JNI callback returns.
+        // The native wallet is actually synchronized now. Publish the balance
+        // and transaction history once, without starting a second sync.
         wallet.setSynchronized()
         walletState.finishSync()
         walletState.setLoading(false)
