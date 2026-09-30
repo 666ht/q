@@ -229,10 +229,19 @@ class WalletState {
     }
 
     fun syncUpdate(syncProgress: SyncProgress) {
-        val done = syncProgress.progress >= 1f || syncProgress.left <= 0L
+        // Do not treat left == 0 as completion by itself. The native wallet
+        // must report a completed refresh first; otherwise a height of 0/0 or
+        // a transient daemon-height race can make the UI claim "synced".
+        val done = syncProgress.progress >= 1f
         _syncProgress.update { if (done) null else syncProgress }
         _isSyncing.set(!done)
         if (done) _connectionStatus.update { Wallet.ConnectionStatus.ConnectionStatus_Connected }
+    }
+
+    fun finishSync() {
+        _syncProgress.value = null
+        _isSyncing.set(false)
+        _connectionStatus.value = Wallet.ConnectionStatus.ConnectionStatus_Connected
     }
 
     fun publishAfterSync(): Boolean {
@@ -392,14 +401,10 @@ class WalletState {
             wallet.store()
             setLoading(true)
 
-            // A custom-height reset must rescan the wallet state from the
-            // requested restore height. startRefresh() only continues the
-            // current refresh and does not rewind an already-synchronized
-            // wallet.
+            // Changing refresh height does not rewind an already synchronized
+            // wallet. Explicitly request the native rescan, then resume the
+            // refresh worker so the scan actually starts.
             wallet.rescanBlockchainAsync()
-            // rescanBlockchainAsync() only wakes the native refresh thread.
-            // The thread must be enabled again after pauseRefresh(), otherwise
-            // the requested rescan is never executed.
             wallet.startRefresh()
             Result.success(true)
         } catch (e: Exception) {
@@ -419,8 +424,6 @@ class WalletState {
             wallet.isSynchronized = false
             wallet.pauseRefresh()
             setLoading(true)
-            // Same contract as resetSyncFromHeight: rescan marks the work,
-            // startRefresh must re-enable the paused native thread.
             wallet.rescanBlockchainAsync()
             wallet.startRefresh()
             Result.success(true)
