@@ -115,19 +115,17 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
 
         wallet.setSynchronized()
         wallet.store()
-        val published = walletState.publishAfterSync()
+
+        // Publish the freshly synchronized native history and coins through
+        // the same path used by upstream. This must happen before clearing
+        // the reset/restore state and before ending the loading state.
+        refresh(true)
+        walletState.update()
         walletState.finishResetSync()
         walletState.finishRestoreSync()
 
         walletState.syncUpdate(SyncProgress(1f, 0L))
         walletState.setLoading(false)
-
-        if (!published) {
-            refresh(true)
-            walletState.update()
-        }
-
-        wallet.refreshAsync()
     }
 
     private fun tryRestartConnection() {
