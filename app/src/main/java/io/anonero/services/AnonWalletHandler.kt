@@ -123,7 +123,6 @@ class AnonWalletHandler(
                 walletState.beginRestoreSync()
                 wallet.setRestoreHeight(restoreHeight)
                 wallet.store()
-                prefs.edit { remove(io.anonero.util.RESTORE_HEIGHT) }
             }
             if (wallet.isInitialized) {
                 wallet.refreshHistory()
