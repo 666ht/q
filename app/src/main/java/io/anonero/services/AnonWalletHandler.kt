@@ -71,7 +71,6 @@ class AnonWalletHandler(
         )
 
         wallet.setListener(handler)
-        wallet.refreshHistory()
         handler?.start()
         walletState.setLoading(true)
         walletState.update()
@@ -120,6 +119,9 @@ class AnonWalletHandler(
                 wallet.setRestoreHeight(restoreHeight)
             }
             if (wallet.isInitialized) {
+                // History must be created after native wallet init so its native handle
+                // belongs to the initialized wallet and can see synced transactions.
+                wallet.resetHistory()
                 wallet.refreshHistory()
                 wallet.setTrustedDaemon(true)
 
