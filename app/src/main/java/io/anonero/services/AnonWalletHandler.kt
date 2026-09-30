@@ -7,6 +7,7 @@ import io.anonero.model.node.Node
 import io.anonero.model.node.NodeFields
 import org.json.JSONObject
 import io.anonero.util.RESTORE_HEIGHT
+import io.anonero.util.RESTORE_NEEDS_RESCAN
 import io.anonero.util.WALLET_PROXY
 import io.anonero.util.WALLET_PROXY_PORT
 import io.anonero.util.WALLET_USE_TOR
@@ -66,10 +67,20 @@ class AnonWalletHandler(
 
     suspend fun startService() {
         val wallet = WalletManager.instance?.wallet ?: return
+        val needsRestoreRescan = prefs.getBoolean(RESTORE_NEEDS_RESCAN, false)
+        if (needsRestoreRescan) {
+            walletState.startRestoreSync()
+        }
         handler = MoneroHandlerThread(
             wallet,
             walletState
-        )
+        ) {
+            if (needsRestoreRescan) {
+                prefs.edit(commit = true) {
+                    putBoolean(RESTORE_NEEDS_RESCAN, false)
+                }
+            }
+        }
 
         wallet.setListener(handler)
         wallet.refreshHistory()
@@ -122,6 +133,10 @@ class AnonWalletHandler(
             if (wallet.isInitialized) {
                 wallet.refreshHistory()
                 wallet.setTrustedDaemon(true)
+                if (needsRestoreRescan) {
+                    wallet.rescanBlockchainAsync()
+                    Timber.tag(TAG).i("Queued one native rescan for restored wallet")
+                }
                 wallet.startRefresh()
                 walletState.update()
             }
