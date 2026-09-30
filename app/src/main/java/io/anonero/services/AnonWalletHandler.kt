@@ -71,6 +71,7 @@ class AnonWalletHandler(
         )
 
         wallet.setListener(handler)
+        wallet.refreshHistory()
         handler?.start()
         walletState.setLoading(true)
         walletState.update()
@@ -114,30 +115,13 @@ class AnonWalletHandler(
                 wallet.refreshHistory()
             }
             wallet.init(0)
-            val restoreHeight = prefs.getLong(io.anonero.util.RESTORE_HEIGHT, 0L)
-            if (restoreHeight != 0L) {
-                wallet.setRestoreHeight(restoreHeight)
+            if (prefs.getLong(io.anonero.util.RESTORE_HEIGHT, 0L) != 0L) {
+                wallet.setRestoreHeight(prefs.getLong(io.anonero.util.RESTORE_HEIGHT, 0L))
             }
             if (wallet.isInitialized) {
-                // History must be created after native wallet init so its native handle
-                // belongs to the initialized wallet and can see synced transactions.
-                wallet.resetHistory()
                 wallet.refreshHistory()
                 wallet.setTrustedDaemon(true)
-
-                if (restoreHeight != 0L) {
-                    // Monero's native refresh uses the configured restore height.
-                    // Start one normal refresh from that height; do not launch a
-                    // second explicit rescan, which can make restore appear to
-                    // require two synchronization passes.
-                    walletState.startRestoreSync()
-                    wallet.startRefresh()
-                    prefs.edit {
-                        remove(io.anonero.util.RESTORE_HEIGHT)
-                    }
-                } else {
-                    wallet.startRefresh()
-                }
+                wallet.startRefresh()
                 walletState.update()
             }
         } catch (e: Exception) {
