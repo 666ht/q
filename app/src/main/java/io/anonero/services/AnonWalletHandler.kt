@@ -135,6 +135,7 @@ class AnonWalletHandler(
                     // that manual "reset sync" performs, but it happens only
                     // once here so restore completes with a single scan.
                     wallet.rescanBlockchainAsync()
+                    wallet.startRefresh()
                     prefs.edit {
                         remove(io.anonero.util.RESTORE_HEIGHT)
                     }
