@@ -25,7 +25,6 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
         if (walletState.isWiping()) return
         Timber.tag(name).i("moneyReceived: %s", amount)
         WalletManager.instance?.wallet?.store()
-        // Push balance/history to observers; store alone does not update UI state.
         refresh(false)
     }
 
@@ -86,23 +85,32 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
             chainHeight
         )
 
+        // Match upstream ANONERO: only reconnect when a node is selected.
+        // With no daemon address, stay disconnected instead of spinning init().
         if (status === Wallet.ConnectionStatus.ConnectionStatus_Disconnected || status == null) {
-            tryRestartConnection()
+            val daemonAddress = WalletManager.instance?.getDaemonAddress()
+            if (!daemonAddress.isNullOrBlank()) {
+                tryRestartConnection()
+            } else {
+                walletState.setLoading(false)
+                walletState.update()
+            }
             return
         }
 
         val heightDiff = daemonHeight - chainHeight
         if (heightDiff >= 2) {
-            if (walletState.isRestoreSyncInProgress() || walletState.isResetSyncInProgress()) {
-                // Still scanning: do not restart, but always refreshHistory before
-                // update() so observers are not stuck on a stale empty history.
-                refresh(false)
-                return
-            }
-            tryRestartConnection()
+            // Upstream: continue the existing refresh thread. Do NOT re-init
+            // on every tick — that drops status to Disconnected and blocks
+            // reaching the completion path that publishes balance/history.
+            wallet.startRefresh()
+            // Keep observers current while still catching up (updated()
+            // may not fire often enough on some nodes).
+            refresh(false)
             return
         }
 
+        // heightDiff < 2: native refresh completed for this pass.
         if (!wallet.isSynchronized) {
             updateSyncProgress(chainHeight)
         }
@@ -110,9 +118,6 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
         wallet.setSynchronized()
         wallet.store()
 
-        // Publish the freshly synchronized native history and coins through
-        // the same path used by upstream. This must happen before clearing
-        // the reset/restore state and before ending the loading state.
         refresh(true)
         walletState.update()
         walletState.finishResetSync()
