@@ -71,14 +71,6 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
     override fun refreshed() {
         if (walletState.isWiping()) return
 
-        if (wallet.isSynchronized) {
-            wallet.refreshHistory()
-            wallet.refreshCoins()
-            walletState.update()
-            walletState.setLoading(false)
-            return
-        }
-
         val status = wallet.fullStatus.connectionStatus
         val daemonHeight = wallet.getDaemonBlockChainHeight()
         val chainHeight = wallet.getBlockChainHeight()
