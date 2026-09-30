@@ -76,15 +76,6 @@ class AnonWalletHandler(
         walletState.setLoading(true)
         walletState.update()
         try {
-            // A restore marker means this wallet has never completed its
-            // restore scan. Keep the restore lifecycle active before any
-            // connection callback can arrive.
-            val restoreHeight = prefs.getLong(io.anonero.util.RESTORE_HEIGHT, 0L)
-            if (restoreHeight != 0L) {
-                walletState.beginRestoreSync()
-                Timber.tag(TAG).i("Restore scan pending from height=%s", restoreHeight)
-            }
-
             val host = prefs.getString(NodeFields.RPC_HOST.value, "")
             val rpcPort = prefs.getInt(NodeFields.RPC_PORT.value, Node.defaultRpcPort)
             val rpcUsername = prefs.getString(NodeFields.RPC_USERNAME.value, "")
@@ -124,28 +115,14 @@ class AnonWalletHandler(
                 wallet.refreshHistory()
             }
             wallet.init(0)
+            val restoreHeight = prefs.getLong(io.anonero.util.RESTORE_HEIGHT, 0L)
             if (restoreHeight != 0L) {
                 wallet.setRestoreHeight(restoreHeight)
             }
             if (wallet.isInitialized) {
                 wallet.refreshHistory()
                 wallet.setTrustedDaemon(true)
-
-                // A recovered wallet already has its restore height inside
-                // native wallet2. Starting the normal refresh worker is the
-                // single sync pass; do not enqueue a second explicit rescan.
                 wallet.startRefresh()
-
-                if (restoreHeight != 0L) {
-                    prefs.edit {
-                        remove(io.anonero.util.RESTORE_HEIGHT)
-                    }
-                    Timber.tag(TAG).i(
-                        "Started single restore sync from height=%s",
-                        restoreHeight
-                    )
-                }
-
                 walletState.update()
             }
         } catch (e: Exception) {
