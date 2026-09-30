@@ -966,7 +966,7 @@ Java_io_anonero_model_Wallet_initJ(JNIEnv *env, jobject instance,
     env->ReleaseStringUTFChars(daemon_address, _daemon_address);
     env->ReleaseStringUTFChars(daemon_username, _daemon_username);
     env->ReleaseStringUTFChars(daemon_password, _daemon_password);
-    env->ReleaseStringUTFChars(daemon_password, _proxy_address);
+    env->ReleaseStringUTFChars(proxy_address, _proxy_address);
     LOGD("initJ(): end");
     return static_cast<jboolean>(status);
 }
