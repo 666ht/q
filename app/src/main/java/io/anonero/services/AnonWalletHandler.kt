@@ -135,6 +135,8 @@ class AnonWalletHandler(
                     // once here so restore completes with a single scan.
                     wallet.rescanBlockchainAsync()
                     wallet.startRefresh()
+                    // Consume the restore marker only after the one-time native
+                    // rescan has been requested and the refresh worker is running.
                     prefs.edit {
                         remove(io.anonero.util.RESTORE_HEIGHT)
                     }
