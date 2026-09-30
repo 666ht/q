@@ -60,7 +60,7 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
 
     override fun updated() {
         if (walletState.isWiping()) return
-        refresh(false)
+        wallet.refresh()
         Timber.tag(name).i("updated()")
         walletState.update()
     }
