@@ -128,7 +128,26 @@ class AnonWalletHandler(
             if (wallet.isInitialized) {
                 wallet.refreshHistory()
                 wallet.setTrustedDaemon(true)
-                wallet.startRefresh()
+
+                if (restoreHeight != 0L) {
+                    // Newly restored wallets need one real rescan from the
+                    // requested restore height. This is the same operation
+                    // that manual "reset sync" performs, but it happens only
+                    // once here so restore completes with a single scan.
+                    wallet.rescanBlockchainAsync()
+                    prefs.edit {
+                        remove(io.anonero.util.RESTORE_HEIGHT)
+                    }
+                    Timber.tag(TAG).i(
+                        "Started one-time restore rescan from height=%s",
+                        restoreHeight
+                    )
+                } else {
+                    // Existing wallet: resume from the native persisted
+                    // refresh height without rescanning.
+                    wallet.startRefresh()
+                }
+
                 walletState.update()
             }
         } catch (e: Exception) {
