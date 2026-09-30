@@ -3,6 +3,7 @@ package io.anonero.services
 import io.anonero.model.PendingTransaction
 import io.anonero.model.Wallet
 import io.anonero.model.WalletListener
+import io.anonero.model.WalletManager
 import timber.log.Timber
 
 class MoneroHandlerThread(private val wallet: Wallet, private val walletState: WalletState) :
