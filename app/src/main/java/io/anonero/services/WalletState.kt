@@ -369,6 +369,10 @@ class WalletState {
             // current refresh and does not rewind an already-synchronized
             // wallet.
             wallet.rescanBlockchainAsync()
+            // rescanBlockchainAsync() only wakes the native refresh thread.
+            // The thread must be enabled again after pauseRefresh(), otherwise
+            // the requested rescan is never executed.
+            wallet.startRefresh()
             Result.success(true)
         } catch (e: Exception) {
             _resetSyncInProgress.set(false)
