@@ -80,12 +80,11 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
             return
         }
 
-        val heightDiff = daemonHeight - chainHeight
-        if (heightDiff >= 2) {
-            walletState.publishAfterSync()
-            tryRestartConnection()
-            return
-        }
+        // A small daemon/scan-height difference at the instant the native
+        // refresh callback arrives is normal: the daemon can advance while the
+        // wallet is scanning. Do not restart the wallet here. The native refresh
+        // thread owns the next incremental refresh cycle; restarting from this
+        // callback creates the extra automatic sync seen after first restore.
 
         if (!wallet.isSynchronized) {
             updateSyncProgress(chainHeight)
