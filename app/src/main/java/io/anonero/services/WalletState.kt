@@ -88,7 +88,7 @@ class WalletState {
                 _balanceInfo.update { wallet.balance }
                 _unLockedBalance.update {
                     if (AnonConfig.viewOnly) wallet.viewOnlyBalance()
-                    wallet.unlockedBalance
+                    else wallet.unlockedBalance
                 }
                 _walletStatus.update { wallet.fullStatus }
                 if (wallet.status.errorString.isNotEmpty()) {
@@ -333,8 +333,18 @@ class WalletState {
     fun refresh() {
         val wallet = getWallet ?: return
         if (!wallet.isInitialized) return
+        // Always re-publish history/balance from native. Skip starting another
+        // startRefresh only while a sync/rescan is already running.
+        refreshScope.launch {
+            try {
+                wallet.refreshHistory()
+                update()
+            } catch (e: Exception) {
+                Timber.tag(TAG).e(e, "refreshHistory error")
+            }
+        }
         if (_isSyncing.get() || !wallet.isSynchronized) {
-            Timber.tag(TAG).d("refresh ignored while wallet sync is active")
+            Timber.tag(TAG).d("startRefresh skipped while wallet sync is active")
             return
         }
         if (wallet.fullStatus.connectionStatus == Wallet.ConnectionStatus.ConnectionStatus_Connected) {
@@ -343,9 +353,6 @@ class WalletState {
                 try { wallet.startRefresh() }
                 catch (e: Exception) { Timber.tag(TAG).e(e, "refresh error"); setLoading(false) }
             }
-        }
-        refreshScope.launch {
-            try { wallet.refreshHistory() } catch (e: Exception) { Timber.tag(TAG).e(e, "refreshHistory error") }
         }
     }
 
@@ -383,18 +390,23 @@ class WalletState {
     }
 
     fun resyncBlockchain(): Result<Boolean> {
-        setLoading(true)
-        try {
-            if (getWallet?.fullStatus?.connectionStatus != Wallet.ConnectionStatus.ConnectionStatus_Connected) {
+        return try {
+            val wallet = getWallet ?: return Result.failure(Exception("Wallet not initialized"))
+            if (wallet.fullStatus.connectionStatus != Wallet.ConnectionStatus.ConnectionStatus_Connected) {
                 return Result.failure(Exception(AnonConfig.context?.getString(R.string.resync_daemon_required) ?: "Please connect to daemon for resync"))
             }
-            getWallet?.rescanBlockchainAsync()
-            return Result.success(true)
+            wallet.isSynchronized = false
+            wallet.pauseRefresh()
+            setLoading(true)
+            // Same contract as resetSyncFromHeight: rescan marks the work,
+            // startRefresh must re-enable the paused native thread.
+            wallet.rescanBlockchainAsync()
+            wallet.startRefresh()
+            Result.success(true)
         } catch (e: Exception) {
             Timber.tag(TAG).e(e)
-            return Result.failure(e)
-        } finally {
             setLoading(false)
+            Result.failure(e)
         }
     }
 

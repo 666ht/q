@@ -25,10 +25,14 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
         if (walletState.isWiping()) return
         Timber.tag(name).i("moneyReceived: %s", amount)
         WalletManager.instance?.wallet?.store()
+        // Push balance/history to observers; store alone does not update UI state.
+        refresh(false)
     }
 
     override fun unconfirmedMoneyReceived(txId: String?, amount: Long) {
         if (walletState.isWiping()) return
+        Timber.tag(name).i("unconfirmedMoneyReceived: %s", amount)
+        refresh(false)
     }
 
     override fun newBlock(height: Long) {
@@ -90,11 +94,9 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
         val heightDiff = daemonHeight - chainHeight
         if (heightDiff >= 2) {
             if (walletState.isRestoreSyncInProgress() || walletState.isResetSyncInProgress()) {
-                // Restore/custom-height rescan is already owned by the native
-                // refresh/rescan operation. Do not reinitialize or restart it
-                // here, otherwise an in-progress rewind can be replaced by a
-                // normal refresh.
-                walletState.update()
+                // Still scanning: do not restart, but always refreshHistory before
+                // update() so observers are not stuck on a stale empty history.
+                refresh(false)
                 return
             }
             tryRestartConnection()
