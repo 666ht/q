@@ -103,21 +103,6 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
             return
         }
 
-        // Restore/reset rescans must also be acknowledged by native wallet2.
-        // Height equality alone can describe the old cache while the restore
-        // rescan has not finished publishing its wallet state yet.
-        val restoreOrReset = walletState.isRestoreSyncInProgress() || walletState.isResetSyncInProgress()
-        if (restoreOrReset && !wallet.nativeSynchronized) {
-            Timber.tag(name).i(
-                "restore/reset refresh finished without native synchronized state; waiting for next native refresh"
-            )
-            if (!wallet.isSynchronized) {
-                updateSyncProgress(chainHeight)
-            }
-            wallet.refreshAsync()
-            return
-        }
-
         if (!wallet.isSynchronized) {
             updateSyncProgress(chainHeight)
         }
@@ -125,6 +110,7 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
         // This refresh pass has actually caught up. Mark the Java state synced,
         // then publish native balance/history only after the JNI callback returns.
         wallet.setSynchronized()
+        walletState.update()
         walletState.finishSync()
         walletState.setLoading(false)
         walletState.publishAfterNativeRefresh()
