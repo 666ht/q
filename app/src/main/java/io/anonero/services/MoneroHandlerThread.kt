@@ -33,20 +33,27 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
 
     private fun updateSyncProgress(height: Long) {
         if (walletState.isWiping() || wallet.isSynchronized) return
-        val syncHeight = wallet.getBlockChainHeight()
+
         val daemonHeight = wallet.getDaemonBlockChainHeight()
-        val left = daemonHeight - syncHeight
-        if (syncHeight < 0 || left < 0) return
+        if (daemonHeight <= 0L || height < 0L) return
+
         val resetHeight = walletState.getResetSyncHeight()
-        val progress = if (walletState.isResetSyncInProgress() && resetHeight >= 0L) {
-            val total = daemonHeight - resetHeight
-            if (total <= 0L) 1f
-            else ((height - resetHeight).toDouble() / total.toDouble()).coerceIn(0.0, 1.0).toFloat()
-        } else if (wallet.getDaemonBlockChainTargetHeight().toDouble() == 0.0) {
-            1f
-        } else {
-            (height.toDouble() / wallet.getDaemonBlockChainTargetHeight().toDouble()).toFloat()
+        if (walletState.isResetSyncInProgress() && resetHeight >= 0L) {
+            val total = (daemonHeight - resetHeight).coerceAtLeast(1L)
+            val progress = ((height - resetHeight).toDouble() / total.toDouble())
+                .coerceIn(0.0, 1.0)
+                .toFloat()
+            val left = (daemonHeight - height).coerceAtLeast(0L)
+            walletState.syncUpdate(SyncProgress(progress, left))
+            return
         }
+
+        val target = wallet.getDaemonBlockChainTargetHeight().takeIf { it > 0L }
+            ?: daemonHeight
+        val progress = (height.toDouble() / target.toDouble())
+            .coerceIn(0.0, 1.0)
+            .toFloat()
+        val left = (daemonHeight - height).coerceAtLeast(0L)
         walletState.syncUpdate(SyncProgress(progress, left))
     }
 
@@ -85,20 +92,17 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
             return
         }
 
-        val heightDiff = daemonHeight - chainHeight
-        if (heightDiff >= 2) {
-            // The native refresh thread is already scanning. Re-starting it and
-            // refreshing history from this callback only creates re-entrant work.
+        // Native wallet2 is authoritative about whether this refresh cycle
+        // actually synchronized the wallet. Do not infer completion from
+        // daemonHeight - chainHeight; during restore/rescan those values can
+        // temporarily be 0/0 or reflect the old cache.
+        if (!wallet.nativeSynchronized) {
+            updateSyncProgress(chainHeight)
             return
         }
 
-        if (!wallet.isSynchronized) updateSyncProgress(chainHeight)
-
-        // Native wallet refresh has completed. Mark synchronization done now,
-        // then publish balance/history asynchronously after this JNI callback
-        // returns to native code.
         wallet.setSynchronized()
-        walletState.syncUpdate(SyncProgress(1f, 0L))
+        walletState.finishSync()
         walletState.setLoading(false)
         walletState.publishAfterNativeRefresh()
     }
