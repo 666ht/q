@@ -286,32 +286,15 @@ class WalletState {
 
     fun publishAfterNativeRefresh() {
         refreshScope.launch {
-            val published = try {
-                publishAfterSync()
-            } catch (e: Exception) {
-                Timber.tag(TAG).e(e, "publishAfterNativeRefresh failed")
-                false
-            }
-
-            Timber.tag(TAG).i(
-                "publishAfterNativeRefresh: balance/history published=%s",
-                published
-            )
-
-            if (published) {
+            try {
+                val published = publishAfterSync()
+                Timber.tag(TAG).i(
+                    "publishAfterNativeRefresh: balance/history published=%s",
+                    published
+                )
+            } finally {
                 finishResetSync()
                 finishRestoreSync()
-            } else {
-                // Do not end restore/reset just because the native callback arrived.
-                // Retry publication through a normal refresh; rescanBlockchainAsync()
-                // is not called here, so this cannot start a second rescan.
-                getWallet?.let {
-                    try {
-                        it.refreshAsync()
-                    } catch (e: Exception) {
-                        Timber.tag(TAG).e(e, "refreshAsync after publish failure")
-                    }
-                }
             }
         }
     }
