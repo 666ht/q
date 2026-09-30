@@ -104,7 +104,7 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
         // refresh worker after the first pass.
         val heightDiff = daemonHeight - chainHeight
         if (heightDiff >= 2L) {
-            wallet.startRefresh()
+            wallet.refreshAsync()
             return
         }
 
