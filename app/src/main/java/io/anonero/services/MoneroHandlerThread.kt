@@ -71,10 +71,6 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
     override fun refreshed() {
         if (walletState.isWiping()) return
 
-        // A second native refresh is intentionally requested after the first
-        // completed refresh. The wallet backend can finish updating its
-        // history/balance immediately after the refreshed callback, so reading
-        // them in the same callback can still return the previous state.
         if (wallet.isSynchronized) {
             wallet.refreshHistory()
             wallet.refreshCoins()
@@ -101,11 +97,10 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
 
         val heightDiff = daemonHeight - chainHeight
         if (heightDiff >= 2) {
-            if (walletState.isRestoreSyncInProgress()) {
-                // A restore refresh can report a partial height before the
-                // requested restore-height scan has finished. Continue the
-                // native refresh, but never call init(0): that would discard
-                // the restore-height start point and cause a second full sync.
+            if (walletState.isRestoreSyncInProgress() || walletState.isResetSyncInProgress()) {
+                // Restore and custom-height rescan must continue the existing
+                // native refresh. Reinitializing the wallet here can restart
+                // the scan outside the requested restore height.
                 wallet.startRefresh()
                 walletState.update()
                 return
@@ -132,8 +127,6 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
             walletState.update()
         }
 
-        // Trigger one follow-up native refresh so balance/history are read
-        // after the backend has committed the completed scan.
         wallet.refreshAsync()
     }
 
