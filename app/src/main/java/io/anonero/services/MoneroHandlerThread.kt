@@ -113,12 +113,18 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
             return
         }
 
-        // The native wallet is actually synchronized now. Publish the balance
-        // and transaction history once, without starting a second sync.
+        // Match the upstream completion order: the native refresh has
+        // completed, so publish its freshly updated caches synchronously.
+        // These calls do not start another blockchain sync.
         wallet.setSynchronized()
+        wallet.store()
+        wallet.refreshHistory()
+        wallet.refreshCoins()
         walletState.finishSync()
         walletState.setLoading(false)
-        walletState.publishAfterNativeRefresh()
+        walletState.update()
+        walletState.finishResetSync()
+        walletState.finishRestoreSync()
     }
 
     private fun tryRestartConnection() {
