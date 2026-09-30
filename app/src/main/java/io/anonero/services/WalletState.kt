@@ -390,25 +390,12 @@ class WalletState {
                 return Result.failure(Exception(AnonConfig.context?.getString(R.string.resync_daemon_required) ?: "Please connect to daemon for resync"))
             }
             if (height < 0L) return Result.failure(IllegalArgumentException("Invalid restore height"))
-            _resetSyncInProgress.set(true)
-            _resetSyncHeight.set(height)
-            wallet.isSynchronized = false
-            wallet.pauseRefresh()
             wallet.setRestoreHeight(height)
             wallet.store()
-            setLoading(true)
-
-            // Changing refresh height does not rewind an already synchronized
-            // wallet. Explicitly request the native rescan, then resume the
-            // refresh worker so the scan actually starts.
             wallet.rescanBlockchainAsync()
-            wallet.startRefresh()
-            // Explicitly wake the refresh worker even when it was already enabled.
-            wallet.refreshAsync()
+            setLoading(true)
             Result.success(true)
         } catch (e: Exception) {
-            _resetSyncInProgress.set(false)
-            _resetSyncHeight.set(-1L)
             Timber.tag(TAG).e(e, "reset sync error")
             Result.failure(e)
         }
