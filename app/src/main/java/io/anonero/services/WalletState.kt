@@ -358,11 +358,10 @@ class WalletState {
             if (height < 0L) return Result.failure(IllegalArgumentException("Invalid restore height"))
             _resetSyncInProgress.set(true)
             _resetSyncHeight.set(height)
-            // A reset starts a new native scan and must not inherit the
-            // previous synchronized state.
             wallet.isSynchronized = false
             wallet.pauseRefresh()
             wallet.setRestoreHeight(height)
+            wallet.store()
             setLoading(true)
             wallet.startRefresh()
             Result.success(true)
