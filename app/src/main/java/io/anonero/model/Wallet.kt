@@ -387,6 +387,10 @@ class Wallet {
     private external fun loadUnsignedTx(inputFile: String?): Long
 
     //virtual TransactionHistory * history() const = 0;
+    fun resetHistory() {
+        history = null
+    }
+
     fun refreshHistory() {
         // Always create the native transaction history before refreshing it.
         // The old implementation silently did nothing while history was null,
