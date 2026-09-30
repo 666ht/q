@@ -71,12 +71,14 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
 
         val status = wallet.fullStatus.connectionStatus
         val daemonHeight = wallet.getDaemonBlockChainHeight()
+        val daemonTarget = wallet.getDaemonBlockChainTargetHeight()
         val chainHeight = wallet.getBlockChainHeight()
 
         Timber.tag(name).i(
-            "refreshed() status:%s daemonHeight:%s chainHeight:%s",
+            "refreshed() status:%s daemonHeight:%s daemonTarget:%s chainHeight:%s",
             status,
             daemonHeight,
+            daemonTarget,
             chainHeight
         )
 
@@ -97,11 +99,17 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
             return
         }
 
-        // Use the same completion rule that allowed the old restore/reset flow
-        // to keep scanning until it actually caught up with the daemon. The
-        // native wallet synchronized flag can remain false for a completed
-        // refresh pass, so using it as the sole stop condition can strand the
-        // refresh worker after the first pass.
+        // The native callback is also emitted when doRefresh() skipped the
+        // wallet scan because the daemon was not ready. Never treat that as
+        // "sync complete", especially during restore, or the one-time restore
+        // rescan can be consumed before it actually runs.
+        if (daemonHeight <= 1L || daemonTarget <= 1L || daemonHeight < daemonTarget) {
+            wallet.refreshAsync()
+            return
+        }
+
+        // Keep scanning until the wallet has actually caught up with the daemon.
+        // A native refresh callback is not itself a completion signal.
         val heightDiff = daemonHeight - chainHeight
         if (heightDiff >= 2L) {
             wallet.refreshAsync()
