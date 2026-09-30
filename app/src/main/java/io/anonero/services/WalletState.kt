@@ -241,6 +241,11 @@ class WalletState {
         if (!wallet.isInitialized) return false
         return try {
             wallet.refreshHistory()
+            // refreshHistory() updates transfer records, but balance/unlockedBalance
+            // depend on the native coin cache. Refresh it after marking the wallet
+            // synchronized so the first completed sync publishes the real balance.
+            wallet.setSynchronized()
+            wallet.refreshCoins()
             val balance = wallet.balance
             val unlocked = if (AnonConfig.viewOnly) wallet.viewOnlyBalance() else wallet.unlockedBalance
             val status = wallet.fullStatus
