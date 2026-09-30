@@ -33,9 +33,10 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
 
     private fun updateSyncProgress(height: Long) {
         if (walletState.isWiping() || wallet.isSynchronized) return
+        if (height < 0L) return
 
         val daemonHeight = wallet.getDaemonBlockChainHeight()
-        if (daemonHeight <= 0L || height < 0L) return
+        if (daemonHeight <= 0L) return
 
         val resetHeight = walletState.getResetSyncHeight()
         if (walletState.isResetSyncInProgress() && resetHeight >= 0L) {
@@ -59,10 +60,9 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
 
     override fun updated() {
         if (walletState.isWiping()) return
-        // This callback is emitted from inside the native refresh operation.
-        // Do not call back into wallet.refreshHistory()/coins()/balance here.
-        // The completed refresh callback publishes the state after the native
-        // refresh operation has returned.
+        // Native emits this callback while a refresh operation is still running.
+        // Do not call refreshHistory()/balance/coins here; that would re-enter
+        // native wallet APIs from inside the native refresh callback.
         Timber.tag(name).i("updated()")
     }
 
@@ -73,11 +73,16 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
         val daemonHeight = wallet.getDaemonBlockChainHeight()
         val chainHeight = wallet.getBlockChainHeight()
 
-        Timber.tag(name).i("refreshed() status:%s daemonHeight:%s chainHeight:%s", status, daemonHeight, chainHeight)
+        Timber.tag(name).i(
+            "refreshed() status:%s daemonHeight:%s chainHeight:%s",
+            status,
+            daemonHeight,
+            chainHeight
+        )
 
         if (status === Wallet.ConnectionStatus.ConnectionStatus_Disconnected || status == null) {
-            // Never replace an active restore/reset rescan with a fresh init().
-            // The native refresh thread owns this scan until it completes.
+            // During an active restore/reset scan the native refresh worker must
+            // be allowed to reconnect itself; do not replace it with init(0).
             if (walletState.isResetSyncInProgress() || walletState.isRestoreSyncInProgress()) {
                 Timber.tag(name).i("native rescan waiting for connection")
                 return
@@ -92,15 +97,23 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
             return
         }
 
-        // Native wallet2 is authoritative about whether this refresh cycle
-        // actually synchronized the wallet. Do not infer completion from
-        // daemonHeight - chainHeight; during restore/rescan those values can
-        // temporarily be 0/0 or reflect the old cache.
-        if (!wallet.nativeSynchronized) {
-            updateSyncProgress(chainHeight)
+        // Use the same completion rule that allowed the old restore/reset flow
+        // to keep scanning until it actually caught up with the daemon. The
+        // native wallet synchronized flag can remain false for a completed
+        // refresh pass, so using it as the sole stop condition can strand the
+        // refresh worker after the first pass.
+        val heightDiff = daemonHeight - chainHeight
+        if (heightDiff >= 2L) {
+            wallet.startRefresh()
             return
         }
 
+        if (!wallet.isSynchronized) {
+            updateSyncProgress(chainHeight)
+        }
+
+        // This refresh pass has actually caught up. Mark the Java state synced,
+        // then publish native balance/history only after the JNI callback returns.
         wallet.setSynchronized()
         walletState.finishSync()
         walletState.setLoading(false)
