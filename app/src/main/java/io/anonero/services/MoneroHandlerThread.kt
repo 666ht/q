@@ -98,10 +98,10 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
         val heightDiff = daemonHeight - chainHeight
         if (heightDiff >= 2) {
             if (walletState.isRestoreSyncInProgress() || walletState.isResetSyncInProgress()) {
-                // Restore and custom-height rescan must continue the existing
-                // native refresh. Reinitializing the wallet here can restart
-                // the scan outside the requested restore height.
-                wallet.startRefresh()
+                // Restore/custom-height rescan is already owned by the native
+                // refresh/rescan operation. Do not reinitialize or restart it
+                // here, otherwise an in-progress rewind can be replaced by a
+                // normal refresh.
                 walletState.update()
                 return
             }
