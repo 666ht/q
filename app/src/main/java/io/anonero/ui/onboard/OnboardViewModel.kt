@@ -13,6 +13,7 @@ import io.anonero.util.KeyStoreHelper
 import io.anonero.util.PREFS_PASSPHRASE_HASH
 import io.anonero.util.PREFS_PIN_HASH
 import io.anonero.util.RESTORE_HEIGHT
+import io.anonero.util.RESTORE_NEEDS_RESCAN
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -179,6 +180,7 @@ class OnboardViewModel(private val prefs: SharedPreferences) : ViewModel() {
             restorePayload?.restoreHeight?.let {
                 putLong(RESTORE_HEIGHT, it)
             }
+            putBoolean(RESTORE_NEEDS_RESCAN, true)
         }
         try {
             anonWallet.close()
