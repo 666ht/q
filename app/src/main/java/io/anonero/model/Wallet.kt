@@ -255,6 +255,11 @@ class Wallet {
         isSynchronized = true
     }
 
+    // Native wallet2 owns the authoritative synchronization state.
+    val nativeSynchronized: Boolean
+        get() = isSynchronizedJ()
+
+    private external fun isSynchronizedJ(): Boolean
 
     external fun startRefresh()
     external fun pauseRefresh()
