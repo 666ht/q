@@ -115,8 +115,15 @@ class AnonWalletHandler(
                 wallet.refreshHistory()
             }
             wallet.init(0)
-            if (prefs.getLong(io.anonero.util.RESTORE_HEIGHT, 0L) != 0L) {
-                wallet.setRestoreHeight(prefs.getLong(io.anonero.util.RESTORE_HEIGHT, 0L))
+            val restoreHeight = prefs.getLong(io.anonero.util.RESTORE_HEIGHT, 0L)
+            if (restoreHeight != 0L) {
+                // recoveryWallet() already creates the native wallet with this
+                // refresh height. Keep the Java lifecycle guard so transient
+                // disconnects cannot replace the restore scan with init(0).
+                walletState.beginRestoreSync()
+                wallet.setRestoreHeight(restoreHeight)
+                wallet.store()
+                prefs.edit { remove(io.anonero.util.RESTORE_HEIGHT) }
             }
             if (wallet.isInitialized) {
                 wallet.refreshHistory()
