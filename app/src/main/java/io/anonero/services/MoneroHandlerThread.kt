@@ -60,7 +60,7 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
 
     override fun updated() {
         if (walletState.isWiping()) return
-        wallet.refresh()
+        refresh(false)
         Timber.tag(name).i("updated()")
         walletState.update()
     }
@@ -91,7 +91,7 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
                 }
                 wallet.setSynchronized()
                 wallet.store()
-                wallet.refresh()
+                refresh(true)
                 walletState.finishSync()
                 walletState.setLoading(false)
                 walletState.finishResetSync()
@@ -105,6 +105,14 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
     private fun tryRestartConnection() {
         wallet.init(0)
         wallet.startRefresh()
+        walletState.update()
+    }
+
+    private fun refresh(walletSynced: Boolean) {
+        wallet.refreshHistory()
+        if (walletSynced) {
+            wallet.refreshCoins()
+        }
         walletState.update()
     }
 
