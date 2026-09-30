@@ -363,7 +363,12 @@ class WalletState {
             wallet.setRestoreHeight(height)
             wallet.store()
             setLoading(true)
-            wallet.startRefresh()
+
+            // A custom-height reset must rescan the wallet state from the
+            // requested restore height. startRefresh() only continues the
+            // current refresh and does not rewind an already-synchronized
+            // wallet.
+            wallet.rescanBlockchainAsync()
             Result.success(true)
         } catch (e: Exception) {
             _resetSyncInProgress.set(false)
