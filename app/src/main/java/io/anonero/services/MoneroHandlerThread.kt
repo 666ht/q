@@ -13,6 +13,7 @@ class MoneroHandlerThread(
     private val onRestoreRescanFinished: (() -> Unit)? = null
 ) :
     Thread(null, null, "MoneroHandler", THREAD_STACK_SIZE), WalletListener {
+    private val restoreRescanFinished = AtomicBoolean(false)
     @Synchronized override fun start() { super.start() }
     override fun run() {}
 
