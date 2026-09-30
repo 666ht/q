@@ -246,6 +246,7 @@ class WalletState {
             // synchronized so the first completed sync publishes the real balance.
             wallet.setSynchronized()
             wallet.refreshCoins()
+            wallet.store()
             val balance = wallet.balance
             val unlocked = if (AnonConfig.viewOnly) wallet.viewOnlyBalance() else wallet.unlockedBalance
             val status = wallet.fullStatus
@@ -274,6 +275,21 @@ class WalletState {
         } catch (e: Exception) {
             Timber.tag(TAG).e(e, "publishAfterSync failed")
             false
+        }
+    }
+
+    fun publishAfterNativeRefresh() {
+        refreshScope.launch {
+            try {
+                val published = publishAfterSync()
+                Timber.tag(TAG).i(
+                    "publishAfterNativeRefresh: balance/history published=%s",
+                    published
+                )
+            } finally {
+                finishResetSync()
+                finishRestoreSync()
+            }
         }
     }
 
