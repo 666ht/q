@@ -117,39 +117,12 @@ class AnonWalletHandler(
             wallet.init(0)
             val restoreHeight = prefs.getLong(io.anonero.util.RESTORE_HEIGHT, 0L)
             if (restoreHeight != 0L) {
-                // recoveryWallet() already creates the native wallet with this
-                // refresh height. Keep the Java lifecycle guard so transient
-                // disconnects cannot replace the restore scan with init(0).
-                walletState.beginRestoreSync()
                 wallet.setRestoreHeight(restoreHeight)
-                wallet.store()
             }
             if (wallet.isInitialized) {
                 wallet.refreshHistory()
                 wallet.setTrustedDaemon(true)
-
-                if (restoreHeight != 0L) {
-                    // Newly restored wallets need one real rescan from the
-                    // requested restore height. This is the same operation
-                    // that manual "reset sync" performs, but it happens only
-                    // once here so restore completes with a single scan.
-                    wallet.rescanBlockchainAsync()
-                    wallet.startRefresh()
-                    // Consume the restore marker only after the one-time native
-                    // rescan has been requested and the refresh worker is running.
-                    prefs.edit {
-                        remove(io.anonero.util.RESTORE_HEIGHT)
-                    }
-                    Timber.tag(TAG).i(
-                        "Started one-time restore rescan from height=%s",
-                        restoreHeight
-                    )
-                } else {
-                    // Existing wallet: resume from the native persisted
-                    // refresh height without rescanning.
-                    wallet.startRefresh()
-                }
-
+                wallet.startRefresh()
                 walletState.update()
             }
         } catch (e: Exception) {
