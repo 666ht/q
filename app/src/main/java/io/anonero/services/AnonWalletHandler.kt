@@ -117,12 +117,27 @@ class AnonWalletHandler(
             wallet.init(0)
             val restoreHeight = prefs.getLong(io.anonero.util.RESTORE_HEIGHT, 0L)
             if (restoreHeight != 0L) {
+                // A restored wallet needs a real native blockchain scan from
+                // the restore height. This request is consumed by the existing
+                // refresh worker; XMR f07ba2+ clears the scan cache without
+                // embedding another refresh pass.
+                walletState.beginRestoreSync()
                 wallet.setRestoreHeight(restoreHeight)
             }
             if (wallet.isInitialized) {
                 wallet.refreshHistory()
                 wallet.setTrustedDaemon(true)
-                wallet.startRefresh()
+                if (restoreHeight != 0L) {
+                    wallet.rescanBlockchainAsync()
+                    wallet.startRefresh()
+                    prefs.edit { remove(io.anonero.util.RESTORE_HEIGHT) }
+                    Timber.tag(TAG).i(
+                        "Started one-time native restore scan from height=%s",
+                        restoreHeight
+                    )
+                } else {
+                    wallet.startRefresh()
+                }
                 walletState.update()
             }
         } catch (e: Exception) {
