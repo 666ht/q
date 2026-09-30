@@ -196,20 +196,11 @@ class WalletState {
     }
 
     fun setConnectionStatus(status: Wallet.ConnectionStatus) {
-        val previous = _previousConnectionStatus.getAndSet(status)
+        // Connection callbacks are state notifications only.
+        // Starting a native refresh here duplicates the explicit refresh started
+        // by the node-connect flow and can launch a second automatic sync.
+        _previousConnectionStatus.set(status)
         _connectionStatus.update { status }
-        if (previous == Wallet.ConnectionStatus.ConnectionStatus_Disconnected &&
-            status == Wallet.ConnectionStatus.ConnectionStatus_Connected) {
-            setLoading(true)
-            refreshScope.launch {
-                try {
-                    getWallet?.startRefresh()
-                } catch (e: Exception) {
-                    Timber.tag(TAG).e(e, "startRefresh error")
-                    setLoading(false)
-                }
-            }
-        }
     }
 
     fun updateDaemon(daemonInfo: DaemonInfo) {
