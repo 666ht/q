@@ -99,7 +99,9 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
         wallet.store()
         val published = walletState.publishAfterSync()
 
-        walletState.syncUpdate(SyncProgress(1f, 0L))
+        // Only the native refreshed() callback is allowed to end sync.
+        // Reaching daemon height in newBlock() is not sufficient.
+        walletState.completeSync()
         walletState.setLoading(false)
 
         if (!published) {
