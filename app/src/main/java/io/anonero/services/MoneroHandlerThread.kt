@@ -4,9 +4,14 @@ import io.anonero.model.PendingTransaction
 import io.anonero.model.Wallet
 import io.anonero.model.WalletListener
 import io.anonero.model.WalletManager
+import java.util.concurrent.atomic.AtomicBoolean
 import timber.log.Timber
 
-class MoneroHandlerThread(private val wallet: Wallet, private val walletState: WalletState) :
+class MoneroHandlerThread(
+    private val wallet: Wallet,
+    private val walletState: WalletState,
+    private val onRestoreRescanFinished: (() -> Unit)? = null
+) :
     Thread(null, null, "MoneroHandler", THREAD_STACK_SIZE), WalletListener {
     @Synchronized override fun start() { super.start() }
     override fun run() {}
@@ -96,6 +101,9 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
                 walletState.setLoading(false)
                 walletState.finishResetSync()
                 walletState.finishRestoreSync()
+                if (restoreRescanFinished.compareAndSet(false, true)) {
+                    onRestoreRescanFinished?.invoke()
+                }
             }
         }
 
