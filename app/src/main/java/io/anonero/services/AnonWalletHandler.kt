@@ -131,25 +131,19 @@ class AnonWalletHandler(
                 wallet.refreshHistory()
                 wallet.setTrustedDaemon(true)
 
-                if (restoreHeight != 0L) {
-                    // Recovery creates the wallet at the requested height, but
-                    // the native refresh worker still needs an explicit rescan
-                    // request to populate balance/history on the first pass.
-                    // XMR keeps this request pending until the daemon is ready.
-                    wallet.rescanBlockchainAsync()
-                    wallet.startRefresh()
+                // A recovered wallet already has its restore height inside
+                // native wallet2. Starting the normal refresh worker is the
+                // single sync pass; do not enqueue a second explicit rescan.
+                wallet.startRefresh()
 
-                    // The request is now owned by native wallet2. Do not
-                    // trigger another rescan after the first one completes.
+                if (restoreHeight != 0L) {
                     prefs.edit {
                         remove(io.anonero.util.RESTORE_HEIGHT)
                     }
                     Timber.tag(TAG).i(
-                        "Started one-time restore rescan from height=%s",
+                        "Started single restore sync from height=%s",
                         restoreHeight
                     )
-                } else {
-                    wallet.startRefresh()
                 }
 
                 walletState.update()
