@@ -76,6 +76,15 @@ class AnonWalletHandler(
         walletState.setLoading(true)
         walletState.update()
         try {
+            // A restore marker means this wallet has never completed its
+            // restore scan. Keep the restore lifecycle active before any
+            // connection callback can arrive.
+            val restoreHeight = prefs.getLong(io.anonero.util.RESTORE_HEIGHT, 0L)
+            if (restoreHeight != 0L) {
+                walletState.beginRestoreSync()
+                Timber.tag(TAG).i("Restore scan pending from height=%s", restoreHeight)
+            }
+
             val host = prefs.getString(NodeFields.RPC_HOST.value, "")
             val rpcPort = prefs.getInt(NodeFields.RPC_PORT.value, Node.defaultRpcPort)
             val rpcUsername = prefs.getString(NodeFields.RPC_USERNAME.value, "")
@@ -115,14 +124,34 @@ class AnonWalletHandler(
                 wallet.refreshHistory()
             }
             wallet.init(0)
-            val restoreHeight = prefs.getLong(io.anonero.util.RESTORE_HEIGHT, 0L)
             if (restoreHeight != 0L) {
                 wallet.setRestoreHeight(restoreHeight)
             }
             if (wallet.isInitialized) {
                 wallet.refreshHistory()
                 wallet.setTrustedDaemon(true)
-                wallet.startRefresh()
+
+                if (restoreHeight != 0L) {
+                    // Recovery creates the wallet at the requested height, but
+                    // the native refresh worker still needs an explicit rescan
+                    // request to populate balance/history on the first pass.
+                    // XMR keeps this request pending until the daemon is ready.
+                    wallet.rescanBlockchainAsync()
+                    wallet.startRefresh()
+
+                    // The request is now owned by native wallet2. Do not
+                    // trigger another rescan after the first one completes.
+                    prefs.edit {
+                        remove(io.anonero.util.RESTORE_HEIGHT)
+                    }
+                    Timber.tag(TAG).i(
+                        "Started one-time restore rescan from height=%s",
+                        restoreHeight
+                    )
+                } else {
+                    wallet.startRefresh()
+                }
+
                 walletState.update()
             }
         } catch (e: Exception) {
