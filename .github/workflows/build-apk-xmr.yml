@@ -8,7 +8,7 @@ on:
 # Rapid source changes should not start multiple expensive native builds in parallel.
 # A newer main build supersedes an older one before it can consume runner time.
 concurrency:
-  group: build-apk-\${{ github.ref }}
+  group: build-apk-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
