@@ -60,9 +60,10 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
 
     override fun updated() {
         if (walletState.isWiping()) return
-        // Native emits this callback while a refresh operation is still running.
-        // Do not call refreshHistory()/balance/coins here; that would re-enter
-        // native wallet APIs from inside the native refresh callback.
+        // Native wallet2 refreshes its history cache before the listener callback.
+        // Publish the current Java state on every native update so a restored
+        // wallet does not wait for a second manual resync to expose balance/history.
+        walletState.update()
         Timber.tag(name).i("updated()")
     }
 
@@ -71,14 +72,12 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
 
         val status = wallet.fullStatus.connectionStatus
         val daemonHeight = wallet.getDaemonBlockChainHeight()
-        val daemonTarget = wallet.getDaemonBlockChainTargetHeight()
         val chainHeight = wallet.getBlockChainHeight()
 
         Timber.tag(name).i(
-            "refreshed() status:%s daemonHeight:%s daemonTarget:%s chainHeight:%s",
+            "refreshed() status:%s daemonHeight:%s chainHeight:%s",
             status,
             daemonHeight,
-            daemonTarget,
             chainHeight
         )
 
@@ -96,15 +95,6 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
             } else {
                 walletState.setLoading(false)
             }
-            return
-        }
-
-        // The native callback is also emitted when doRefresh() skipped the
-        // wallet scan because the daemon was not ready. Never treat that as
-        // "sync complete", especially during restore, or the one-time restore
-        // rescan can be consumed before it actually runs.
-        if (daemonHeight <= 1L || daemonTarget <= 1L || daemonHeight < daemonTarget) {
-            wallet.refreshAsync()
             return
         }
 
@@ -138,6 +128,9 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
         // This refresh pass has actually caught up. Mark the Java state synced,
         // then publish native balance/history only after the JNI callback returns.
         wallet.setSynchronized()
+        // Publish once immediately from the native cache, then run the
+        // post-callback refresh outside the native callback thread.
+        walletState.update()
         walletState.finishSync()
         walletState.setLoading(false)
         walletState.publishAfterNativeRefresh()
