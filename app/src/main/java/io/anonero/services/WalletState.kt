@@ -403,6 +403,8 @@ class WalletState {
             // refresh worker so the scan actually starts.
             wallet.rescanBlockchainAsync()
             wallet.startRefresh()
+            // Explicitly wake the refresh worker even when it was already enabled.
+            wallet.refreshAsync()
             Result.success(true)
         } catch (e: Exception) {
             _resetSyncInProgress.set(false)
