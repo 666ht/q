@@ -217,19 +217,25 @@ class WalletState {
     }
 
     fun syncUpdate(syncProgress: SyncProgress) {
-        val done = syncProgress.progress >= 1f || syncProgress.left <= 0L
-        _syncProgress.update { if (done) null else syncProgress }
-        _isSyncing.set(!done)
-        if (done) {
-            // The native refresh has reached the daemon height. Keep both the
-            // visible status and the previous-status tracker in sync. Without
-            // this, the next native Connected callback looks like a new
-            // Disconnected -> Connected transition and setConnectionStatus()
-            // starts a second wallet refresh immediately after first sync.
-            val connected = Wallet.ConnectionStatus.ConnectionStatus_Connected
-            _previousConnectionStatus.set(connected)
-            _connectionStatus.update { connected }
-        }
+        // Reaching daemon height is only scan-progress information. Do not mark
+        // synchronization complete here: the native wallet can still be
+        // finalizing the refresh and rebuilding balance/history. Completion is
+        // signaled only by MoneroHandlerThread.refreshed().
+        _syncProgress.update { syncProgress }
+        _isSyncing.set(true)
+    }
+
+    fun completeSync() {
+        if (_isWiping.get()) return
+        _syncProgress.update { null }
+        _isSyncing.set(false)
+
+        // Keep both status trackers in sync. Otherwise the next native
+        // Connected callback can look like a fresh Disconnected -> Connected
+        // transition and trigger another wallet refresh.
+        val connected = Wallet.ConnectionStatus.ConnectionStatus_Connected
+        _previousConnectionStatus.set(connected)
+        _connectionStatus.update { connected }
     }
 
     /**
