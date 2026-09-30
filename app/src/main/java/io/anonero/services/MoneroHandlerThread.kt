@@ -95,22 +95,24 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
             return
         }
 
-        // Keep scanning until the wallet has actually caught up with the daemon.
-        // A native refresh callback is not itself a completion signal.
-        val heightDiff = daemonHeight - chainHeight
-        if (heightDiff >= 2L) {
-            wallet.refreshAsync()
+        // The native callback is fired after each refresh attempt, including
+        // attempts that were skipped because the daemon was not ready yet.
+        // Only the native wallet's own synchronized flag means the restore
+        // scan actually completed. Do not manufacture a second refresh here;
+        // the existing native refresh worker remains enabled and will retry.
+        if (!wallet.nativeSynchronized) {
+            if (!wallet.isSynchronized) {
+                updateSyncProgress(chainHeight)
+            }
+            Timber.tag(name).i(
+                "refreshed() native sync not complete; waiting for native refresh worker"
+            )
             return
         }
 
-        if (!wallet.isSynchronized) {
-            updateSyncProgress(chainHeight)
-        }
-
-        // This refresh pass has actually caught up. Mark the Java state synced,
-        // then publish native balance/history only after the JNI callback returns.
+        // Native wallet2 has completed the actual scan. Now publish the balance
+        // and transaction history once, without starting another sync pass.
         wallet.setSynchronized()
-        walletState.update()
         walletState.finishSync()
         walletState.setLoading(false)
         walletState.publishAfterNativeRefresh()
