@@ -45,6 +45,10 @@ class WalletState {
     private var _resetSyncInProgress = AtomicBoolean(false)
     private val _resetSyncHeight = AtomicLong(-1L)
     private var _restoreSyncInProgress = AtomicBoolean(false)
+    // A restored wallet needs one extra rescan pass after the first native
+    // refresh. This is the same operation that used to be done manually by
+    // pressing "reset sync" once after restore.
+    private var _restoreSecondPassPending = AtomicBoolean(false)
     private val _backgroundSync = MutableStateFlow(false)
     private val _isWiping = AtomicBoolean(false)
     private val _incomingTx = MutableSharedFlow<Unit>(extraBufferCapacity = 8)
@@ -147,10 +151,22 @@ class WalletState {
     fun isResetSyncInProgress(): Boolean = _resetSyncInProgress.get()
     fun getResetSyncHeight(): Long = _resetSyncHeight.get()
 
-    fun beginRestoreSync() { _restoreSyncInProgress.set(true) }
-    fun startRestoreSync() { _restoreSyncInProgress.set(true) }
+    fun beginRestoreSync() {
+        _restoreSyncInProgress.set(true)
+        _restoreSecondPassPending.set(true)
+    }
+
+    fun startRestoreSync() {
+        _restoreSyncInProgress.set(true)
+        _restoreSecondPassPending.set(true)
+    }
+
     fun isRestoreSyncInProgress(): Boolean = _restoreSyncInProgress.get()
-    fun finishRestoreSync() { _restoreSyncInProgress.set(false) }
+
+    fun finishRestoreSync() {
+        _restoreSyncInProgress.set(false)
+        _restoreSecondPassPending.set(false)
+    }
 
     fun finishResetSync() {
         _resetSyncInProgress.set(false)
@@ -286,15 +302,49 @@ class WalletState {
 
     fun publishAfterNativeRefresh() {
         refreshScope.launch {
+            var startedRestoreSecondPass = false
             try {
                 val published = publishAfterSync()
                 Timber.tag(TAG).i(
                     "publishAfterNativeRefresh: balance/history published=%s",
                     published
                 )
+
+                // A restored wallet can finish its first native refresh without
+                // exposing the discovered outputs/history. Run one additional
+                // rescan from the same restore height, exactly like the manual
+                // "reset sync" action that makes the data appear.
+                if (isRestoreSyncInProgress() &&
+                    _restoreSecondPassPending.compareAndSet(true, false)
+                ) {
+                    val wallet = getWallet
+                    val restoreHeight = wallet?.getRestoreHeight() ?: 0L
+                    if (wallet == null || !wallet.isInitialized || restoreHeight <= 0L) {
+                        Timber.tag(TAG).w(
+                            "restore second pass skipped: wallet=%s initialized=%s height=%s",
+                            wallet != null,
+                            wallet?.isInitialized,
+                            restoreHeight
+                        )
+                    } else {
+                        wallet.setRestoreHeight(restoreHeight)
+                        wallet.store()
+                        setLoading(true)
+                        wallet.rescanBlockchainAsync()
+                        startedRestoreSecondPass = true
+                        Timber.tag(TAG).i(
+                            "restore second pass started from height=%s",
+                            restoreHeight
+                        )
+                    }
+                }
+            } catch (e: Exception) {
+                Timber.tag(TAG).e(e, "publishAfterNativeRefresh failed")
             } finally {
-                finishResetSync()
-                finishRestoreSync()
+                if (!startedRestoreSecondPass) {
+                    finishResetSync()
+                    finishRestoreSync()
+                }
             }
         }
     }
