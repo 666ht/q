@@ -8,13 +8,7 @@ import timber.log.Timber
 
 class MoneroHandlerThread(private val wallet: Wallet, private val walletState: WalletState) :
     Thread(null, null, "MoneroHandler", THREAD_STACK_SIZE), WalletListener {
-
-
-    @Synchronized
-    override fun start() {
-        super.start()
-    }
-
+    @Synchronized override fun start() { super.start() }
     override fun run() {}
 
     override fun moneySpent(txId: String?, amount: Long) {
@@ -43,19 +37,14 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
     private fun updateSyncProgress(height: Long) {
         if (walletState.isWiping() || wallet.isSynchronized) return
         val syncHeight = wallet.getBlockChainHeight()
-        val deamonHeight = wallet.getDaemonBlockChainHeight()
-        val left = deamonHeight - syncHeight
+        val daemonHeight = wallet.getDaemonBlockChainHeight()
+        val left = daemonHeight - syncHeight
         if (syncHeight < 0 || left < 0) return
         val resetHeight = walletState.getResetSyncHeight()
         val progress = if (walletState.isResetSyncInProgress() && resetHeight >= 0L) {
-            val total = deamonHeight - resetHeight
-            if (total <= 0L) {
-                1f
-            } else {
-                ((height - resetHeight).toDouble() / total.toDouble())
-                    .coerceIn(0.0, 1.0)
-                    .toFloat()
-            }
+            val total = daemonHeight - resetHeight
+            if (total <= 0L) 1f
+            else ((height - resetHeight).toDouble() / total.toDouble()).coerceIn(0.0, 1.0).toFloat()
         } else if (wallet.getDaemonBlockChainTargetHeight().toDouble() == 0.0) {
             1f
         } else {
@@ -78,15 +67,8 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
         val daemonHeight = wallet.getDaemonBlockChainHeight()
         val chainHeight = wallet.getBlockChainHeight()
 
-        Timber.tag(name).i(
-            "refreshed() status:%s daemonHeight:%s chainHeight:%s",
-            status,
-            daemonHeight,
-            chainHeight
-        )
+        Timber.tag(name).i("refreshed() status:%s daemonHeight:%s chainHeight:%s", status, daemonHeight, chainHeight)
 
-        // Match upstream ANONERO: only reconnect when a node is selected.
-        // With no daemon address, stay disconnected instead of spinning init().
         if (status === Wallet.ConnectionStatus.ConnectionStatus_Disconnected || status == null) {
             val daemonAddress = WalletManager.instance?.getDaemonAddress()
             if (!daemonAddress.isNullOrBlank()) {
@@ -100,29 +82,24 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
 
         val heightDiff = daemonHeight - chainHeight
         if (heightDiff >= 2) {
-            // Upstream: continue the existing refresh thread. Do NOT re-init
-            // on every tick — that drops status to Disconnected and blocks
-            // reaching the completion path that publishes balance/history.
             wallet.startRefresh()
-            // Keep observers current while still catching up (updated()
-            // may not fire often enough on some nodes).
             refresh(false)
             return
         }
 
-        // heightDiff < 2: native refresh completed for this pass.
-        if (!wallet.isSynchronized) {
-            updateSyncProgress(chainHeight)
-        }
+        if (!wallet.isSynchronized) updateSyncProgress(chainHeight)
 
         wallet.setSynchronized()
         wallet.store()
 
-        refresh(true)
-        walletState.update()
+        // The native refresh is complete here. Read the freshly refreshed
+        // native balance/history in one explicit publication step so restore
+        // and custom-height rescan do not depend on another callback.
+        val published = walletState.publishAfterSync()
+        Timber.tag(name).i("sync complete: balance/history published=%s", published)
+
         walletState.finishResetSync()
         walletState.finishRestoreSync()
-
         walletState.syncUpdate(SyncProgress(1f, 0L))
         walletState.setLoading(false)
     }
@@ -139,9 +116,7 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
         walletState.update()
     }
 
-    fun sendTx(pendingTx: PendingTransaction): Boolean {
-        return pendingTx.commit("", true)
-    }
+    fun sendTx(pendingTx: PendingTransaction): Boolean = pendingTx.commit("", true)
 
     interface Listener {
         fun onRefresh(walletSynced: Boolean)
