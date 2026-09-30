@@ -60,10 +60,9 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
 
     override fun updated() {
         if (walletState.isWiping()) return
-        // Native emits this callback while a refresh operation is still running.
-        // Do not call refreshHistory()/balance/coins here; that would re-enter
-        // native wallet APIs from inside the native refresh callback.
+        refresh(false)
         Timber.tag(name).i("updated()")
+        walletState.update()
     }
 
     override fun refreshed() {
@@ -71,60 +70,36 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
 
         val status = wallet.fullStatus.connectionStatus
         val daemonHeight = wallet.getDaemonBlockChainHeight()
-        val daemonTarget = wallet.getDaemonBlockChainTargetHeight()
         val chainHeight = wallet.getBlockChainHeight()
 
         Timber.tag(name).i(
-            "refreshed() status:%s daemonHeight:%s daemonTarget:%s chainHeight:%s",
+            "refreshed() status:%s daemonHeight:%s chainHeight:%s",
             status,
             daemonHeight,
-            daemonTarget,
             chainHeight
         )
 
         if (status === Wallet.ConnectionStatus.ConnectionStatus_Disconnected || status == null) {
-            // During an active restore/reset scan the native refresh worker must
-            // be allowed to reconnect itself; do not replace it with init(0).
-            if (walletState.isResetSyncInProgress() || walletState.isRestoreSyncInProgress()) {
-                Timber.tag(name).i("native rescan waiting for connection")
-                return
-            }
-
-            val daemonAddress = WalletManager.instance?.getDaemonAddress()
-            if (!daemonAddress.isNullOrBlank()) {
+            tryRestartConnection()
+        } else {
+            val heightDiff = daemonHeight - chainHeight
+            if (heightDiff >= 2L) {
                 tryRestartConnection()
             } else {
+                if (!wallet.isSynchronized) {
+                    updateSyncProgress(chainHeight)
+                }
+                wallet.setSynchronized()
+                wallet.store()
+                refresh(true)
+                walletState.finishSync()
                 walletState.setLoading(false)
+                walletState.finishResetSync()
+                walletState.finishRestoreSync()
             }
-            return
         }
 
-        // A native refresh callback does not mean the wallet scan completed.
-        // Do not start another refresh from inside the callback. Native wallet2
-        // keeps the existing refresh worker alive and will perform its next
-        // normal cycle.
-        if (!wallet.nativeSynchronized) {
-            if (!wallet.isSynchronized) {
-                updateSyncProgress(chainHeight)
-            }
-            Timber.tag(name).i(
-                "refreshed() native sync incomplete; waiting for existing refresh worker"
-            )
-            return
-        }
-
-        // Match the upstream completion order: the native refresh has
-        // completed, so publish its freshly updated caches synchronously.
-        // These calls do not start another blockchain sync.
-        wallet.setSynchronized()
-        wallet.store()
-        wallet.refreshHistory()
-        wallet.refreshCoins()
-        walletState.finishSync()
-        walletState.setLoading(false)
         walletState.update()
-        walletState.finishResetSync()
-        walletState.finishRestoreSync()
     }
 
     private fun tryRestartConnection() {
