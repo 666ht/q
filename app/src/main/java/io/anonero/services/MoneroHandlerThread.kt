@@ -3,7 +3,6 @@ package io.anonero.services
 import io.anonero.model.PendingTransaction
 import io.anonero.model.Wallet
 import io.anonero.model.WalletListener
-import io.anonero.model.WalletManager
 import timber.log.Timber
 
 class MoneroHandlerThread(private val wallet: Wallet, private val walletState: WalletState) :
@@ -18,14 +17,11 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
     override fun moneyReceived(txId: String?, amount: Long) {
         if (walletState.isWiping()) return
         Timber.tag(name).i("moneyReceived: %s", amount)
-        WalletManager.instance?.wallet?.store()
-        refresh(false)
     }
 
     override fun unconfirmedMoneyReceived(txId: String?, amount: Long) {
         if (walletState.isWiping()) return
         Timber.tag(name).i("unconfirmedMoneyReceived: %s", amount)
-        refresh(false)
     }
 
     override fun newBlock(height: Long) {
@@ -55,9 +51,11 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
 
     override fun updated() {
         if (walletState.isWiping()) return
-        refresh(false)
+        // This callback is emitted from inside the native refresh operation.
+        // Do not call back into wallet.refreshHistory()/coins()/balance here.
+        // The completed refresh callback publishes the state after the native
+        // refresh operation has returned.
         Timber.tag(name).i("updated()")
-        walletState.update()
     }
 
     override fun refreshed() {
@@ -70,49 +68,43 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
         Timber.tag(name).i("refreshed() status:%s daemonHeight:%s chainHeight:%s", status, daemonHeight, chainHeight)
 
         if (status === Wallet.ConnectionStatus.ConnectionStatus_Disconnected || status == null) {
+            // Never replace an active restore/reset rescan with a fresh init().
+            // The native refresh thread owns this scan until it completes.
+            if (walletState.isResetSyncInProgress() || walletState.isRestoreSyncInProgress()) {
+                Timber.tag(name).i("native rescan waiting for connection")
+                return
+            }
+
             val daemonAddress = WalletManager.instance?.getDaemonAddress()
             if (!daemonAddress.isNullOrBlank()) {
                 tryRestartConnection()
             } else {
                 walletState.setLoading(false)
-                walletState.update()
             }
             return
         }
 
         val heightDiff = daemonHeight - chainHeight
         if (heightDiff >= 2) {
-            wallet.startRefresh()
-            refresh(false)
+            // The native refresh thread is already scanning. Re-starting it and
+            // refreshing history from this callback only creates re-entrant work.
             return
         }
 
         if (!wallet.isSynchronized) updateSyncProgress(chainHeight)
 
+        // Native wallet refresh has completed. Mark synchronization done now,
+        // then publish balance/history asynchronously after this JNI callback
+        // returns to native code.
         wallet.setSynchronized()
-        wallet.store()
-
-        // The native refresh is complete here. Read the freshly refreshed
-        // native balance/history in one explicit publication step so restore
-        // and custom-height rescan do not depend on another callback.
-        val published = walletState.publishAfterSync()
-        Timber.tag(name).i("sync complete: balance/history published=%s", published)
-
-        walletState.finishResetSync()
-        walletState.finishRestoreSync()
         walletState.syncUpdate(SyncProgress(1f, 0L))
         walletState.setLoading(false)
+        walletState.publishAfterNativeRefresh()
     }
 
     private fun tryRestartConnection() {
         wallet.init(0)
         wallet.startRefresh()
-        walletState.update()
-    }
-
-    private fun refresh(walletSynced: Boolean) {
-        wallet.refreshHistory()
-        if (walletSynced) wallet.refreshCoins()
         walletState.update()
     }
 
