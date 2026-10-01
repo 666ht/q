@@ -586,7 +586,7 @@ fun TransactionScreen(
                                             )
                                             append("XMR")
                                             pop()
-                                            append("管理")
+                                            append(" 管理")
                                         }
                                     )
                                 },
