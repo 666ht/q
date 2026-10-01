@@ -309,18 +309,59 @@ class WalletState {
 
     fun resetSyncFromHeight(height: Long): Result<Boolean> = try {
         val wallet = getWallet ?: return Result.failure(Exception("Wallet not initialized"))
-        if (wallet.fullStatus.connectionStatus != Wallet.ConnectionStatus.ConnectionStatus_Connected) return Result.failure(Exception("Please connect to daemon for resync"))
-        if (height < 0L) return Result.failure(IllegalArgumentException("Invalid restore height"))
-        wallet.setRestoreHeight(height)
-        wallet.store()
-        AnonConfig.context?.getSharedPreferences(AnonConfig.PREFS, android.content.Context.MODE_PRIVATE)?.edit()
-            ?.putLong(RESTORE_HEIGHT, height)
-            ?.apply()
-        setLoading(true)
-        wallet.rescanBlockchainAsync()
+        if (wallet.fullStatus.connectionStatus != Wallet.ConnectionStatus.ConnectionStatus_Connected) {
+            return Result.failure(Exception("Please connect to daemon for resync"))
+        }
+        if (height < 0L) {
+            return Result.failure(IllegalArgumentException("Invalid restore height"))
+        }
+
+        // Stop the current refresh before changing the restore height.
+        // This prevents an in-flight refresh from continuing with the old start height.
+        wallet.pauseRefresh()
+        try {
+            wallet.setRestoreHeight(height)
+
+            // Native background-wallet mode can silently reject setRestoreHeight().
+            // Verify the value immediately so we never report a false successful reset.
+            val actualHeight = wallet.getRestoreHeight()
+            if (actualHeight != height) {
+                return Result.failure(
+                    IllegalStateException(
+                        "Restore height was not applied: requested=$height actual=$actualHeight"
+                    )
+                )
+            }
+
+            if (!wallet.store()) {
+                return Result.failure(Exception("Failed to save restore height"))
+            }
+
+            val prefs = AnonConfig.context?.getSharedPreferences(
+                AnonConfig.PREFS,
+                android.content.Context.MODE_PRIVATE
+            )
+            if (prefs != null) {
+                prefs.edit()
+                    .putLong(RESTORE_HEIGHT, height)
+                    .commit()
+            }
+
+            setLoading(true)
+            wallet.rescanBlockchainAsync()
+        } finally {
+            // Resume normal wallet refresh after the rescan request is queued.
+            wallet.startRefresh()
+        }
+
+        Timber.tag(TAG).i(
+            "Reset sync from custom height: requested=%d actual=%d",
+            height,
+            wallet.getRestoreHeight()
+        )
         Result.success(true)
     } catch (e: Exception) {
-        Timber.tag(TAG).e(e)
+        Timber.tag(TAG).e(e, "Failed to reset sync from custom height: %d", height)
         Result.failure(e)
     }
 
