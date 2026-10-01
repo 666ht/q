@@ -578,7 +578,18 @@ fun TransactionScreen(
                             onDismissRequest = { showMenu = false }
                         ) {
                             DropdownMenuItem(
-                                text = { Text(stringResource(R.string.coin_control)) },
+                                text = {
+                                    androidx.compose.foundation.text.BasicText(
+                                        androidx.compose.ui.text.buildAnnotatedString {
+                                            pushStyle(
+                                                androidx.compose.ui.text.SpanStyle(fontFamily = customXmrFont)
+                                            )
+                                            append("XMR")
+                                            pop()
+                                            append("管理")
+                                        }
+                                    )
+                                },
                                 onClick = {
                                     navigateTo(CoinsScreenRoute)
                                 }
