@@ -37,14 +37,16 @@ class Subaddress(
 
     val displayLabel: String
         get() {
-            if (addressIndex == 0) return "主地址 0"
-
+            val defaultBaseLabel = if (addressIndex == 0) "主地址" else "子地址"
             val baseLabel = if (
                 label.isEmpty() ||
                 DEFAULT_LABEL_FORMATTER.matcher(label).matches() ||
-                label.matches(Regex("""(?i).*\b(primary\s+address|subaddress|address)\b.*"""))
+                label.matches(
+                    Regex("""(?i).*\b(primary\s+address|primary\s+account|subaddress|address)\b.*""")
+                ) ||
+                (addressIndex == 0 && label == "主地址")
             ) {
-                "子地址"
+                defaultBaseLabel
             } else {
                 label.replace(Regex("""\s*[#＃]?\s*\d+$"""), "")
             }
