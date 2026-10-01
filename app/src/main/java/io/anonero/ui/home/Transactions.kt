@@ -64,6 +64,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
@@ -735,21 +736,24 @@ fun TransactionScreen(
                     ) {
                         val transaction = transactions[it + 1]
                         with(sharedTransitionScope) {
-                            TransactionItem(
-                                transaction,
-                                hideAmounts = hideAmounts,
-                                showBorder = false,
-                                onClick = { onItemClick(transaction) },
-                                modifier = Modifier
-                                    .zIndex(if (it == 0) 3f else 0f)
-                                    .offset(y = (-(it + 1) * 65).dp)
-                                    .sharedElement(
-                                        sharedTransitionScope.rememberSharedContentState(
-                                            key = transaction.hash.orEmpty(),
-                                        ),
-                                        animatedVisibilityScope = animatedContentScope
-                                    )
-                            )
+                            OverlappingTransactionItem(
+                                overlap = 65.dp,
+                                modifier = Modifier.zIndex(if (it == 0) 3f else 0f)
+                            ) {
+                                TransactionItem(
+                                    transaction,
+                                    hideAmounts = hideAmounts,
+                                    showBorder = false,
+                                    onClick = { onItemClick(transaction) },
+                                    modifier = Modifier
+                                        .sharedElement(
+                                            sharedTransitionScope.rememberSharedContentState(
+                                                key = transaction.hash.orEmpty(),
+                                            ),
+                                            animatedVisibilityScope = animatedContentScope
+                                        )
+                                )
+                            }
                         }
                     }
                 }
@@ -758,6 +762,28 @@ fun TransactionScreen(
     }
 }
 
+
+@Composable
+private fun OverlappingTransactionItem(
+    overlap: androidx.compose.ui.unit.Dp,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    Layout(
+        modifier = modifier.fillMaxWidth(),
+        content = content,
+    ) { measurables, constraints ->
+        val placeable = measurables.single().measure(
+            constraints.copy(minWidth = constraints.maxWidth)
+        )
+        val overlapPx = overlap.roundToPx()
+        val itemHeight = (placeable.height - overlapPx).coerceAtLeast(1)
+
+        layout(placeable.width, itemHeight) {
+            placeable.placeRelative(0, -overlapPx)
+        }
+    }
+}
 
 @Composable
 fun TransactionItem(tx: TransactionInfo, hideAmounts: Boolean = false, modifier: Modifier = Modifier, onClick: (() -> Unit)? = null, rightAlignAmount: Boolean = true, showTime: Boolean = false, timePattern: String = "dd/MM\nHH:mm", timeZone: ZoneId = ZoneId.systemDefault(), upstreamLayout: Boolean = false, showBorder: Boolean = true) {
