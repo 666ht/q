@@ -35,7 +35,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.rememberTextMeasurer
@@ -57,27 +56,26 @@ private fun FullWidthMiddleHiddenValue(
     style: TextStyle,
 ) {
     val textMeasurer = rememberTextMeasurer()
-    val density = LocalDensity.current
-    val outputOnePrefixWidth = with(density) {
-        textMeasurer.measure("输出 ", style).size.width.toDp()
-    }
 
-    Box(modifier = Modifier.fillMaxWidth()) {
+    androidx.compose.foundation.layout.Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.Top
+    ) {
         Text(
             text = label,
             modifier = Modifier.size(width = 52.dp, height = 24.dp),
-            style = style
+            style = style,
+            textAlign = TextAlign.Start
         )
         BoxWithConstraints(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(start = outputOnePrefixWidth)
+            modifier = Modifier.weight(1f)
         ) {
             if (expanded) {
                 Text(
                     text = value,
                     modifier = Modifier.fillMaxWidth(),
                     style = style,
+                    textAlign = TextAlign.Start,
                     softWrap = true,
                     overflow = TextOverflow.Clip
                 )
@@ -112,6 +110,7 @@ private fun FullWidthMiddleHiddenValue(
                     text = best,
                     modifier = Modifier.fillMaxWidth(),
                     style = style,
+                    textAlign = TextAlign.Start,
                     maxLines = 1,
                     softWrap = false,
                     overflow = TextOverflow.Clip
