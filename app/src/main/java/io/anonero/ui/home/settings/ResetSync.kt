@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -88,27 +89,32 @@ fun ResetSyncPage(
             androidx.compose.foundation.layout.Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(96.dp)
+                    .weight(1.5f)
                     .padding(bottom = 8.dp),
                 contentAlignment = androidx.compose.ui.Alignment.Center
             ) {
-                AnonOutlineButton(
-                onClick = {
-                    val restoreHeight = height.toLongOrNull()
-                    if (restoreHeight == null) {
-                        error = "请输入有效高度或日期"
-                        return@AnonOutlineButton
-                    }
-                    val result = walletState.resetSyncFromHeight(restoreHeight)
-                    if (result.isSuccess) {
-                        onBackPress()
-                    } else {
-                        error = result.exceptionOrNull()?.message ?: "重置失败"
-                    }
-                },
-                    modifier = Modifier.fillMaxWidth(.9f)
+                androidx.compose.foundation.layout.Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally
                 ) {
-                    Text("重置")
+                    AnonOutlineButton(
+                        onClick = {
+                            val restoreHeight = height.toLongOrNull()
+                            if (restoreHeight == null) {
+                                error = "请输入有效高度或日期"
+                                return@AnonOutlineButton
+                            }
+                            val result = walletState.resetSyncFromHeight(restoreHeight)
+                            if (result.isSuccess) {
+                                onBackPress()
+                            } else {
+                                error = result.exceptionOrNull()?.message ?: "重置失败"
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(.9f)
+                    ) {
+                        Text("重置")
+                    }
                 }
             }
         }
