@@ -39,6 +39,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.unit.offset
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
@@ -135,7 +136,7 @@ fun CoinsScreen(
         },
         topBar = {
             TopAppBar(
-                title = { XmrText(text = "XMR", fontSize = 30.sp) },
+                title = { XmrText(text = "XMR", fontSize = 30.sp, modifier = Modifier.offset(y = (-2).dp)) },
                 navigationIcon = {
                     IconButton(onClick = onBackPress) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
