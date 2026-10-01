@@ -585,6 +585,7 @@ fun TransactionScreen(
                                                 androidx.compose.ui.text.SpanStyle(fontFamily = customXmrFont,
                                                     fontSize = 18.sp
                                                 )
+                                            )
                                             append("XMR")
                                             pop()
                                             append(" 管理")
