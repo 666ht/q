@@ -748,19 +748,11 @@ Java_io_anonero_model_WalletManager_resolveOpenAlias(JNIEnv *env, jobject instan
 JNIEXPORT jboolean JNICALL
 Java_io_anonero_model_WalletManager_setProxyJ(JNIEnv *env, jobject instance,
                                               jstring address) {
-    if (address == nullptr) {
-        return JNI_FALSE;
-    }
-
     const char *_address = env->GetStringUTFChars(address, nullptr);
-    if (_address == nullptr) {
-        return JNI_FALSE;
-    }
-
     bool rc =
             Monero::WalletManagerFactory::getWalletManager()->setProxy(std::string(_address));
     env->ReleaseStringUTFChars(address, _address);
-    return rc ? JNI_TRUE : JNI_FALSE;
+    return rc;
 }
 
 
