@@ -1,7 +1,6 @@
 package io.anonero.ui.home
 
 import AnonNeroTheme
-import android.graphics.Typeface
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.slideInVertically
@@ -40,9 +39,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
@@ -68,10 +65,6 @@ fun CoinsScreen(
     onCoinClick: (CoinsInfo) -> Unit = {},
 ) {
     val walletState: WalletState by inject(WalletState::class.java)
-    val context = LocalContext.current
-    val customXmrFont = remember {
-        FontFamily(Typeface.createFromAsset(context.assets, "160ee2f7b959256f6a2e09db2fa9060b.ttf"))
-    }
     val coins by walletState.coins.collectAsState(arrayListOf())
     val hideAmounts by walletState.hideAmountsFlow.collectAsState(false)
     var selectedCoins by remember { mutableStateOf(selected) }
@@ -166,14 +159,9 @@ fun CoinsScreen(
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Text(
-                                modifier = Modifier.padding(start = 2.dp),
                                 color = MaterialTheme.colorScheme.primary,
-                                fontFamily = customXmrFont,
-                                fontSize = 18.sp
+                                fontWeight = FontWeight.SemiBold
                             )
-                            Text(
-                                "XMR ${index + 1}",
-                                color = MaterialTheme.colorScheme.primary,
                             )
                             Text(
                                 if (hideAmounts) Formats.maskAmount(coin.amount) else Formats.getDisplayAmount(coin.amount),
