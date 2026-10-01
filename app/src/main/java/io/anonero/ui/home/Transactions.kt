@@ -582,8 +582,9 @@ fun TransactionScreen(
                                     Text(
                                         androidx.compose.ui.text.buildAnnotatedString {
                                             pushStyle(
-                                                androidx.compose.ui.text.SpanStyle(fontFamily = customXmrFont)
-                                            )
+                                                androidx.compose.ui.text.SpanStyle(fontFamily = customXmrFont,
+                                                    fontSize = 18.sp
+                                                )
                                             append("XMR")
                                             pop()
                                             append(" 管理")
