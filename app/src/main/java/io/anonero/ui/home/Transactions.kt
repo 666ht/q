@@ -579,7 +579,7 @@ fun TransactionScreen(
                         ) {
                             DropdownMenuItem(
                                 text = {
-                                    androidx.compose.foundation.text.BasicText(
+                                    Text(
                                         androidx.compose.ui.text.buildAnnotatedString {
                                             pushStyle(
                                                 androidx.compose.ui.text.SpanStyle(fontFamily = customXmrFont)
