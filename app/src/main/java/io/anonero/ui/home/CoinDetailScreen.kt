@@ -47,7 +47,7 @@ private fun abbreviatedValue(value: String, maxChars: Int): String {
     val available = (maxChars - 3).coerceAtLeast(2)
     val left = available / 2
     val right = available - left
-    return value.take(left) + "..." + value.takeLast(right)
+    return value.take(left) + "…" + value.takeLast(right)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -145,10 +145,10 @@ fun CoinDetailScreen(
                     Text(
                         text = coin?.let { if (pubKeyState == 1) it.pub_key else abbreviatedValue(it.pub_key, 32) } ?: "____",
                         modifier = Modifier.weight(1f),
-                        textAlign = if (pubKeyState == 1) TextAlign.Start else TextAlign.End,
+                        textAlign = TextAlign.Start,
                         maxLines = if (pubKeyState == 1) Int.MAX_VALUE else 1,
                         softWrap = pubKeyState == 1,
-                        overflow = if (pubKeyState == 1) TextOverflow.Clip else TextOverflow.Ellipsis,
+                        overflow = TextOverflow.Clip,
                         style = MaterialTheme.typography.titleMedium
                     )
                 }
@@ -166,10 +166,10 @@ fun CoinDetailScreen(
                     Text(
                         text = coin?.let { if (hashState == 1) it.hash else abbreviatedValue(it.hash, 32) } ?: "____",
                         modifier = Modifier.weight(1f),
-                        textAlign = if (hashState == 1) TextAlign.Start else TextAlign.End,
+                        textAlign = TextAlign.Start,
                         maxLines = if (hashState == 1) Int.MAX_VALUE else 1,
                         softWrap = hashState == 1,
-                        overflow = if (hashState == 1) TextOverflow.Clip else TextOverflow.Ellipsis,
+                        overflow = TextOverflow.Clip,
                         style = MaterialTheme.typography.titleMedium
                     )
                 }
@@ -187,10 +187,10 @@ fun CoinDetailScreen(
                     Text(
                         text = outputAddress?.let { if (addressState == 1) it else abbreviatedValue(it, 32) } ?: "____",
                         modifier = Modifier.weight(1f),
-                        textAlign = if (addressState == 1) TextAlign.Start else TextAlign.End,
+                        textAlign = TextAlign.Start,
                         maxLines = if (addressState == 1) Int.MAX_VALUE else 1,
                         softWrap = addressState == 1,
-                        overflow = if (addressState == 1) TextOverflow.Clip else TextOverflow.Ellipsis,
+                        overflow = TextOverflow.Clip,
                         style = MaterialTheme.typography.titleMedium
                     )
                 }
