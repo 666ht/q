@@ -93,6 +93,7 @@
     <string name="primary_address">主地址</string>
     <string name="import_view_keys">导入查看密钥</string>
     <string name="invalid_qr_code">无效的二维码</string>
+    <string name="camera_access_qr_code">允许使用相机扫描二维码</string>
     <string name="loading">正在加载....</string>
     <string name="unable_to_create_wallet">无法创建钱包</string>
     <string name="enter_new_pin">输入新PIN</string>
