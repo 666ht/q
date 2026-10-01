@@ -3,7 +3,6 @@ package io.anonero.ui.home
 import AnonNeroTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -37,7 +36,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -55,9 +53,7 @@ private fun FullWidthMiddleHiddenValue(
     expanded: Boolean,
     style: TextStyle,
 ) {
-    val textMeasurer = rememberTextMeasurer()
-
-    androidx.compose.foundation.layout.Row(
+    Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.Top
     ) {
@@ -67,55 +63,25 @@ private fun FullWidthMiddleHiddenValue(
             style = style,
             textAlign = TextAlign.Start
         )
-        BoxWithConstraints(
-            modifier = Modifier.weight(1f)
-        ) {
-            if (expanded) {
-                Text(
-                    text = value,
-                    modifier = Modifier.fillMaxWidth(),
-                    style = style,
-                    textAlign = TextAlign.Start,
-                    softWrap = true,
-                    overflow = TextOverflow.Clip
-                )
-            } else {
-                val maxWidth = constraints.maxWidth
-                val ellipsis = "..."
-                var low = 0
-                var high = value.length
-                var best = ellipsis
-
-                while (low <= high) {
-                    val keep = (low + high) / 2
-                    if (keep >= value.length) {
-                        best = value
-                        break
-                    }
-
-                    val left = keep / 2
-                    val right = keep - left
-                    val candidate = value.take(left) + ellipsis + value.takeLast(right)
-                    val width = textMeasurer.measure(candidate, style).size.width
-
-                    if (width <= maxWidth) {
-                        best = candidate
-                        low = keep + 1
-                    } else {
-                        high = keep - 1
-                    }
-                }
-
-                Text(
-                    text = best,
-                    modifier = Modifier.fillMaxWidth(),
-                    style = style,
-                    textAlign = TextAlign.Start,
-                    maxLines = 1,
-                    softWrap = false,
-                    overflow = TextOverflow.Clip
-                )
-            }
+        if (expanded) {
+            Text(
+                text = value,
+                modifier = Modifier.weight(1f),
+                style = style,
+                textAlign = TextAlign.Start,
+                softWrap = true,
+                overflow = TextOverflow.Clip
+            )
+        } else {
+            Text(
+                text = value,
+                modifier = Modifier.weight(1f),
+                style = style,
+                textAlign = TextAlign.Start,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis
+            )
         }
     }
 }
