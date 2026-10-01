@@ -135,7 +135,7 @@ fun CoinsScreen(
         },
         topBar = {
             TopAppBar(
-                title = { XmrText(text = "XMR", fontSize = 50.sp) },
+                title = { XmrText(text = "XMR", fontSize = 22.sp) },
                 navigationIcon = {
                     IconButton(onClick = onBackPress) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
