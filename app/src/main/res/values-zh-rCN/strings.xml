@@ -94,6 +94,10 @@
     <string name="import_view_keys">导入查看密钥</string>
     <string name="invalid_qr_code">无效的二维码</string>
     <string name="camera_access_qr_code">允许使用相机扫描二维码</string>
+    <string name="allow_button">允许</string>
+    <string name="open_app_settings">打开应用设置</string>
+    <string name="close_button">关闭</string>
+    <string name="camera_permission_required">需要相机权限才能扫描二维码。请在应用设置中启用相机权限。</string>
     <string name="loading">正在加载....</string>
     <string name="unable_to_create_wallet">无法创建钱包</string>
     <string name="enter_new_pin">输入新PIN</string>
