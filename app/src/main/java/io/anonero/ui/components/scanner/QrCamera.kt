@@ -78,7 +78,7 @@ import com.google.accompanist.permissions.PermissionStatus
 import com.google.accompanist.permissions.rememberPermissionState
 import com.sparrowwallet.hummingbird.URDecoder
 import io.anonero.icons.AnonIcons
-import io.anonero.anon.R
+import io.anonero.R
 import timber.log.Timber
 import java.util.concurrent.Executors
 
