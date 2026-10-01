@@ -591,10 +591,7 @@ fun SendScreen(
 
                     if (coins.isNotEmpty())
                         Text(
-                            text = "${if (coins.size == 1) stringResource(R.string._1_coin_selected) else "${coins.size} ${
-                                stringResource(
-                                    R.string.coins_selected
-                                )}"}",
+                            text = stringResource(R.string.coins_selected, coins.size),
                             modifier = Modifier
                                 .align(CenterHorizontally)
                                 .padding(
