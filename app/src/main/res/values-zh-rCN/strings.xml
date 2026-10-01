@@ -55,7 +55,7 @@
     <string name="sweeping_balance">清空余额:</string>
     <string name="minus_fees">(扣除手续费)</string>
     <string name="available_balance">可用余额:</string>
-    <string name="_1_coin_selected">已选择1个硬币</string>
+    <string name="_1_coin_selected">已选择%1$d输出</string>
     <string name="coins_selected">个硬币已选择</string>
     <string name="scan_key_images">扫描密钥映像</string>
     <string name="key_images">密钥映像</string>
