@@ -777,9 +777,10 @@ private fun OverlappingTransactionItem(
         )
         val overlapPx = overlap.roundToPx()
 
-        // Keep the full measured height so LazyColumn retains a correct scroll range,
-        // while visually shifting every lower row upward by the same 65dp.
-        layout(placeable.width, placeable.height) {
+        // Each row keeps the same visual 65dp overlap as the current layout,
+        // while LazyColumn measures only the visible advance between rows.
+        val itemHeight = (placeable.height - overlapPx).coerceAtLeast(1)
+        layout(placeable.width, itemHeight) {
             placeable.placeRelative(0, -overlapPx)
         }
     }
