@@ -88,7 +88,7 @@ fun ResetSyncPage(
             androidx.compose.foundation.layout.Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(96.dp)
+                    .height(120.dp)
                     .padding(bottom = 8.dp),
                 contentAlignment = androidx.compose.ui.Alignment.Center
             ) {
