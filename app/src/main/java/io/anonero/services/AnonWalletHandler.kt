@@ -116,8 +116,10 @@ class AnonWalletHandler(
                 wallet.refreshHistory()
             }
             wallet.init(0)
-            if(prefs.getLong(RESTORE_HEIGHT, 0L)!=0L) {
-                wallet.setRestoreHeight(prefs.getLong(RESTORE_HEIGHT, 0L));
+            val savedRestoreHeight = prefs.getLong(RESTORE_HEIGHT, 0L)
+            if (savedRestoreHeight > 0L && savedRestoreHeight != wallet.getRestoreHeight()) {
+                wallet.setRestoreHeight(savedRestoreHeight)
+                wallet.store()
             }
             if (wallet.isInitialized) {
                 wallet.refreshHistory()
