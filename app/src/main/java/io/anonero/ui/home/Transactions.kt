@@ -735,19 +735,24 @@ fun TransactionScreen(
                     ) {
                         val transaction = transactions[it + 1]
                         with(sharedTransitionScope) {
-                            TransactionItem(
-                                transaction,
-                                hideAmounts = hideAmounts,
-                                showBorder = false,
-                                onClick = { onItemClick(transaction) },
-                                modifier = Modifier
-                                    .sharedElement(
-                                        sharedTransitionScope.rememberSharedContentState(
-                                            key = transaction.hash.orEmpty(),
-                                        ),
-                                        animatedVisibilityScope = animatedContentScope
-                                    )
-                            )
+                            Box(
+                                modifier = Modifier.height(65.dp)
+                            ) {
+                                TransactionItem(
+                                    transaction,
+                                    hideAmounts = hideAmounts,
+                                    showBorder = false,
+                                    onClick = { onItemClick(transaction) },
+                                    modifier = Modifier
+                                        .zIndex(if (it == 0) 3f else 0f)
+                                        .sharedElement(
+                                            sharedTransitionScope.rememberSharedContentState(
+                                                key = transaction.hash.orEmpty(),
+                                            ),
+                                            animatedVisibilityScope = animatedContentScope
+                                        )
+                                )
+                            }
                         }
                     }
                 }
