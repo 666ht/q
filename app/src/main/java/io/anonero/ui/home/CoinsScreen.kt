@@ -159,9 +159,8 @@ fun CoinsScreen(
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Text(
+                                stringResource(R.string.output_number, index + 1),
                                 color = MaterialTheme.colorScheme.primary,
-                                fontWeight = FontWeight.SemiBold
-                            )
                             )
                             Text(
                                 if (hideAmounts) Formats.maskAmount(coin.amount) else Formats.getDisplayAmount(coin.amount),
