@@ -34,6 +34,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.rememberTextMeasurer
@@ -55,16 +56,22 @@ private fun FullWidthMiddleHiddenValue(
     style: TextStyle,
 ) {
     val textMeasurer = rememberTextMeasurer()
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.Top
-    ) {
+    val density = LocalDensity.current
+    val outputOnePrefixWidth = with(density) {
+        textMeasurer.measure("输出 ", style).size.width.toDp()
+    }
+
+    Box(modifier = Modifier.fillMaxWidth()) {
         Text(
-            label,
+            text = label,
             modifier = Modifier.size(width = 52.dp, height = 24.dp),
             style = style
         )
-        BoxWithConstraints(modifier = Modifier.weight(1f)) {
+        BoxWithConstraints(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = outputOnePrefixWidth)
+        ) {
             if (expanded) {
                 Text(
                     text = value,
@@ -77,17 +84,20 @@ private fun FullWidthMiddleHiddenValue(
                 val ellipsis = "…"
                 var low = 0
                 var high = value.length
-                var best = value
+                var best = ellipsis
+
                 while (low <= high) {
                     val keep = (low + high) / 2
                     if (keep >= value.length) {
                         best = value
                         break
                     }
+
                     val left = keep / 2
                     val right = keep - left
                     val candidate = value.take(left) + ellipsis + value.takeLast(right)
                     val width = textMeasurer.measure(candidate, style).size.width
+
                     if (width <= maxWidth) {
                         best = candidate
                         low = keep + 1
@@ -95,6 +105,7 @@ private fun FullWidthMiddleHiddenValue(
                         high = keep - 1
                     }
                 }
+
                 Text(
                     text = best,
                     modifier = Modifier.fillMaxWidth(),
