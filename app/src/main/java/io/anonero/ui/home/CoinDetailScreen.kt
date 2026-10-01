@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import AnonOutlineButton
@@ -29,6 +30,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -58,6 +61,7 @@ fun CoinDetailScreen(
     val coinIndex = coins.indexOfFirst { it.key == coinKey }
     val coin = coins.getOrNull(coinIndex)
     val scope = rememberCoroutineScope()
+    val clipboardManager = LocalClipboardManager.current
     var busy by remember { mutableStateOf(false) }
     var pubKeyState by remember { mutableStateOf(0) }
     var hashState by remember { mutableStateOf(0) }
@@ -120,7 +124,7 @@ fun CoinDetailScreen(
                     }
                 }
                 Text(
-                    text = "全局索引  " + (coin?.globalOutputIndex ?: "____"),
+                    text = "全局索引 " + (coin?.globalOutputIndex ?: "____"),
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 12.dp),
@@ -130,10 +134,13 @@ fun CoinDetailScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 12.dp)
-                        .clickable { pubKeyState = if (pubKeyState == 1) 0 else 1 },
+                        .combinedClickable(
+                        onClick = { pubKeyState = if (pubKeyState == 1) 0 else 1 },
+                        onLongClick = { coin?.pub_key?.let { clipboardManager.setText(AnnotatedString(it)) } }
+                    ),
                     verticalAlignment = Alignment.Top
                 ) {
-                    Text("公钥", modifier = Modifier.size(width = 40.dp, height = 24.dp), style = MaterialTheme.typography.titleMedium)
+                    Text("公钥", modifier = Modifier.size(width = 52.dp, height = 24.dp), style = MaterialTheme.typography.titleMedium)
                     Text(
                         text = coin?.let { if (pubKeyState == 1) it.pub_key else abbreviatedValue(it.pub_key, 32) } ?: "____",
                         modifier = Modifier.weight(1f),
@@ -145,10 +152,13 @@ fun CoinDetailScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 8.dp)
-                        .clickable { hashState = if (hashState == 1) 0 else 1 },
+                        .combinedClickable(
+                        onClick = { hashState = if (hashState == 1) 0 else 1 },
+                        onLongClick = { coin?.hash?.let { clipboardManager.setText(AnnotatedString(it)) } }
+                    ),
                     verticalAlignment = Alignment.Top
                 ) {
-                    Text("哈希", modifier = Modifier.size(width = 40.dp, height = 24.dp), style = MaterialTheme.typography.titleMedium)
+                    Text("哈希", modifier = Modifier.size(width = 52.dp, height = 24.dp), style = MaterialTheme.typography.titleMedium)
                     Text(
                         text = coin?.let { if (hashState == 1) it.hash else abbreviatedValue(it.hash, 32) } ?: "____",
                         modifier = Modifier.weight(1f),
@@ -160,10 +170,13 @@ fun CoinDetailScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 8.dp)
-                        .clickable { addressState = if (addressState == 1) 0 else 1 },
+                        .combinedClickable(
+                        onClick = { addressState = if (addressState == 1) 0 else 1 },
+                        onLongClick = { outputAddress?.let { clipboardManager.setText(AnnotatedString(it)) } }
+                    ),
                     verticalAlignment = Alignment.Top
                 ) {
-                    Text("地址", modifier = Modifier.size(width = 40.dp, height = 24.dp), style = MaterialTheme.typography.titleMedium)
+                    Text("地址", modifier = Modifier.size(width = 52.dp, height = 24.dp), style = MaterialTheme.typography.titleMedium)
                     Text(
                         text = outputAddress?.let { if (addressState == 1) it else abbreviatedValue(it, 32) } ?: "____",
                         modifier = Modifier.weight(1f),
