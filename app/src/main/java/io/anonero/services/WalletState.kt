@@ -3,7 +3,6 @@ package io.anonero.services
 import androidx.compose.ui.util.fastDistinctBy
 import androidx.compose.ui.util.fastFilter
 import io.anonero.AnonConfig
-import io.anonero.R
 import io.anonero.model.CoinsInfo
 import io.anonero.model.Subaddress
 import io.anonero.model.TransactionInfo
@@ -13,12 +12,7 @@ import io.anonero.model.node.DaemonInfo
 import io.anonero.ui.util.getAllUsedSubAddresses
 import io.anonero.ui.util.getLatestSubAddress
 import io.anonero.ui.home.LockScreenShortCut
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.cancelChildren
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -30,7 +24,6 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import timber.log.Timber
 import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 
 data class SyncProgress(val progress: Float, val left: Long)
@@ -42,11 +35,7 @@ class WalletState {
     val hideAmountsFlow = MutableStateFlow(false)
     private val _isLoading = MutableStateFlow(false)
     private var _isSyncing = AtomicBoolean(false)
-    private var _resetSyncInProgress = AtomicBoolean(false)
-    private val _resetSyncHeight = AtomicLong(-1L)
-    private var _restoreSyncInProgress = AtomicBoolean(false)
     private val _backgroundSync = MutableStateFlow(false)
-    private val _isWiping = AtomicBoolean(false)
     private val _incomingTx = MutableSharedFlow<Unit>(extraBufferCapacity = 8)
     private val _transactions = MutableStateFlow<List<TransactionInfo>>(listOf())
     private val _subAddresses = MutableStateFlow<List<Subaddress>>(listOf())
@@ -62,21 +51,27 @@ class WalletState {
     private val _unlockShortcut = Channel<LockScreenShortCut>(capacity = 1)
     val unlockShortcut = _unlockShortcut.receiveAsFlow()
     private val bgSyncMutex = Mutex()
-    private val refreshScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     val transactions: Flow<List<TransactionInfo>> = _transactions
+
     val balanceInfo: Flow<Long?> = _balanceInfo
     val unLockedBalance: Flow<Long?> = _unLockedBalance
     val isLoading: Flow<Boolean> = _isLoading
     val isSyncing get():Boolean = _isSyncing.get()
     val backgroundSync get():Boolean = _backgroundSync.value
     val backgroundSyncFlow: Flow<Boolean> = _backgroundSync
+
     val walletStatus: Flow<Wallet.Status?> = _walletStatus
     val syncProgress: Flow<SyncProgress?> = _syncProgress
+
     val nextAddress: Flow<Subaddress?> = _nextAddress
     val coins: Flow<List<CoinsInfo>> = _coins
     val subAddresses: Flow<List<Subaddress>> = _subAddresses
-    val walletConnectionStatus: Flow<Wallet.ConnectionStatus?> = _walletStatus.map { it?.connectionStatus }
+
+    val walletConnectionStatus: Flow<Wallet.ConnectionStatus?> = _walletStatus.map {
+        it?.connectionStatus
+    }
+
     val daemonInfo: Flow<DaemonInfo?> = _connectedDaemon
     val connectionStatus: Flow<Wallet.ConnectionStatus?> = _connectionStatus
     val incomingTx = _incomingTx.asSharedFlow()
@@ -87,8 +82,10 @@ class WalletState {
             if (wallet.isInitialized) {
                 _balanceInfo.update { wallet.balance }
                 _unLockedBalance.update {
-                    if (AnonConfig.viewOnly) wallet.viewOnlyBalance()
-                    else wallet.unlockedBalance
+                    if (AnonConfig.viewOnly) {
+                        wallet.viewOnlyBalance()
+                    }
+                    wallet.unlockedBalance
                 }
                 _walletStatus.update { wallet.fullStatus }
                 if (wallet.status.errorString.isNotEmpty()) {
@@ -111,56 +108,36 @@ class WalletState {
                 }
             }
             val oldTxCount = _transactions.value.size
-            val updatedTxs = (wallet.history?.all
-                ?.sortedWith(compareByDescending<TransactionInfo> { it.timestamp }.thenByDescending { it.hash ?: "" })
-                ?: listOf())
-                .fastDistinctBy { it.getListKey() }
+            val updatedTxs = (wallet.history?.all?.sortedWith(comparator = { o1, o2 ->
+                o2.timestamp.compareTo(o1.timestamp)
+            }) ?: listOf()).fastDistinctBy {
+                it.getListKey()
+            }
             _transactions.update { updatedTxs }
             if (oldTxCount > 0 && updatedTxs.size > oldTxCount) {
                 val hasNewIncoming = updatedTxs.take(updatedTxs.size - oldTxCount).any {
                     it.direction == TransactionInfo.Direction.Direction_In
                 }
-                if (hasNewIncoming) _incomingTx.tryEmit(Unit)
+                if (hasNewIncoming) {
+                    _incomingTx.tryEmit(Unit)
+                }
             }
             if (!backgroundSync) {
-                wallet.coins?.refresh()
-                _nextAddress.update { wallet.getLatestSubAddress() }
-                _subAddresses.update { wallet.getAllUsedSubAddresses().reversed() }
+                _nextAddress.update { (wallet.getLatestSubAddress()) }
+                _subAddresses.update { (wallet.getAllUsedSubAddresses()).reversed() }
                 _coins.update { (wallet.coins?.all ?: listOf()).fastFilter { !it.spent } }
             }
         }
     }
 
-    fun prepareForWipe() {
-        _isWiping.set(true)
-        _blockUpdates.set(true)
-        refreshScope.coroutineContext.cancelChildren()
-        _backgroundSync.value = false
-    }
-
     fun setLoading(b: Boolean) {
-        if (_isWiping.get()) return
-        _isLoading.update { b }
-    }
-
-    fun isWiping(): Boolean = _isWiping.get()
-    fun isResetSyncInProgress(): Boolean = _resetSyncInProgress.get()
-    fun getResetSyncHeight(): Long = _resetSyncHeight.get()
-
-    fun beginRestoreSync() { _restoreSyncInProgress.set(true) }
-    fun startRestoreSync() { _restoreSyncInProgress.set(true) }
-    fun isRestoreSyncInProgress(): Boolean = _restoreSyncInProgress.get()
-    fun finishRestoreSync() { _restoreSyncInProgress.set(false) }
-
-    fun finishResetSync() {
-        _resetSyncInProgress.set(false)
-        _resetSyncHeight.set(-1L)
+        this._isLoading.update { b }
     }
 
     fun emitUnlockShortcut(shortcut: LockScreenShortCut) {
         _unlockShortcut.trySend(shortcut)
     }
-
+    
     suspend fun enterBackgroundSync(): Boolean = bgSyncMutex.withLock {
         val wallet = getWallet ?: return false
         if (!wallet.isInitialized || backgroundSync) return false
@@ -169,14 +146,17 @@ class WalletState {
         if (AnonConfig.viewOnly) return true
         _blockUpdates.set(true)
         try {
-            if (wallet.startBackgroundSync()) return true
+            if (wallet.startBackgroundSync()) {
+                Timber.tag(TAG).i("Entered background sync")
+                return true
+            }
             _backgroundSync.value = false
             Timber.tag(TAG).e("startBackgroundSync returned false")
-            false
+            return false
         } catch (e: Exception) {
             _backgroundSync.value = false
             Timber.tag(TAG).e(e, "startBackgroundSync error")
-            false
+            return false
         } finally {
             _blockUpdates.set(false)
         }
@@ -196,11 +176,13 @@ class WalletState {
                 update()
                 wallet.startRefresh()
                 Timber.tag(TAG).i("Exited background sync")
-                true
-            } else false
+                return true
+            }
+            Timber.tag(TAG).e("stopBackgroundSync returned false")
+            return false
         } catch (e: Exception) {
             Timber.tag(TAG).e(e, "stopBackgroundSync error")
-            false
+            return false
         } finally {
             _blockUpdates.set(false)
         }
@@ -209,214 +191,109 @@ class WalletState {
     fun setConnectionStatus(status: Wallet.ConnectionStatus) {
         val previous = _previousConnectionStatus.getAndSet(status)
         _connectionStatus.update { status }
-        if (!_resetSyncInProgress.get() && !_restoreSyncInProgress.get() &&
-            previous == Wallet.ConnectionStatus.ConnectionStatus_Disconnected &&
-            status == Wallet.ConnectionStatus.ConnectionStatus_Connected &&
-            getWallet?.isSynchronized == true) {
+        if (previous == Wallet.ConnectionStatus.ConnectionStatus_Disconnected &&
+            status == Wallet.ConnectionStatus.ConnectionStatus_Connected) {
             setLoading(true)
-            refreshScope.launch {
-                try { getWallet?.startRefresh() }
-                catch (e: Exception) {
-                    Timber.tag(TAG).e(e, "startRefresh error")
-                    setLoading(false)
-                }
-            }
+            getWallet?.startRefresh()
         }
     }
 
     fun updateDaemon(daemonInfo: DaemonInfo) {
-        _connectedDaemon.update { daemonInfo }
+        this._connectedDaemon.update { daemonInfo }
     }
 
     fun syncUpdate(syncProgress: SyncProgress) {
-        // Progress is only a progress report. Completion is driven exclusively
-        // by finishSync() after native wallet2 reports synchronized.
-        _syncProgress.value = syncProgress
-        _isSyncing.set(true)
-    }
-
-    fun finishSync() {
-        _syncProgress.value = null
-        _isSyncing.set(false)
-        _connectionStatus.value = Wallet.ConnectionStatus.ConnectionStatus_Connected
-    }
-
-    fun publishAfterSync(): Boolean {
-        if (_isWiping.get()) return false
-        val wallet = getWallet ?: return false
-        if (!wallet.isInitialized) return false
-        return try {
-            wallet.refreshHistory()
-            // refreshHistory() updates transfer records, but balance/unlockedBalance
-            // depend on the native coin cache. Refresh it after marking the wallet
-            // synchronized so the first completed sync publishes the real balance.
-            wallet.setSynchronized()
-            wallet.refreshCoins()
-            wallet.store()
-            val balance = wallet.balance
-            val unlocked = if (AnonConfig.viewOnly) wallet.viewOnlyBalance() else wallet.unlockedBalance
-            val status = wallet.fullStatus
-            val updatedTxs = (wallet.history?.all?.sortedByDescending { it.timestamp } ?: emptyList())
-                .fastDistinctBy { it.getListKey() }
-            _balanceInfo.value = balance
-            _unLockedBalance.value = unlocked
-            _walletStatus.value = status
-            _transactions.value = updatedTxs
-            if (!backgroundSync) {
-                wallet.coins?.refresh()
-                _nextAddress.value = wallet.getLatestSubAddress()
-                _subAddresses.value = wallet.getAllUsedSubAddresses().reversed()
-                _coins.value = (wallet.coins?.all ?: emptyList()).fastFilter { !it.spent }
-            }
-            val address = try { WalletManager.instance?.getDaemonAddress() } catch (_: Exception) { null }
-            address?.let {
-                _connectedDaemon.value = DaemonInfo(
-                    it,
-                    connectionStatus = status.connectionStatus ?: Wallet.ConnectionStatus.ConnectionStatus_Disconnected,
-                    WalletManager.instance?.getBlockchainHeight() ?: -1L
-                )
-            }
-            Timber.tag(TAG).i("publishAfterSync: balance=%s unlocked=%s transactions=%s", balance, unlocked, updatedTxs.size)
-            true
-        } catch (e: Exception) {
-            Timber.tag(TAG).e(e, "publishAfterSync failed")
-            false
+        val done = syncProgress.progress == 1f || syncProgress.left == 0L
+        _syncProgress.update { if (done) null else syncProgress }
+        _isSyncing.set(!done)
+        if (done) {
+            _connectionStatus.update { Wallet.ConnectionStatus.ConnectionStatus_Connected }
         }
     }
 
-    fun publishAfterNativeRefresh() {
-        refreshScope.launch {
-            try {
-                val published = publishAfterSync()
-                Timber.tag(TAG).i(
-                    "publishAfterNativeRefresh: balance/history published=%s",
-                    published
-                )
-            } finally {
-                finishResetSync()
-                finishRestoreSync()
-            }
-        }
+    fun toggleHideAmounts() {
+        hideAmountsFlow.update { !it }
     }
 
-    fun getAddressForCoin(txHash: String?): String? {
-        if (txHash.isNullOrEmpty()) return null
-        val tx = _transactions.value.firstOrNull { it.hash == txHash } ?: return null
-        return try { getWallet?.getSubaddress(tx.accountIndex, tx.addressIndex) } catch (e: Exception) { null }
+    fun setBackGroundSync(startBackgroundSync: Boolean) {
+        _backgroundSync.update { startBackgroundSync }
     }
-
-    fun freezeCoin(publicKey: String): Result<Boolean> {
-        return try {
-            val wallet = getWallet ?: return Result.failure(Exception("Wallet not initialized"))
-            val coins = wallet.coins ?: return Result.failure(Exception("Coins not initialized"))
-            coins.setFrozen(publicKey); wallet.store(); coins.refresh(); update(); Result.success(true)
-        } catch (e: Exception) { Result.failure(e) }
-    }
-
-    fun thawCoin(publicKey: String): Result<Boolean> {
-        return try {
-            val wallet = getWallet ?: return Result.failure(Exception("Wallet not initialized"))
-            val coins = wallet.coins ?: return Result.failure(Exception("Coins not initialized"))
-            coins.thaw(publicKey); wallet.store(); coins.refresh(); update(); Result.success(true)
-        } catch (e: Exception) { Result.failure(e) }
-    }
-
-    fun toggleHideAmounts() { hideAmountsFlow.update { !it } }
-    fun setBackGroundSync(startBackgroundSync: Boolean) { _backgroundSync.update { startBackgroundSync } }
 
     fun getNewAddress() {
         getWallet?.let {
-            it.addSubaddress(it.getAccountIndex(), "")
+            it.addSubaddress(it.getAccountIndex(), "Subaddress #${it.numSubAddresses}")
             it.store()
-            it.getLatestSubAddress().let { subAddresses -> _nextAddress.update { subAddresses } }
-            it.getAllUsedSubAddresses().let { allItems -> _subAddresses.update { allItems.reversed() } }
+            it.getLatestSubAddress().let { subAddresses ->
+                _nextAddress.update { subAddresses }
+            }
+            it.getAllUsedSubAddresses().let { allItems ->
+                _subAddresses.update { allItems.reversed() }
+            }
             update()
         }
     }
 
     fun setTransactionNote(note: String, transactionInfo: TransactionInfo) {
         getWallet?.let {
-            it.setUserNote(transactionInfo.hash, note); it.store(); it.refreshHistory(); update()
+            it.setUserNote(transactionInfo.hash, note)
+            it.store()
+            it.refreshHistory()
+            update()
         }
     }
 
     fun updateAddressLabel(label: String, addressIndex: Int) {
         getWallet?.let {
-            it.setSubaddressLabel(addressIndex, label); it.store(); it.refreshHistory()
+            it.setSubaddressLabel(addressIndex, label)
+            it.store()
+            it.refreshHistory()
             it.getAllUsedSubAddresses().let { allItems ->
-                val refreshed = allItems.reversed()
-                _subAddresses.update { current ->
-                    refreshed.map { address ->
-                        current.firstOrNull { it.addressIndex == address.addressIndex }?.let { existing ->
-                            if (existing.label != address.label) address.withLabel(address.label) else address
-                        } ?: address
-                    }
-                }
+                _subAddresses.update { allItems.reversed() }
             }
-            it.getLatestSubAddress().let { latest -> _nextAddress.update { latest } }
+            it.getLatestSubAddress().let { subAddresses ->
+                _nextAddress.update { subAddresses }
+            }
         }
     }
 
     fun refresh() {
-        val wallet = getWallet ?: return
-        if (!wallet.isInitialized) return
-        // Always re-publish history/balance from native. Skip starting another
-        // startRefresh only while a sync/rescan is already running.
-        refreshScope.launch {
-            try {
-                wallet.refreshHistory()
-                update()
-            } catch (e: Exception) {
-                Timber.tag(TAG).e(e, "refreshHistory error")
-            }
+        if(getWallet?.isInitialized != true) {
+            return;
         }
-        if (_isSyncing.get() || !wallet.isSynchronized) {
-            Timber.tag(TAG).d("startRefresh skipped while wallet sync is active")
-            return
-        }
-        if (wallet.fullStatus.connectionStatus == Wallet.ConnectionStatus.ConnectionStatus_Connected) {
-            setLoading(true)
-            refreshScope.launch {
-                try { wallet.startRefresh() }
-                catch (e: Exception) { Timber.tag(TAG).e(e, "refresh error"); setLoading(false) }
-            }
-        }
+        if (getWallet?.fullStatus?.connectionStatus == Wallet.ConnectionStatus.ConnectionStatus_Connected) {
+            setLoading(true);
+            getWallet?.startRefresh();
+        };
+        getWallet?.refreshHistory()
     }
 
-    fun resetSyncFromHeight(height: Long): Result<Boolean> {
-        return try {
-            val wallet = getWallet ?: return Result.failure(Exception("Wallet not initialized"))
-            if (wallet.fullStatus.connectionStatus != Wallet.ConnectionStatus.ConnectionStatus_Connected) {
-                return Result.failure(Exception(AnonConfig.context?.getString(R.string.resync_daemon_required) ?: "Please connect to daemon for resync"))
-            }
-            if (height < 0L) return Result.failure(IllegalArgumentException("Invalid restore height"))
-            wallet.setRestoreHeight(height)
-            wallet.store()
-            wallet.rescanBlockchainAsync()
-            setLoading(true)
-            Result.success(true)
-        } catch (e: Exception) {
-            Timber.tag(TAG).e(e, "reset sync error")
-            Result.failure(e)
-        }
+    fun resetSyncFromHeight(height: Long): Result<Boolean> = try {
+        val wallet = getWallet ?: return Result.failure(Exception("Wallet not initialized"))
+        if (wallet.fullStatus.connectionStatus != Wallet.ConnectionStatus.ConnectionStatus_Connected) return Result.failure(Exception("Please connect to daemon for resync"))
+        if (height < 0L) return Result.failure(IllegalArgumentException("Invalid restore height"))
+        wallet.setRestoreHeight(height)
+        wallet.store()
+        setLoading(true)
+        wallet.rescanBlockchainAsync()
+        Result.success(true)
+    } catch (e: Exception) {
+        Timber.tag(TAG).e(e)
+        Result.failure(e)
     }
 
     fun resyncBlockchain(): Result<Boolean> {
-        return try {
-            val wallet = getWallet ?: return Result.failure(Exception("Wallet not initialized"))
-            if (wallet.fullStatus.connectionStatus != Wallet.ConnectionStatus.ConnectionStatus_Connected) {
-                return Result.failure(Exception(AnonConfig.context?.getString(R.string.resync_daemon_required) ?: "Please connect to daemon for resync"))
+        setLoading(true);
+        try {
+            if (getWallet?.fullStatus?.connectionStatus != Wallet.ConnectionStatus.ConnectionStatus_Connected) {
+                return Result.failure(Exception("Please connect to daemon for resync"))
             }
-            wallet.isSynchronized = false
-            wallet.pauseRefresh()
-            setLoading(true)
-            wallet.rescanBlockchainAsync()
-            wallet.startRefresh()
-            Result.success(true)
+            getWallet?.rescanBlockchainAsync()
+            return Result.success(true)
         } catch (e: Exception) {
             Timber.tag(TAG).e(e)
-            setLoading(false)
-            Result.failure(e)
+            return Result.failure(e)
+        } finally {
+            setLoading(false);
         }
     }
 
