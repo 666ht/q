@@ -44,6 +44,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.ModalBottomSheetProperties
 import androidx.compose.material3.Text
+import androidx.compose.ui.res.stringResource
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -199,7 +200,7 @@ fun QRScanner(
                         )
                         Text(
 
-                            "Allow camera access to scan QR code",
+                            stringResource(R.string.camera_access_qr_code),
                             style = MaterialTheme.typography.bodyMedium.copy(
                                 color = Color.White
                             ),
