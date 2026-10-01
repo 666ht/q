@@ -46,6 +46,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.asLiveData
 import io.anonero.R
 import io.anonero.model.CoinsInfo
@@ -109,7 +110,7 @@ fun CoinsScreen(
                 ),
                 exit = slideOutVertically(
                     targetOffsetY = { it },
-                    animationSpec = tween(durationMillis = 220)
+                    animationSpec = tween(durationMillis = 220 )
                 )
             ) {
                 OutlinedButton(
