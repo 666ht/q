@@ -737,8 +737,7 @@ fun TransactionScreen(
                         val transaction = transactions[it + 1]
                         with(sharedTransitionScope) {
                             OverlappingTransactionItem(
-                                overlap = 65.dp,
-                                modifier = Modifier.zIndex(if (it == 0) 3f else 0f)
+                                overlap = 65.dp
                             ) {
                                 TransactionItem(
                                     transaction,
@@ -777,9 +776,10 @@ private fun OverlappingTransactionItem(
             constraints.copy(minWidth = constraints.maxWidth)
         )
         val overlapPx = overlap.roundToPx()
-        val itemHeight = (placeable.height - overlapPx).coerceAtLeast(1)
 
-        layout(placeable.width, itemHeight) {
+        // Keep the full measured height so LazyColumn retains a correct scroll range,
+        // while visually shifting every lower row upward by the same 65dp.
+        layout(placeable.width, placeable.height) {
             placeable.placeRelative(0, -overlapPx)
         }
     }
