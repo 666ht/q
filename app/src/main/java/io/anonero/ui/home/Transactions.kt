@@ -579,7 +579,12 @@ fun TransactionScreen(
                             onDismissRequest = { showMenu = false }
                         ) {
                             DropdownMenuItem(
-                                text = { Text(stringResource(R.string.coin_control)) },
+                                text = {
+                                    XmrText(
+                                        stringResource(R.string.coin_control),
+                                        fontSize = 18.sp
+                                    )
+                                },
                                 onClick = {
                                     navigateTo(CoinsScreenRoute)
                                 }
