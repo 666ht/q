@@ -134,6 +134,26 @@ class TransactionsViewModel : ViewModel() {
 
 }
 
+@Composable
+fun XmrText(
+    text: String = "XMR",
+    fontSize: androidx.compose.ui.unit.TextUnit = androidx.compose.ui.unit.TextUnit.Unspecified,
+    modifier: Modifier = Modifier,
+    color: androidx.compose.ui.graphics.Color = androidx.compose.ui.graphics.Color.Unspecified,
+) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val xmrFont = remember {
+        FontFamily(Typeface.createFromAsset(context.assets, "160ee2f7b959256f6a2e09db2fa9060b.ttf"))
+    }
+    Text(
+        text = text,
+        modifier = modifier,
+        fontFamily = xmrFont,
+        fontSize = fontSize,
+        color = color,
+    )
+}
+
 private const val TAG = "Transactions"
 
 @OptIn(
