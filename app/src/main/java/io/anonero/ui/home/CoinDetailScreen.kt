@@ -42,12 +42,65 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 
-private fun abbreviatedValue(value: String, maxChars: Int): String {
-    if (value.length <= maxChars) return value
-    val available = (maxChars - 3).coerceAtLeast(2)
-    val left = available / 2
-    val right = available - left
-    return value.take(left) + "…" + value.takeLast(right)
+@Composable
+private fun FullWidthMiddleHiddenValue(
+    label: String,
+    value: String,
+    expanded: Boolean,
+    style: TextStyle,
+) {
+    val textMeasurer = rememberTextMeasurer()
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.Top
+    ) {
+        Text(
+            label,
+            modifier = Modifier.size(width = 52.dp, height = 24.dp),
+            style = style
+        )
+        BoxWithConstraints(modifier = Modifier.weight(1f)) {
+            if (expanded) {
+                Text(
+                    text = value,
+                    modifier = Modifier.fillMaxWidth(),
+                    style = style,
+                    softWrap = true
+                )
+            } else {
+                val maxWidth = constraints.maxWidth
+                val ellipsis = "…"
+                var low = 0
+                var high = value.length
+                var best = value
+                while (low <= high) {
+                    val keep = (low + high) / 2
+                    if (keep >= value.length) {
+                        best = value
+                        break
+                    }
+                    val left = keep / 2
+                    val right = keep - left
+                    val candidate = value.take(left) + ellipsis + value.takeLast(right)
+                    val width = textMeasurer.measure(candidate, style).size.width
+                    if (width <= maxWidth) {
+                        best = candidate
+                        low = keep + 1
+                    } else {
+                        high = keep - 1
+                    }
+                }
+                Text(
+                    text = best,
+                    modifier = Modifier.fillMaxWidth(),
+                    style = style,
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Clip
+                )
+            }
+        }
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -136,19 +189,15 @@ fun CoinDetailScreen(
                         .fillMaxWidth()
                         .padding(top = 12.dp)
                         .combinedClickable(
-                        onClick = { pubKeyState = if (pubKeyState == 1) 0 else 1 },
-                        onLongClick = { coin?.pub_key?.let { clipboardManager.setText(AnnotatedString(it)) } }
-                    ),
+                            onClick = { pubKeyState = if (pubKeyState == 1) 0 else 1 },
+                            onLongClick = { coin?.pub_key?.let { clipboardManager.setText(AnnotatedString(it)) } }
+                        ),
                     verticalAlignment = Alignment.Top
                 ) {
-                    Text("公钥", modifier = Modifier.size(width = 52.dp, height = 24.dp), style = MaterialTheme.typography.titleMedium)
-                    Text(
-                        text = coin?.let { if (pubKeyState == 1) it.pub_key else abbreviatedValue(it.pub_key, 32) } ?: "____",
-                        modifier = Modifier.weight(1f),
-                        textAlign = TextAlign.Start,
-                        maxLines = if (pubKeyState == 1) Int.MAX_VALUE else 1,
-                        softWrap = pubKeyState == 1,
-                        overflow = TextOverflow.Clip,
+                    FullWidthMiddleHiddenValue(
+                        label = "公钥",
+                        value = coin?.pub_key ?: "____",
+                        expanded = pubKeyState == 1,
                         style = MaterialTheme.typography.titleMedium
                     )
                 }
@@ -157,19 +206,15 @@ fun CoinDetailScreen(
                         .fillMaxWidth()
                         .padding(top = 8.dp)
                         .combinedClickable(
-                        onClick = { hashState = if (hashState == 1) 0 else 1 },
-                        onLongClick = { coin?.hash?.let { clipboardManager.setText(AnnotatedString(it)) } }
-                    ),
+                            onClick = { hashState = if (hashState == 1) 0 else 1 },
+                            onLongClick = { coin?.hash?.let { clipboardManager.setText(AnnotatedString(it)) } }
+                        ),
                     verticalAlignment = Alignment.Top
                 ) {
-                    Text("哈希", modifier = Modifier.size(width = 52.dp, height = 24.dp), style = MaterialTheme.typography.titleMedium)
-                    Text(
-                        text = coin?.let { if (hashState == 1) it.hash else abbreviatedValue(it.hash, 32) } ?: "____",
-                        modifier = Modifier.weight(1f),
-                        textAlign = TextAlign.Start,
-                        maxLines = if (hashState == 1) Int.MAX_VALUE else 1,
-                        softWrap = hashState == 1,
-                        overflow = TextOverflow.Clip,
+                    FullWidthMiddleHiddenValue(
+                        label = "哈希",
+                        value = coin?.hash ?: "____",
+                        expanded = hashState == 1,
                         style = MaterialTheme.typography.titleMedium
                     )
                 }
@@ -178,19 +223,15 @@ fun CoinDetailScreen(
                         .fillMaxWidth()
                         .padding(top = 8.dp)
                         .combinedClickable(
-                        onClick = { addressState = if (addressState == 1) 0 else 1 },
-                        onLongClick = { outputAddress?.let { clipboardManager.setText(AnnotatedString(it)) } }
-                    ),
+                            onClick = { addressState = if (addressState == 1) 0 else 1 },
+                            onLongClick = { outputAddress?.let { clipboardManager.setText(AnnotatedString(it)) } }
+                        ),
                     verticalAlignment = Alignment.Top
                 ) {
-                    Text("地址", modifier = Modifier.size(width = 52.dp, height = 24.dp), style = MaterialTheme.typography.titleMedium)
-                    Text(
-                        text = outputAddress?.let { if (addressState == 1) it else abbreviatedValue(it, 32) } ?: "____",
-                        modifier = Modifier.weight(1f),
-                        textAlign = TextAlign.Start,
-                        maxLines = if (addressState == 1) Int.MAX_VALUE else 1,
-                        softWrap = addressState == 1,
-                        overflow = TextOverflow.Clip,
+                    FullWidthMiddleHiddenValue(
+                        label = "地址",
+                        value = outputAddress ?: "____",
+                        expanded = addressState == 1,
                         style = MaterialTheme.typography.titleMedium
                     )
                 }
