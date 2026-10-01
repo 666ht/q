@@ -35,6 +35,7 @@ class WalletState {
     val hideAmountsFlow = MutableStateFlow(false)
     private val _isLoading = MutableStateFlow(false)
     private var _isSyncing = AtomicBoolean(false)
+    private val _isWiping = AtomicBoolean(false)
     private val _backgroundSync = MutableStateFlow(false)
     private val _incomingTx = MutableSharedFlow<Unit>(extraBufferCapacity = 8)
     private val _transactions = MutableStateFlow<List<TransactionInfo>>(listOf())
@@ -130,6 +131,14 @@ class WalletState {
         }
     }
 
+    fun prepareForWipe() {
+        _isWiping.set(true)
+        _blockUpdates.set(true)
+        _backgroundSync.value = false
+    }
+
+    fun isWiping(): Boolean = _isWiping.get()
+
     fun setLoading(b: Boolean) {
         this._isLoading.update { b }
     }
@@ -196,6 +205,36 @@ class WalletState {
             setLoading(true)
             getWallet?.startRefresh()
         }
+    }
+
+    fun getAddressForCoin(txHash: String?): String? {
+        if (txHash.isNullOrEmpty()) return null
+        val tx = _transactions.value.firstOrNull { it.hash == txHash } ?: return null
+        return try { getWallet?.getSubaddress(tx.accountIndex, tx.addressIndex) } catch (_: Exception) { null }
+    }
+
+    fun freezeCoin(publicKey: String): Result<Boolean> = try {
+        val wallet = getWallet ?: return Result.failure(Exception("Wallet not initialized"))
+        val coins = wallet.coins ?: return Result.failure(Exception("Coins not initialized"))
+        coins.setFrozen(publicKey)
+        wallet.store()
+        coins.refresh()
+        update()
+        Result.success(true)
+    } catch (e: Exception) {
+        Result.failure(e)
+    }
+
+    fun thawCoin(publicKey: String): Result<Boolean> = try {
+        val wallet = getWallet ?: return Result.failure(Exception("Wallet not initialized"))
+        val coins = wallet.coins ?: return Result.failure(Exception("Coins not initialized"))
+        coins.thaw(publicKey)
+        wallet.store()
+        coins.refresh()
+        update()
+        Result.success(true)
+    } catch (e: Exception) {
+        Result.failure(e)
     }
 
     fun updateDaemon(daemonInfo: DaemonInfo) {
