@@ -271,6 +271,7 @@ fun CoinDetailScreen(
                 },
                 modifier = Modifier
                     .fillMaxWidth()
+                    .height(48.dp)
                     .padding(bottom = 16.dp)
             ) {
                 Text(if (coin?.frozen == true) "解冻" else "冻结")
