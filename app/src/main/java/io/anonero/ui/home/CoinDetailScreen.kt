@@ -33,6 +33,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import io.anonero.services.WalletState
@@ -144,7 +145,10 @@ fun CoinDetailScreen(
                     Text(
                         text = coin?.let { if (pubKeyState == 1) it.pub_key else abbreviatedValue(it.pub_key, 32) } ?: "____",
                         modifier = Modifier.weight(1f),
-                        textAlign = TextAlign.End,
+                        textAlign = if (pubKeyState == 1) TextAlign.Start else TextAlign.End,
+                        maxLines = if (pubKeyState == 1) Int.MAX_VALUE else 1,
+                        softWrap = pubKeyState == 1,
+                        overflow = if (pubKeyState == 1) TextOverflow.Clip else TextOverflow.Ellipsis,
                         style = MaterialTheme.typography.titleMedium
                     )
                 }
@@ -162,7 +166,10 @@ fun CoinDetailScreen(
                     Text(
                         text = coin?.let { if (hashState == 1) it.hash else abbreviatedValue(it.hash, 32) } ?: "____",
                         modifier = Modifier.weight(1f),
-                        textAlign = TextAlign.End,
+                        textAlign = if (hashState == 1) TextAlign.Start else TextAlign.End,
+                        maxLines = if (hashState == 1) Int.MAX_VALUE else 1,
+                        softWrap = hashState == 1,
+                        overflow = if (hashState == 1) TextOverflow.Clip else TextOverflow.Ellipsis,
                         style = MaterialTheme.typography.titleMedium
                     )
                 }
@@ -180,7 +187,10 @@ fun CoinDetailScreen(
                     Text(
                         text = outputAddress?.let { if (addressState == 1) it else abbreviatedValue(it, 32) } ?: "____",
                         modifier = Modifier.weight(1f),
-                        textAlign = TextAlign.End,
+                        textAlign = if (addressState == 1) TextAlign.Start else TextAlign.End,
+                        maxLines = if (addressState == 1) Int.MAX_VALUE else 1,
+                        softWrap = addressState == 1,
+                        overflow = if (addressState == 1) TextOverflow.Clip else TextOverflow.Ellipsis,
                         style = MaterialTheme.typography.titleMedium
                     )
                 }
