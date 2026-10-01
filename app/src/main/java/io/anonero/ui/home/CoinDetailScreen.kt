@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import AnonOutlineButton
@@ -29,6 +30,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -58,6 +61,7 @@ fun CoinDetailScreen(
     val coinIndex = coins.indexOfFirst { it.key == coinKey }
     val coin = coins.getOrNull(coinIndex)
     val scope = rememberCoroutineScope()
+    val clipboardManager = LocalClipboardManager.current
     var busy by remember { mutableStateOf(false) }
     var pubKeyState by remember { mutableStateOf(0) }
     var hashState by remember { mutableStateOf(0) }
@@ -130,7 +134,7 @@ fun CoinDetailScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 12.dp)
-                        .clickable { pubKeyState = if (pubKeyState == 1) 0 else 1 },
+                        .combinedClickable(\n                        onClick = { pubKeyState = if (pubKeyState == 1) 0 else 1 },\n                        onLongClick = { coin?.pub_key?.let { clipboardManager.setText(AnnotatedString(it)) } }\n                    ),
                     verticalAlignment = Alignment.Top
                 ) {
                     Text("公钥", modifier = Modifier.size(width = 40.dp, height = 24.dp), style = MaterialTheme.typography.titleMedium)
@@ -145,7 +149,7 @@ fun CoinDetailScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 8.dp)
-                        .clickable { hashState = if (hashState == 1) 0 else 1 },
+                        .combinedClickable(\n                        onClick = { hashState = if (hashState == 1) 0 else 1 },\n                        onLongClick = { coin?.hash?.let { clipboardManager.setText(AnnotatedString(it)) } }\n                    ),
                     verticalAlignment = Alignment.Top
                 ) {
                     Text("哈希", modifier = Modifier.size(width = 40.dp, height = 24.dp), style = MaterialTheme.typography.titleMedium)
@@ -160,7 +164,7 @@ fun CoinDetailScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 8.dp)
-                        .clickable { addressState = if (addressState == 1) 0 else 1 },
+                        .combinedClickable(\n                        onClick = { addressState = if (addressState == 1) 0 else 1 },\n                        onLongClick = { outputAddress?.let { clipboardManager.setText(AnnotatedString(it)) } }\n                    ),
                     verticalAlignment = Alignment.Top
                 ) {
                     Text("地址", modifier = Modifier.size(width = 40.dp, height = 24.dp), style = MaterialTheme.typography.titleMedium)
