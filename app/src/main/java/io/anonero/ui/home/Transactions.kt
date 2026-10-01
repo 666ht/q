@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -735,25 +736,19 @@ fun TransactionScreen(
                     ) {
                         val transaction = transactions[it + 1]
                         with(sharedTransitionScope) {
-                            Box(
+                            TransactionItem(
+                                transaction,
+                                hideAmounts = hideAmounts,
+                                showBorder = false,
+                                onClick = { onItemClick(transaction) },
                                 modifier = Modifier
-                                    .size(65.dp)
-                            ) {
-                                TransactionItem(
-                                    transaction,
-                                    hideAmounts = hideAmounts,
-                                    showBorder = false,
-                                    onClick = { onItemClick(transaction) },
-                                    modifier = Modifier
-                                        .zIndex(if (it == 0) 3f else 0f)
-                                        .sharedElement(
-                                            sharedTransitionScope.rememberSharedContentState(
-                                                key = transaction.hash.orEmpty(),
-                                            ),
-                                            animatedVisibilityScope = animatedContentScope
-                                        )
-                                )
-                            }
+                                    .sharedElement(
+                                        sharedTransitionScope.rememberSharedContentState(
+                                            key = transaction.hash.orEmpty(),
+                                        ),
+                                        animatedVisibilityScope = animatedContentScope
+                                    )
+                            )
                         }
                     }
                 }
