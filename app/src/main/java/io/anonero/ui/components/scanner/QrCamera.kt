@@ -222,7 +222,7 @@ fun QRScanner(
                             onClick = {
                                 cameraPermissionState.launchPermissionRequest()
                             }) {
-                            Text("Allow")
+                            Text(stringResource(R.string.allow_button))
                         }
                     }
                 } else {
@@ -242,7 +242,7 @@ fun QRScanner(
                                 )
                         )
                         Text(
-                            "Camera permission is required to scan QR codes. Please enable it in app settings.",
+                            stringResource(R.string.camera_permission_required),
                             style = MaterialTheme.typography.bodyMedium.copy(
                                 color = Color.White
                             ),
@@ -269,7 +269,7 @@ fun QRScanner(
                                     }
                                 context.startActivity(intent)
                             }) {
-                            Text("Open App Settings")
+                            Text(stringResource(R.string.open_app_settings))
                         }
                     }
                 }
@@ -582,7 +582,7 @@ fun QRScanner(
                             Row {
                                 Icon(Icons.Default.Close, contentDescription = "")
                                 Spacer(Modifier.padding(8.dp))
-                                Text("Close")
+                                Text(stringResource(R.string.close_button))
                                 Spacer(Modifier.padding(12.dp))
                             }
                         }
