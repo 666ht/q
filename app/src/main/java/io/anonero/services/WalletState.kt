@@ -313,7 +313,7 @@ class WalletState {
         if (height < 0L) return Result.failure(IllegalArgumentException("Invalid restore height"))
         wallet.setRestoreHeight(height)
         wallet.store()
-        AnonConfig.context?.getSharedPreferences(AnonConfig.PREFS_NAME, android.content.Context.MODE_PRIVATE)?.edit()
+        AnonConfig.context?.getSharedPreferences(AnonConfig.PREFS, android.content.Context.MODE_PRIVATE)?.edit()
             ?.putLong(RESTORE_HEIGHT, height)
             ?.apply()
         setLoading(true)
