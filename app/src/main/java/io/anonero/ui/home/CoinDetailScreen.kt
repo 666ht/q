@@ -78,7 +78,8 @@ private fun FullWidthMiddleHiddenValue(
                     text = value,
                     modifier = Modifier.fillMaxWidth(),
                     style = style,
-                    softWrap = true
+                    softWrap = true,
+                    overflow = TextOverflow.Clip
                 )
             } else {
                 val maxWidth = constraints.maxWidth
