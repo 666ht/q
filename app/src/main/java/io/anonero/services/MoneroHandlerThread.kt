@@ -6,99 +6,86 @@ import io.anonero.model.WalletListener
 import io.anonero.model.WalletManager
 import timber.log.Timber
 
+/**
+ * Handy class for starting a new thread that has a looper. The looper can then be
+ * used to create handler classes. Note that start() must still be called.
+ * The started Thread has a stck size of STACK_SIZE (=5MB)
+ */
+
 class MoneroHandlerThread(private val wallet: Wallet, private val walletState: WalletState) :
     Thread(null, null, "MoneroHandler", THREAD_STACK_SIZE), WalletListener {
-    @Synchronized override fun start() { super.start() }
-    override fun run() {}
+
+
+    @Synchronized
+    override fun start() {
+        super.start()
+    }
+
+    override fun run() {
+
+    }
 
     override fun moneySpent(txId: String?, amount: Long) {
-        if (walletState.isWiping()) return
+
     }
 
     override fun moneyReceived(txId: String?, amount: Long) {
-        if (walletState.isWiping()) return
         Timber.tag(name).i("moneyReceived: %s", amount)
+        WalletManager.instance?.wallet?.store()
     }
 
-    override fun unconfirmedMoneyReceived(txId: String?, amount: Long) {
-        if (walletState.isWiping()) return
-        Timber.tag(name).i("unconfirmedMoneyReceived: %s", amount)
-    }
+    override fun unconfirmedMoneyReceived(txId: String?, amount: Long) {}
 
     override fun newBlock(height: Long) {
-        if (walletState.isWiping()) return
         Timber.tag(name).i("newBlock: %s", height)
         updateSyncProgress(height)
     }
 
     private fun updateSyncProgress(height: Long) {
-        if (walletState.isWiping() || wallet.isSynchronized) return
-        if (height < 0L) return
-
-        val daemonHeight = wallet.getDaemonBlockChainHeight()
-        if (daemonHeight <= 0L) return
-
-        val resetHeight = walletState.getResetSyncHeight()
-        if (walletState.isResetSyncInProgress() && resetHeight >= 0L) {
-            val total = (daemonHeight - resetHeight).coerceAtLeast(1L)
-            val progress = ((height - resetHeight).toDouble() / total.toDouble())
-                .coerceIn(0.0, 1.0)
-                .toFloat()
-            val left = (daemonHeight - height).coerceAtLeast(0L)
-            walletState.syncUpdate(SyncProgress(progress, left))
+        val syncHeight = wallet.getBlockChainHeight()
+        val deamonHeight = wallet.getDaemonBlockChainHeight()
+        val left = deamonHeight - syncHeight
+        if (syncHeight < 0 || left < 0) {
             return
         }
-
-        val target = wallet.getDaemonBlockChainTargetHeight().takeIf { it > 0L }
-            ?: daemonHeight
-        val progress = (height.toDouble() / target.toDouble())
-            .coerceIn(0.0, 1.0)
-            .toFloat()
-        val left = (daemonHeight - height).coerceAtLeast(0L)
+        val progress = if (wallet.getDaemonBlockChainTargetHeight().toDouble() == 0.0) {
+            1f
+        } else {
+            (height.toDouble() / wallet.getDaemonBlockChainTargetHeight().toDouble()).toFloat()
+        }
         walletState.syncUpdate(SyncProgress(progress, left))
     }
 
     override fun updated() {
-        if (walletState.isWiping()) return
         refresh(false)
         Timber.tag(name).i("updated()")
         walletState.update()
     }
 
     override fun refreshed() {
-        if (walletState.isWiping()) return
-
         val status = wallet.fullStatus.connectionStatus
         val daemonHeight = wallet.getDaemonBlockChainHeight()
         val chainHeight = wallet.getBlockChainHeight()
-
-        Timber.tag(name).i(
-            "refreshed() status:%s daemonHeight:%s chainHeight:%s",
-            status,
-            daemonHeight,
-            chainHeight
-        )
-
+        /// height
+        Timber.tag(name)
+            .i("refreshed() status:${status} daemonHeight:$daemonHeight chainHeight:$chainHeight ")
         if (status === Wallet.ConnectionStatus.ConnectionStatus_Disconnected || status == null) {
             tryRestartConnection()
         } else {
             val heightDiff = daemonHeight - chainHeight
-            if (heightDiff >= 2L) {
+            if (heightDiff >= 2) {
                 tryRestartConnection()
             } else {
                 if (!wallet.isSynchronized) {
-                    updateSyncProgress(chainHeight)
+                    updateSyncProgress(wallet.getBlockChainHeight())
                 }
                 wallet.setSynchronized()
                 wallet.store()
                 refresh(true)
-                walletState.finishSync()
                 walletState.setLoading(false)
-                walletState.finishResetSync()
-                walletState.finishRestoreSync()
             }
-        }
 
+        }
         walletState.update()
     }
 
@@ -116,7 +103,9 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
         walletState.update()
     }
 
-    fun sendTx(pendingTx: PendingTransaction): Boolean = pendingTx.commit("", true)
+    fun sendTx(pendingTx: PendingTransaction): Boolean {
+        return pendingTx.commit("", true)
+    }
 
     interface Listener {
         fun onRefresh(walletSynced: Boolean)
@@ -125,6 +114,7 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
     }
 
     companion object {
+        // from src/cryptonote_config.h
         const val THREAD_STACK_SIZE = (5 * 1024 * 1024).toLong()
     }
 }
