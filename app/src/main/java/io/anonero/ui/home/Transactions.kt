@@ -1,7 +1,6 @@
 package io.anonero.ui.home
 
 import AnonNeroTheme
-import android.graphics.Typeface
 import android.view.HapticFeedbackConstants
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.LocalActivity
@@ -67,7 +66,6 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -93,6 +91,7 @@ import io.anonero.model.TransactionInfo
 import io.anonero.model.WalletManager
 import io.anonero.services.WalletState
 import io.anonero.ui.components.WalletProgressIndicator
+import io.anonero.ui.components.XmrText
 import io.anonero.ui.home.graph.routes.CoinsScreenRoute
 import io.anonero.ui.home.graph.routes.ReviewTransactionRoute
 import io.anonero.ui.home.graph.routes.ResetSyncRoute
@@ -134,26 +133,6 @@ class TransactionsViewModel : ViewModel() {
 
 }
 
-@Composable
-fun XmrText(
-    text: String = "XMR",
-    fontSize: androidx.compose.ui.unit.TextUnit = androidx.compose.ui.unit.TextUnit.Unspecified,
-    modifier: Modifier = Modifier,
-    color: androidx.compose.ui.graphics.Color = androidx.compose.ui.graphics.Color.Unspecified,
-) {
-    val context = androidx.compose.ui.platform.LocalContext.current
-    val xmrFont = remember {
-        FontFamily(Typeface.createFromAsset(context.assets, "160ee2f7b959256f6a2e09db2fa9060b.ttf"))
-    }
-    Text(
-        text = text,
-        modifier = modifier,
-        fontFamily = xmrFont,
-        fontSize = fontSize,
-        color = color,
-    )
-}
-
 private const val TAG = "Transactions"
 
 @OptIn(
@@ -193,9 +172,6 @@ fun TransactionScreen(
     val keyImagesImportedText = stringResource(R.string.key_images_imported)
     val activity = LocalActivity.current;
     val context = LocalContext.current
-    val customXmrFont = remember {
-        FontFamily(Typeface.createFromAsset(context.assets, "160ee2f7b959256f6a2e09db2fa9060b.ttf"))
-    }
 
     if (broadcastSignedTxPath != null) {
         AlertDialog(
@@ -599,17 +575,9 @@ fun TransactionScreen(
                         ) {
                             DropdownMenuItem(
                                 text = {
-                                    Text(
-                                        androidx.compose.ui.text.buildAnnotatedString {
-                                            pushStyle(
-                                                androidx.compose.ui.text.SpanStyle(fontFamily = customXmrFont,
-                                                    fontSize = 18.sp
-                                                )
-                                            )
-                                            append("XMR")
-                                            pop()
-                                            append(" 管理")
-                                        }
+                                    XmrText(
+                                        stringResource(R.string.coin_control),
+                                        fontSize = 18.sp
                                     )
                                 },
                                 onClick = {
@@ -723,9 +691,8 @@ fun TransactionScreen(
                             )
                             .fillParentMaxWidth()
                     ) {
-                        Text(
+                        XmrText(
                             text = "XMR",
-                            fontFamily = customXmrFont,
                             fontSize = 50.sp,
                             modifier = Modifier.padding(start = 2.dp).offset(y = (-6).dp)
                         )
