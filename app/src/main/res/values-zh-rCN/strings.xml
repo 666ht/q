@@ -73,7 +73,7 @@
     <string name="description">描述</string>
     <string name="pull_to_start_refresh">下拉开始刷新</string>
     <string name="export_key_images">导出密钥映像</string>
-    <string name="coin_control">输出选择</string>
+    <string name="coin_control">XMR 管理</string>
     <string name="refresh">刷新</string>
     <string name="resync_blockchain">重置同步区块</string>
     <string name="resync_initiated_this_may_take_a_while">已启动重新同步…这可能需要一些时间。</string>
