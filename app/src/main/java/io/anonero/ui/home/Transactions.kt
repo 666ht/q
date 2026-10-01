@@ -736,7 +736,8 @@ fun TransactionScreen(
                         val transaction = transactions[it + 1]
                         with(sharedTransitionScope) {
                             Box(
-                                modifier = Modifier.height(65.dp)
+                                modifier = Modifier
+                                    .size(65.dp)
                             ) {
                                 TransactionItem(
                                     transaction,
