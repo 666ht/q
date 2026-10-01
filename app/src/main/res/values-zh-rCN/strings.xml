@@ -65,7 +65,7 @@
     <string name="save">保存</string>
     <string name="dismiss">取消</string>
     <string name="transaction_id">交易哈希</string>
-    <string name="transaction_fee">旷工费</string>
+    <string name="transaction_fee">矿工费</string>
     <string name="transaction_key">交易密钥</string>
     <string name="confirmation_block">确认区块</string>
     <string name="time">时间</string>
