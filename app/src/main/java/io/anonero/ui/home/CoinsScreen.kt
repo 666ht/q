@@ -132,7 +132,7 @@ fun CoinsScreen(
                     shape = MaterialTheme.shapes.medium,
                     contentPadding = PaddingValues(12.dp)
                 ) {
-                    Text(if (selected.size != 0) stringResource(R.string.confirm) else stringResource(R.string.spend))
+                    Text(stringResource(R.string._1_coin_selected, selectedCoins.size))
                 }
             }
         },
