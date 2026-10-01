@@ -85,7 +85,13 @@ fun ResetSyncPage(
             )
         },
         bottomBar = {
-            AnonOutlineButton(
+            androidx.compose.foundation.layout.Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 8.dp),
+                contentAlignment = androidx.compose.ui.Alignment.Center
+            ) {
+                AnonOutlineButton(
                 onClick = {
                     val restoreHeight = height.toLongOrNull()
                     if (restoreHeight == null) {
@@ -99,12 +105,10 @@ fun ResetSyncPage(
                         error = result.exceptionOrNull()?.message ?: "重置失败"
                     }
                 },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp)
-                    .padding(bottom = 16.dp)
-            ) {
-                Text("重置")
+                    modifier = Modifier.fillMaxWidth(.9f)
+                ) {
+                    Text("重置")
+                }
             }
         }
     ) { padding ->
