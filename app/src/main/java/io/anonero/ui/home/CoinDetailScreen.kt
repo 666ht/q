@@ -82,7 +82,7 @@ private fun FullWidthMiddleHiddenValue(
                 )
             } else {
                 val maxWidth = constraints.maxWidth
-                val ellipsis = "…"
+                val ellipsis = "..."
                 var low = 0
                 var high = value.length
                 var best = ellipsis
