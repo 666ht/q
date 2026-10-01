@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
@@ -51,6 +52,7 @@ import io.anonero.model.CoinsInfo
 import io.anonero.model.Wallet
 import io.anonero.services.WalletState
 import io.anonero.ui.components.WalletProgressIndicator
+import io.anonero.ui.components.XmrText
 import io.anonero.ui.home.graph.routes.SendScreenRoute
 import io.anonero.util.Formats
 import org.koin.java.KoinJavaComponent.inject
@@ -132,7 +134,7 @@ fun CoinsScreen(
         },
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(R.string.coins)) },
+                title = { XmrText(text = "XMR", fontSize = 30.sp, modifier = Modifier.offset(y = (-3).dp)) },
                 navigationIcon = {
                     IconButton(onClick = onBackPress) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
