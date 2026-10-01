@@ -102,7 +102,10 @@ class OnboardViewModel(private val prefs: SharedPreferences) : ViewModel() {
                 addressString = neroKeyPayload!!.primaryAddress,
                 spendKeyString = ""
             )
-            anonWallet?.setRestoreHeight(3460000);
+            neroKeyPayload?.restoreHeight?.let {
+                anonWallet?.setRestoreHeight(it)
+            }
+            anonWallet?.store()
             anonWallet?.store()
             delay(100)
             if (anonWallet?.status?.isOk != true) {
