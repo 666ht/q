@@ -90,7 +90,12 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
     }
 
     private fun tryRestartConnection() {
+        // Keep the user-selected rescan height. wallet.init(0) can classify
+        // the cleared wallet as new and overwrite the refresh height.
+        val restoreHeight = wallet.getRestoreHeight()
         wallet.init(0)
+        wallet.setRestoreHeight(restoreHeight)
+        wallet.store()
         wallet.startRefresh()
         walletState.update()
     }
