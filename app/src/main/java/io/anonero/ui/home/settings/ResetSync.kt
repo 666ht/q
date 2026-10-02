@@ -39,7 +39,6 @@ import java.util.Date
 import java.util.Locale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -68,15 +67,24 @@ fun ResetSyncPage(
     var error by remember { mutableStateOf<String?>(null) }
     val coroutineScope = rememberCoroutineScope()
     var heightDateJob by remember { mutableStateOf<Job?>(null) }
+    val heightToDateCache = remember(wallet) { mutableMapOf<Long, String>() }
+    val dateToHeightCache = remember(wallet) { mutableMapOf<String, Pair<Long, Long>>() }
 
     LaunchedEffect(wallet) {
         val restoreHeight = wallet?.getRestoreHeight()
         if (restoreHeight != null) {
-            val timestamp = withContext(Dispatchers.IO) {
-                runCatching { wallet.getBlockTimestamp(restoreHeight) }.getOrDefault(0L)
-            }
-            if (timestamp > 0L && height == restoreHeight.toString()) {
-                date = dateForTimestamp(timestamp)
+            val cachedDate = heightToDateCache[restoreHeight]
+            if (cachedDate != null) {
+                date = cachedDate
+            } else {
+                val timestamp = withContext(Dispatchers.IO) {
+                    runCatching { wallet.getBlockTimestamp(restoreHeight) }.getOrDefault(0L)
+                }
+                if (timestamp > 0L && height == restoreHeight.toString()) {
+                    val resolvedDate = dateForTimestamp(timestamp)
+                    heightToDateCache[restoreHeight] = resolvedDate
+                    date = resolvedDate
+                }
             }
         }
     }
@@ -143,14 +151,22 @@ fun ResetSyncPage(
                     height.toLongOrNull()?.let { h ->
                         wallet?.let { activeWallet ->
                             heightDateJob = coroutineScope.launch {
-                                delay(150L)
+                                val cachedDate = heightToDateCache[h]
+                                if (cachedDate != null) {
+                                    date = cachedDate
+                                    return@launch
+                                }
                                 val timestamp = withContext(Dispatchers.IO) {
                                     runCatching {
                                         activeWallet.getBlockTimestamp(h)
                                     }.getOrDefault(0L)
                                 }
                                 if (timestamp > 0L && height == h.toString()) {
-                                    date = dateForTimestamp(timestamp)
+                                    val resolvedDate = dateForTimestamp(timestamp)
+                                    heightToDateCache[h] = resolvedDate
+                                    date = resolvedDate
+                                } else if (height == h.toString()) {
+                                    error = "无法查询该高度的区块时间，请检查节点连接"
                                 }
                             }
                         }
@@ -176,7 +192,12 @@ fun ResetSyncPage(
                         wallet?.let { activeWallet ->
                             val requestedDate = it
                             heightDateJob = coroutineScope.launch {
-                                delay(150L)
+                                val cachedRange = dateToHeightCache[requestedDate]
+                                if (cachedRange != null) {
+                                    height = cachedRange.first.toString()
+                                    selectedDateEndHeight = cachedRange.second
+                                    return@launch
+                                }
                                 val range = withContext(Dispatchers.IO) {
                                     runCatching {
                                         val formatter = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply {
@@ -209,9 +230,17 @@ fun ResetSyncPage(
                                     }.getOrNull()
                                 }
 
-                                if (range != null && date == requestedDate) {
+                                if (range != null && date == requestedDate && range.first >= 0L && range.second >= range.first) {
+                                    dateToHeightCache[requestedDate] = range
+                                    heightToDateCache[range.first]?.let { cachedDate ->
+                                        if (cachedDate != requestedDate) {
+                                            heightToDateCache.remove(range.first)
+                                        }
+                                    }
                                     height = range.first.toString()
                                     selectedDateEndHeight = range.second
+                                } else if (date == requestedDate) {
+                                    error = "无法查询该日期的区块高度，请检查节点连接或日期"
                                 }
                             }
                         }
