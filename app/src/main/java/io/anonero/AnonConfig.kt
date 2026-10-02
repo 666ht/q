@@ -24,6 +24,18 @@ object AnonConfig {
     const val PREFS = "anonPref"
     var context: AnonApplication? = null
     private var walletFound: Boolean = false
+    @Volatile
+    private var activeWalletPin: String? = null
+
+    fun rememberActiveWalletPin(pin: String) {
+        activeWalletPin = pin.takeIf { it.isNotBlank() }
+    }
+
+    fun isActiveWalletPin(pin: String): Boolean = activeWalletPin == pin && pin.isNotBlank()
+
+    fun clearActiveWalletPin() {
+        activeWalletPin = null
+    }
 
     const val EXPORT_OUTPUT_FILE = "export_wallet_outputs.out"
     const val IMPORT_OUTPUT_FILE = "import_wallet_outputs"
