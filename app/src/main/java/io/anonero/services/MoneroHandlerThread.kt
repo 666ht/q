@@ -48,7 +48,10 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
         val customStart = walletState.customRescanStartHeight
         val customDayEnd = walletState.customRescanDayEndHeight
         val currentHeight = if (walletState.customRescanInProgress && customStart != null) {
-            maxOf(syncHeight, customStart)
+            // During a native rescan getBlockChainHeight() can lag behind the
+            // newBlock callback. Use the callback height so the progress UI
+            // advances with the actual blocks being scanned.
+            maxOf(height, syncHeight, customStart)
         } else {
             syncHeight
         }
