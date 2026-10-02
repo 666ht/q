@@ -1,5 +1,6 @@
 package io.anonero.services
 
+import io.anonero.AnonConfig
 import androidx.core.content.edit
 import io.anonero.model.PendingTransaction
 import io.anonero.model.Wallet
