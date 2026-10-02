@@ -28,8 +28,8 @@ jobs:
       - name: Pin XMR restore-height fix
         working-directory: external-libs/monero
         run: |
-          git fetch --depth=1 origin c6f830f6ef0e838b75fa2c35494452056c878c89
-          git checkout c6f830f6ef0e838b75fa2c35494452056c878c89
+          git fetch --depth=1 origin 425d95fa4517ee7d991c63dbb1cd3556291bd27e
+          git checkout 425d95fa4517ee7d991c63dbb1cd3556291bd27e
 
       - name: Read XMR revision
         id: xmr
