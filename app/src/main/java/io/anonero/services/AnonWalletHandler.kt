@@ -269,15 +269,14 @@ class AnonWalletHandler(
             // recursively wipe the shared wallets directory, because it may
             // contain other PIN-routed wallets.
             val walletFiles = mutableListOf<File>()
-            run {
-                val openPath = wallet?.getPath()
-                if (!openPath.isNullOrBlank()) add(File(openPath))
-            }
-            val distinctWalletFiles = walletFiles.distinctBy { it.absolutePath }
-
-            if (distinctWalletFiles.isEmpty()) {
+            val openPath = wallet?.getPath()
+            if (!openPath.isNullOrBlank()) {
+                walletFiles.add(File(openPath))
+            } else {
+                // Legacy installations may not expose a native path after close.
                 walletFiles.add(AnonConfig.getDefaultWalletFile(appContext))
             }
+            val distinctWalletFiles = walletFiles.distinctBy { it.absolutePath }
 
             distinctWalletFiles.forEach { file ->
                 repeat(20) {
