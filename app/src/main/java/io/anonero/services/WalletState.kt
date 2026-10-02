@@ -54,6 +54,9 @@ class WalletState {
     val unlockShortcut = _unlockShortcut.receiveAsFlow()
     private val bgSyncMutex = Mutex()
 
+    @Volatile
+    var customRescanInProgress: Boolean = false
+
     val transactions: Flow<List<TransactionInfo>> = _transactions
 
     val balanceInfo: Flow<Long?> = _balanceInfo
@@ -348,6 +351,7 @@ class WalletState {
             }
 
             setLoading(true)
+            customRescanInProgress = true
             // rescanBlockchainAsync() starts the native wallet rescan. Do not call
             // startRefresh() immediately afterwards: doing so can replace the
             // explicit restore height with the wallet's normal refresh position.
