@@ -77,6 +77,9 @@ class WalletManager {
 //            }
 //            Log.d("WalletManager.kt", "Changed Restore Height from $oldHeight to ${wallet.getRestoreHeight()}")
             wallet.setPassword(password) // this rewrites the keys file (which contains the restore height)
+            AnonConfig.context?.let {
+                AnonConfig.rememberWalletPassphrase(it, walletFile, passphrase)
+            }
         }
         return wallet
     }
@@ -120,6 +123,11 @@ class WalletManager {
         )
         val wallet = Wallet(walletHandle)
         manageWallet(wallet)
+        if (wallet.status.isOk) {
+            AnonConfig.context?.let {
+                AnonConfig.rememberWalletPassphrase(it, walletFile, offset)
+            }
+        }
         return wallet
     }
 
@@ -142,6 +150,11 @@ class WalletManager {
         )
         val wallet = Wallet(walletHandle)
         manageWallet(wallet)
+        if (wallet.status.isOk) {
+            AnonConfig.context?.let {
+                AnonConfig.rememberWalletPassphrase(it, walletFile, offset)
+            }
+        }
         return wallet
     }
 
