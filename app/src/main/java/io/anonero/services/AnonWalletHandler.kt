@@ -138,7 +138,25 @@ class AnonWalletHandler(
                     // so it cannot re-arm a restore progress cycle on future opens.
                     prefs.edit { putBoolean(RESTORE_NEEDS_RESCAN, false) }
                 }
-                wallet.startRefresh()
+                var restoreRescanStarted = false
+                if (effectiveRestoreHeight != null && !wallet.nativeSynchronized) {
+                    // Re-arm a recovery wallet from the exact user-selected height.
+                    // This removes any stale/older local scan cursor left by a prior
+                    // wallet generation and guarantees the displayed remaining range
+                    // matches the actual recovery start.
+                    wallet.setRestoreHeight(effectiveRestoreHeight)
+                    restoreRescanStarted =
+                        wallet.rescanBlockchainAsyncFromHeight(effectiveRestoreHeight)
+                    if (!restoreRescanStarted) {
+                        Timber.tag(TAG).w(
+                            "Exact restore-height rescan could not be queued: %d",
+                            effectiveRestoreHeight
+                        )
+                    }
+                }
+                if (!restoreRescanStarted) {
+                    wallet.startRefresh()
+                }
                 walletState.update()
             }
         } catch (e: Exception) {
