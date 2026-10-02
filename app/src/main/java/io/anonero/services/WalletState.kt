@@ -323,12 +323,13 @@ class WalletState {
         // This prevents an in-flight refresh from continuing with the old start height.
         wallet.pauseRefresh()
         try {
-            wallet.setRestoreHeight(height)
+            val applied = wallet.setRestoreHeight(height)
 
-            // Native background-wallet mode can silently reject setRestoreHeight().
-            // Verify the value immediately so we never report a false successful reset.
+            // Confirm the native wallet accepted the exact height before starting
+            // the rescan. This prevents the reset UI from reporting success while
+            // native code is still using an older/default restore height.
             val actualHeight = wallet.getRestoreHeight()
-            if (actualHeight != height) {
+            if (!applied || actualHeight != height) {
                 return Result.failure(
                     IllegalStateException(
                         "Restore height was not applied: requested=$height actual=$actualHeight"
@@ -352,13 +353,15 @@ class WalletState {
 
             setLoading(true)
             customRescanInProgress = true
-            // rescanBlockchainAsync() starts the native wallet rescan. Do not call
-            // startRefresh() immediately afterwards: doing so can replace the
-            // explicit restore height with the wallet's normal refresh position.
-            wallet.rescanBlockchainAsync()
-        } finally {
-            // The rescan owns the refresh lifecycle until its refreshed() callback.
-        }
+
+            // Native rescan queues the rescan on the wallet refresh worker.
+            // Wallet.rescanBlockchainAsync() re-enables that worker after the
+            // pending rescan request is queued.
+            if (!wallet.rescanBlockchainAsync()) {
+                customRescanInProgress = false
+                setLoading(false)
+                return Result.failure(IllegalStateException("Blockchain rescan was not started"))
+            }
 
         Timber.tag(TAG).i(
             "Reset sync from custom height: requested=%d actual=%d",
