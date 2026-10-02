@@ -262,6 +262,13 @@ class WalletState {
         }
     }
 
+    fun finishSync() {
+        _syncProgress.value = null
+        _isSyncing.set(false)
+        _isLoading.value = false
+        _connectionStatus.update { Wallet.ConnectionStatus.ConnectionStatus_Connected }
+    }
+
     fun toggleHideAmounts() {
         hideAmountsFlow.update { !it }
     }
