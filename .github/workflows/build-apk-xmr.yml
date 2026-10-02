@@ -89,3 +89,4 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 # Keep the Monero submodule pinned to the tested const-correct revision.
+# Build on every push to the q test branch so fixes are verified by CI.
