@@ -212,8 +212,15 @@ class WalletState {
         _connectionStatus.update { status }
         if (previous == Wallet.ConnectionStatus.ConnectionStatus_Disconnected &&
             status == Wallet.ConnectionStatus.ConnectionStatus_Connected) {
-            setLoading(true)
-            getWallet?.startRefresh()
+            val wallet = getWallet
+            if (wallet?.isSynchronized == true || (wallet?.isInitialized == true && wallet.nativeSynchronized)) {
+                // The wallet is already synced. Do not restart the refresh/loading
+                // indicator just because the daemon connection was re-established.
+                finishSync()
+            } else {
+                setLoading(true)
+                wallet?.startRefresh()
+            }
         }
     }
 
