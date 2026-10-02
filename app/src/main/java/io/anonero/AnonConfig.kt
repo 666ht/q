@@ -10,6 +10,7 @@ import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import java.io.File
+import java.security.MessageDigest
 import kotlin.math.pow
 
 val jsonDecoder = Json { ignoreUnknownKeys = true }
@@ -46,9 +47,21 @@ object AnonConfig {
     val viewOnly: Boolean get() = BuildConfig.VIEW_ONLY
 
     fun getDefaultWalletFile(context: Context): File {
-        val walletDir = getDefaultWalletDir(context)
-        val anonWallet = File(walletDir, "anon")
-        return anonWallet
+        return File(getDefaultWalletDir(context), "anon")
+    }
+
+    /**
+     * Returns the wallet file assigned to a PIN.
+     *
+     * The legacy wallet remains at "anon" for backward compatibility. New
+     * PIN-routed wallets use a deterministic, non-readable filename derived
+     * from the PIN rather than storing the PIN itself on disk.
+     */
+    fun getWalletFileForPin(context: Context, pin: String): File {
+        val normalized = pin.toByteArray(Charsets.UTF_8)
+        val digest = MessageDigest.getInstance("SHA-256").digest(normalized)
+        val id = digest.joinToString("") { "%02x".format(it) }.take(32)
+        return File(getDefaultWalletDir(context), "wallet_$id")
     }
 
     fun getTorConfig(scope: CoroutineScope): TorRuntime.Environment {
