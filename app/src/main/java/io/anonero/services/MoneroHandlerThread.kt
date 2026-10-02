@@ -5,6 +5,7 @@ import io.anonero.model.Wallet
 import io.anonero.model.WalletListener
 import io.anonero.model.WalletManager
 import timber.log.Timber
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Handy class for starting a new thread that has a looper. The looper can then be
@@ -14,6 +15,8 @@ import timber.log.Timber
 
 class MoneroHandlerThread(private val wallet: Wallet, private val walletState: WalletState) :
     Thread(null, null, "MoneroHandler", THREAD_STACK_SIZE), WalletListener {
+
+    private val syncCompletionHandled = AtomicBoolean(false)
 
 
 
@@ -39,12 +42,18 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
 
     override fun newBlock(height: Long) {
         Timber.tag(name).i("newBlock: %s", height)
+
+        // Native wallet2 is authoritative. Once native synchronization reports
+        // completion, finish immediately from the block callback instead of
+        // waiting for another refresh cycle.
+        if (wallet.nativeSynchronized) {
+            completeSynchronization()
+            return
+        }
+
         // Do not recreate sync progress after synchronization has finished.
-        // The explicit completion state also clears any stale refresh/loading UI.
         if (!wallet.isSynchronized && !walletState.customRescanInProgress) {
             updateSyncProgress(height)
-        } else if (wallet.isSynchronized && !walletState.customRescanInProgress) {
-            walletState.finishSync()
         }
     }
 
@@ -99,6 +108,7 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
     }
 
     override fun refreshed() {
+        syncCompletionHandled.set(false)
         val status = wallet.fullStatus.connectionStatus
         val daemonHeight = wallet.getDaemonBlockChainHeight()
         val chainHeight = wallet.getBlockChainHeight()
@@ -107,19 +117,9 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
             .i("refreshed() status:${status} daemonHeight:$daemonHeight chainHeight:$chainHeight ")
         if (walletState.customRescanInProgress) {
             if (wallet.nativeSynchronized) {
-                // Native wallet2 is authoritative here. The Java flag remains false
-                // throughout the custom rescan and is only set after completion.
-                wallet.setSynchronized()
-
-                // The native layer keeps the wallet's original recovery height
-                // untouched. Only the current rescan used the user-supplied height.
-                walletState.customRescanStartHeight = null
-                walletState.customRescanDayEndHeight = null
-                walletState.customRescanInProgress = false
-                wallet.store()
-
-                refresh(true)
-                walletState.finishSync()
+                // Native wallet2 is authoritative here. Complete the sync and
+                // refresh wallet data immediately when the native scan is done.
+                completeSynchronization()
             } else {
                 updateSyncProgress(walletState.customRescanStartHeight ?: chainHeight)
             }
@@ -136,15 +136,32 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
                 if (!wallet.isSynchronized) {
                     updateSyncProgress(wallet.getBlockChainHeight())
                 }
-                wallet.setSynchronized()
-                walletState.customRescanInProgress = false
-                wallet.store()
-                refresh(true)
-                walletState.finishSync()
+                completeSynchronization()
             }
 
         }
         walletState.update()
+    }
+
+    private fun completeSynchronization() {
+        if (!syncCompletionHandled.compareAndSet(false, true)) {
+            walletState.finishSync()
+            return
+        }
+
+        try {
+            wallet.setSynchronized()
+            walletState.customRescanStartHeight = null
+            walletState.customRescanDayEndHeight = null
+            walletState.customRescanInProgress = false
+
+            // Read the final native wallet state before hiding the progress UI.
+            wallet.store()
+            refresh(true)
+            walletState.update()
+        } finally {
+            walletState.finishSync()
+        }
     }
 
     private fun tryRestartConnection() {
