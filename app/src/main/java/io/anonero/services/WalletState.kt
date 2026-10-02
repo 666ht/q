@@ -64,6 +64,9 @@ class WalletState {
     private val customRescanScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var customRescanJob: Job? = null
     private val customRescanFinishStarted = AtomicBoolean(false)
+    // The async native request is queued before wallet2 clears its old blockchain.
+    // Do not let the first poll of the old tip falsely finish the custom rescan.
+    private val customRescanScanStarted = AtomicBoolean(false)
 
     @Volatile
     var customRescanInProgress: Boolean = false
@@ -383,6 +386,7 @@ class WalletState {
         wallet.pauseRefresh()
         try {
             customRescanFinishStarted.set(false)
+            customRescanScanStarted.set(false)
             customRescanFinished = false
 
             // A custom scan always has a hard end: use the requested end height
@@ -417,6 +421,7 @@ class WalletState {
             Result.success(true)
         } catch (e: Exception) {
             customRescanJob?.cancel()
+            customRescanScanStarted.set(false)
             customRescanStartHeight = null
             customRescanDayEndHeight = null
             customRescanInProgress = false
@@ -442,11 +447,25 @@ class WalletState {
         customRescanJob?.cancel()
         customRescanJob = customRescanScope.launch {
             while (isActive && customRescanInProgress) {
-                val currentHeight = runCatching {
+                val rawHeight = runCatching {
                     wallet.getBlockChainHeight()
                 }.getOrDefault(startHeight)
-                    .coerceAtLeast(startHeight)
 
+                // rescanBlockchainAsyncFromHeight() only queues the native job.
+                // Until wallet2 clears its old blockchain, getBlockChainHeight()
+                // still reports the pre-rescan tip. That old tip may already be
+                // >= endHeight, which must never be treated as completion.
+                if (!customRescanScanStarted.get()) {
+                    if (rawHeight <= startHeight) {
+                        customRescanScanStarted.set(true)
+                    } else {
+                        syncUpdate(SyncProgress(0f, (endHeight - startHeight).coerceAtLeast(0L)))
+                        delay(400)
+                        continue
+                    }
+                }
+
+                val currentHeight = rawHeight.coerceAtLeast(startHeight)
                 if (currentHeight >= endHeight) {
                     requestCustomRescanCompletion(wallet, endHeight)
                     break
@@ -473,6 +492,19 @@ class WalletState {
         val wallet = getWallet ?: return
         val start = customRescanStartHeight ?: return
         val end = customRescanDayEndHeight ?: return
+
+        // Ignore callbacks from the old pre-rescan chain tip. A real custom
+        // rescan is considered started only after callbacks enter its requested
+        // range, or the polling path observes the native chain reset.
+        if (!customRescanScanStarted.get()) {
+            if (height <= start) {
+                customRescanScanStarted.set(true)
+            } else if (height < end) {
+                customRescanScanStarted.set(true)
+            } else {
+                return
+            }
+        }
 
         if (height >= end) {
             requestCustomRescanCompletion(wallet, end)
@@ -508,6 +540,7 @@ class WalletState {
 
         customRescanInProgress = false
         customRescanFinished = true
+        customRescanScanStarted.set(false)
         customRescanJob?.cancel()
         customRescanStartHeight = null
         customRescanDayEndHeight = null
