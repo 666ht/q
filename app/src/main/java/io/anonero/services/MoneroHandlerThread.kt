@@ -15,14 +15,6 @@ import timber.log.Timber
 class MoneroHandlerThread(private val wallet: Wallet, private val walletState: WalletState) :
     Thread(null, null, "MoneroHandler", THREAD_STACK_SIZE), WalletListener {
 
-    // A custom-height rescan owns the refresh lifecycle until its callback
-    // completes. Automatic reconnect must not restart normal refresh over it.
-    @Volatile
-    private var customRescanInProgress = false
-
-    fun markCustomRescanStarted() {
-        customRescanInProgress = true
-    }
 
 
     @Synchronized
@@ -78,7 +70,7 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
         /// height
         Timber.tag(name)
             .i("refreshed() status:${status} daemonHeight:$daemonHeight chainHeight:$chainHeight ")
-        if (customRescanInProgress) {
+        if (walletState.customRescanInProgress) {
             if (!wallet.isSynchronized) {
                 updateSyncProgress(wallet.getBlockChainHeight())
             }
@@ -96,7 +88,7 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
                     updateSyncProgress(wallet.getBlockChainHeight())
                 }
                 wallet.setSynchronized()
-                customRescanInProgress = false
+                walletState.customRescanInProgress = false
                 wallet.store()
                 refresh(true)
                 walletState.setLoading(false)
