@@ -61,7 +61,38 @@ object AnonConfig {
         val normalized = pin.toByteArray(Charsets.UTF_8)
         val digest = MessageDigest.getInstance("SHA-256").digest(normalized)
         val id = digest.joinToString("") { "%02x".format(it) }.take(32)
-        return File(getDefaultWalletDir(context), "wallet_$id")
+        return File(getDefaultWalletDir(context), "wallet_" + id)
+    }
+
+    private fun hashSecret(secret: String): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+            .digest(secret.toByteArray(Charsets.UTF_8))
+        return digest.joinToString("") { "%02x".format(it) }
+    }
+
+    private fun walletPassphrasePrefKey(walletFile: File): String {
+        return "wallet_passphrase_" + hashSecret(walletFile.absolutePath).take(32)
+    }
+
+    fun rememberWalletPassphrase(context: Context, walletFile: File, passphrase: String) {
+        if (passphrase.isBlank()) return
+        context.applicationContext
+            .getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit()
+            .putString(walletPassphrasePrefKey(walletFile), hashSecret(passphrase))
+            .apply()
+    }
+
+    fun isWalletPassphrase(context: Context, walletFile: File, passphrase: String): Boolean {
+        if (passphrase.isBlank()) return false
+        val expected = context.applicationContext
+            .getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getString(walletPassphrasePrefKey(walletFile), null)
+            ?: return false
+        return MessageDigest.isEqual(
+            expected.toByteArray(Charsets.UTF_8),
+            hashSecret(passphrase).toByteArray(Charsets.UTF_8)
+        )
     }
 
     fun getTorConfig(scope: CoroutineScope): TorRuntime.Environment {
@@ -102,7 +133,10 @@ object AnonConfig {
 
     fun initWalletState() {
         MainScope().launch(Dispatchers.IO) {
-            walletFound = getDefaultWalletFile(context!!).exists()
+            val walletDir = getDefaultWalletDir(context!!)
+            walletFound = walletDir.listFiles()?.any { file ->
+                file.isFile && (file.name == "anon" || file.name.startsWith("wallet_"))
+            } == true
         }
     }
 
@@ -134,6 +168,29 @@ object AnonConfig {
      * The app data root itself is not removed; only its data-bearing children
      * are deleted so the running process can finish the wipe flow safely.
      */
+    fun clearAppDataKeepWallets(context: Context): Boolean {
+        val app = context.applicationContext
+        val dataRoot = File(app.applicationInfo.dataDir)
+        val walletsDir = getDefaultWalletDir(app).canonicalFile
+        var success = true
+
+        dataRoot.listFiles()?.forEach { child ->
+            if (child.canonicalFile != walletsDir && !child.deleteRecursively()) {
+                success = false
+            }
+        }
+
+        app.getExternalFilesDirs(null).filterNotNull().forEach { dir ->
+            if (!deleteContents(dir)) success = false
+        }
+        app.externalCacheDirs.filterNotNull().forEach { dir ->
+            if (!deleteContents(dir)) success = false
+        }
+
+        walletFound = walletsDir.listFiles()?.any { it.isFile } == true
+        return success
+    }
+
     fun clearAllAppData(context: Context): Boolean {
         val app = context.applicationContext
 
