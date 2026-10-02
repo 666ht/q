@@ -989,11 +989,14 @@ Java_io_anonero_model_Wallet_initJ(JNIEnv *env, jobject instance,
 
 //    virtual bool createWatchOnly(const std::string &path, const std::string &password, const std::string &language) const = 0;
 
-JNIEXPORT void JNICALL
+JNIEXPORT jboolean JNICALL
 Java_io_anonero_model_Wallet_setRestoreHeight(JNIEnv *env, jobject instance,
                                               jlong height) {
     Monero::Wallet *wallet = getHandle<Monero::Wallet>(env, instance);
     wallet->setRefreshFromBlockHeight((uint64_t) height);
+    return static_cast<jboolean>(
+        wallet->getRefreshFromBlockHeight() == (uint64_t) height
+    );
 }
 
 JNIEXPORT jlong JNICALL
@@ -1261,10 +1264,14 @@ Java_io_anonero_model_Wallet_refreshAsync(JNIEnv *env, jobject instance) {
 //TODO virtual bool rescanBlockchain() = 0;
 
 //virtual void rescanBlockchainAsync() = 0;
-JNIEXPORT void JNICALL
+JNIEXPORT jboolean JNICALL
 Java_io_anonero_model_Wallet_rescanBlockchainAsyncJ(JNIEnv *env, jobject instance) {
     Monero::Wallet *wallet = getHandle<Monero::Wallet>(env, instance);
+    if (wallet->fullStatus().connectionStatus != Monero::Wallet::ConnectionStatus_Connected)
+        return static_cast<jboolean>(false);
+
     wallet->rescanBlockchainAsync();
+    return static_cast<jboolean>(true);
 }
 
 
