@@ -72,6 +72,9 @@ class AnonWalletHandler(
         )
         if (anonWallet?.status?.isOk != true) {
             Timber.tag(TAG).e("openWallet error: %s", anonWallet?.status?.errorString)
+            AnonConfig.clearActiveWalletPin()
+        } else {
+            AnonConfig.rememberActiveWalletPin(pin)
         }
         return anonWallet?.status?.isOk ?: throw InvalidPin()
     }
@@ -254,7 +257,7 @@ class AnonWalletHandler(
             add(pinWalletFile.absolutePath + ".keys")
         }.distinct()
 
-        val isPin = pinCandidates.any { candidate ->
+        val isPin = AnonConfig.isActiveWalletPin(passPhrase) || pinCandidates.any { candidate ->
             runCatching {
                 WalletManager.instance?.verifyWalletPassword(candidate, passPhrase, AnonConfig.viewOnly)
             }.getOrDefault(false)
@@ -288,6 +291,7 @@ class AnonWalletHandler(
         WalletManager.resetInstance()
 
         return if (isPassphrase) {
+            AnonConfig.clearActiveWalletPin()
             AnonConfig.clearAllAppData(appContext)
         } else {
             var deleted = true
@@ -321,6 +325,7 @@ class AnonWalletHandler(
                     }
             }
 
+            AnonConfig.clearActiveWalletPin()
             AnonConfig.disposeState()
             deleted
         }
