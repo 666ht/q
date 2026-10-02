@@ -22,6 +22,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -30,6 +31,10 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import io.anonero.model.WalletManager
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import io.anonero.services.WalletState
 import org.koin.compose.koinInject
 import java.text.SimpleDateFormat
@@ -95,6 +100,8 @@ fun ResetSyncPage(
     }
     var selectedDateEndHeight by remember { mutableStateOf<Long?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
+    val dateLookupScope = rememberCoroutineScope()
+    var dateLookupJob by remember { mutableStateOf<Job?>(null) }
 
     Scaffold(
         topBar = {
@@ -171,9 +178,24 @@ fun ResetSyncPage(
                 onValueChange = {
                     error = null
                     date = it
-                    heightRangeForDate(it)?.let { range ->
-                        height = range.first.toString()
-                        selectedDateEndHeight = range.second
+                    dateLookupJob?.cancel()
+                    selectedDateEndHeight = null
+
+                    // The native date lookup performs multiple daemon RPCs.
+                    // Never run it from Compose's main/UI thread.
+                    if (it.length == 10) {
+                        val requestedDate = it
+                        dateLookupJob = dateLookupScope.launch {
+                            val range = withContext(Dispatchers.IO) {
+                                heightRangeForDate(requestedDate)
+                            }
+                            if (date == requestedDate) {
+                                range?.let {
+                                    height = it.first.toString()
+                                    selectedDateEndHeight = it.second
+                                }
+                            }
+                        }
                     }
                 },
                 shape = MaterialTheme.shapes.medium,
