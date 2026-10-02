@@ -70,6 +70,30 @@ object AnonConfig {
         return digest.joinToString("") { "%02x".format(it) }
     }
 
+    private fun walletPinHashFile(walletFile: File): File =
+        File(walletFile.absolutePath + ".pin.sha256")
+
+    fun rememberWalletPin(walletFile: File, pin: String) {
+        if (pin.isBlank()) return
+        runCatching {
+            val file = walletPinHashFile(walletFile)
+            file.parentFile?.mkdirs()
+            file.writeText(hashSecret(pin), Charsets.UTF_8)
+        }
+    }
+
+    fun isWalletPin(walletFile: File, pin: String): Boolean {
+        if (pin.isBlank()) return false
+        val expected = runCatching {
+            val file = walletPinHashFile(walletFile)
+            if (file.isFile) file.readText(Charsets.UTF_8).trim() else null
+        }.getOrNull() ?: return false
+        return MessageDigest.isEqual(
+            expected.toByteArray(Charsets.UTF_8),
+            hashSecret(pin).toByteArray(Charsets.UTF_8)
+        )
+    }
+
     private fun walletPassphraseHashFile(walletFile: File): File {
         return File(walletFile.absolutePath + ".passphrase.sha256")
     }
