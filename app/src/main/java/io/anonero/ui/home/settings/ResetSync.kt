@@ -171,7 +171,6 @@ fun ResetSyncPage(
                     error = null
                     heightDateJob?.cancel()
                     date = it
-                    heightDateJob?.cancel()
                     selectedDateEndHeight = null
                     if (it.length == 10) {
                         wallet?.let { activeWallet ->
