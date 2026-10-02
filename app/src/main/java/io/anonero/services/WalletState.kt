@@ -358,19 +358,16 @@ class WalletState {
         // original recovery height is never read or overwritten by this path.
         wallet.pauseRefresh()
         try {
-            setLoading(true)
-            customRescanJob?.cancel()
-            customRescanFinished = false
-            customRescanStartHeight = height
-
             // A custom scan always has a hard end: use the requested end height
             // when provided, otherwise stop at the daemon's current height.
             val effectiveEnd = (dayEndHeight ?: wallet.getDaemonBlockChainHeight())
                 .takeIf { it >= height }
-                ?: return Result.failure(
-                    IllegalArgumentException("Invalid custom end height")
-                )
+                ?: throw IllegalArgumentException("Invalid custom end height")
 
+            setLoading(true)
+            customRescanJob?.cancel()
+            customRescanFinished = false
+            customRescanStartHeight = height
             customRescanDayEndHeight = effectiveEnd
             customRescanInProgress = true
 
