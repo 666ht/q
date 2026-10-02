@@ -71,9 +71,10 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
         Timber.tag(name)
             .i("refreshed() status:${status} daemonHeight:$daemonHeight chainHeight:$chainHeight ")
         if (walletState.customRescanInProgress) {
-            if (wallet.isSynchronized) {
-                // The custom rescan has reached the daemon tip. Only now end the
-                // custom-rescan state and resume the normal history/coin refresh.
+            if (wallet.nativeSynchronized) {
+                // Native wallet2 is authoritative here. The Java flag remains false
+                // throughout the custom rescan and is only set after completion.
+                wallet.setSynchronized()
                 walletState.customRescanInProgress = false
                 wallet.store()
                 refresh(true)
