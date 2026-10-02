@@ -77,6 +77,23 @@ class WalletState {
     @Volatile
     var customRescanDayEndHeight: Long? = null
 
+    // Restore-from-seed progress uses the user-selected restore height as its exact start.
+    @Volatile
+    var restoreProgressStartHeight: Long? = null
+
+    @Volatile
+    var restoreProgressInProgress: Boolean = false
+
+    fun beginRestoreProgress(startHeight: Long) {
+        restoreProgressStartHeight = startHeight
+        restoreProgressInProgress = true
+    }
+
+    fun finishRestoreProgress() {
+        restoreProgressStartHeight = null
+        restoreProgressInProgress = false
+    }
+
     val transactions: Flow<List<TransactionInfo>> = _transactions
 
     val balanceInfo: Flow<Long?> = _balanceInfo
