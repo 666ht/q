@@ -211,7 +211,7 @@ class Wallet {
     ): Boolean
 
     external fun getRestoreHeight(): Long
-    external fun setRestoreHeight(height: Long)
+    external fun setRestoreHeight(height: Long): Boolean
 
     private val connectionStatus: ConnectionStatus
         get() {
