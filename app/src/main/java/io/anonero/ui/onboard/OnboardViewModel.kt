@@ -179,8 +179,16 @@ class OnboardViewModel(private val prefs: SharedPreferences) : ViewModel() {
             throw CancellationException("unable to create wallet ${anonWallet?.status?.errorString}")
         }
         val crazyPass: String = KeyStoreHelper.getCrazyPass(AnonConfig.context, passPhrase)
+        val pinHash = CrazyPassEncoder.encode(
+            pin.toByteArray().let { bytes ->
+                if (bytes.size < 32) {
+                    bytes + ByteArray(32 - bytes.size)
+                } else bytes
+            }
+        )
         prefs.edit(commit = true) {
             putString(PREFS_PASSPHRASE_HASH, crazyPass)
+            putString(PREFS_PIN_HASH, pinHash)
             restorePayload?.restoreHeight?.let {
                 putLong(RESTORE_HEIGHT, it)
             }
