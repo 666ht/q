@@ -40,16 +40,27 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
     override fun newBlock(height: Long) {
         Timber.tag(name).i("newBlock: %s", height)
 
-        // Native wallet2 is authoritative. Once native synchronization reports
-        // completion, finish immediately from the block callback instead of
-        // waiting for another refresh cycle.
+        // Custom-height scans have their own hard end and progress cursor. Do not
+        // let the daemon's full target or native synchronized flag finish them.
+        if (walletState.customRescanInProgress) {
+            walletState.onCustomRescanBlock(height)
+            return
+        }
+
+        // A completed custom scan stays paused until the user explicitly starts
+        // a normal refresh again.
+        if (walletState.customRescanFinished) {
+            return
+        }
+
+        // Native wallet2 is authoritative for normal synchronization.
         if (!wallet.isSynchronized && wallet.nativeSynchronized) {
             completeSynchronization()
             return
         }
 
         // Do not recreate sync progress after synchronization has finished.
-        if (!wallet.isSynchronized && !walletState.customRescanInProgress) {
+        if (!wallet.isSynchronized) {
             updateSyncProgress(height)
         }
     }
@@ -112,13 +123,13 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
         Timber.tag(name)
             .i("refreshed() status:${status} daemonHeight:$daemonHeight chainHeight:$chainHeight ")
         if (walletState.customRescanInProgress) {
-            if (!wallet.isSynchronized && wallet.nativeSynchronized) {
-                // Native wallet2 is authoritative here. Complete the sync and
-                // refresh wallet data immediately when the native scan is done.
-                completeSynchronization()
-            } else {
-                updateSyncProgress(walletState.customRescanStartHeight ?: chainHeight)
-            }
+            // The 400ms custom-height poller reads the actual native scan height.
+            // A refresh callback must not promote the custom end into a full sync.
+            walletState.onCustomRescanBlock(chainHeight)
+            walletState.update()
+            return
+        }
+        if (walletState.customRescanFinished) {
             walletState.update()
             return
         }
