@@ -76,7 +76,7 @@ fun CoinDetailScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("冻结", color = outputColor) },
+                title = { Text("冻结") },
                 navigationIcon = {
                     IconButton(onClick = onBackPress) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
