@@ -291,7 +291,6 @@ class AnonWalletHandler(
             AnonConfig.clearAllAppData(appContext)
         } else {
             var deleted = true
-            val walletPath = currentWalletFile.absolutePath
             val walletDir = currentWalletFile.parentFile
             val walletName = currentWalletFile.name
 
