@@ -70,30 +70,31 @@ object AnonConfig {
         return digest.joinToString("") { "%02x".format(it) }
     }
 
-    private fun walletPassphrasePrefKey(walletFile: File): String {
-        return "wallet_passphrase_" + hashSecret(walletFile.absolutePath).take(32)
+    private fun walletPassphraseHashFile(walletFile: File): File {
+        return File(walletFile.absolutePath + ".passphrase.sha256")
     }
 
     fun rememberWalletPassphrase(context: Context, walletFile: File, passphrase: String) {
         if (passphrase.isBlank()) return
-        context.applicationContext
-            .getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .edit()
-            .putString(walletPassphrasePrefKey(walletFile), hashSecret(passphrase))
-            .apply()
+        val hashFile = walletPassphraseHashFile(walletFile)
+        runCatching {
+            hashFile.parentFile?.mkdirs()
+            hashFile.writeText(hashSecret(passphrase), Charsets.UTF_8)
+        }
     }
 
     fun isWalletPassphrase(context: Context, walletFile: File, passphrase: String): Boolean {
         if (passphrase.isBlank()) return false
-        val expected = context.applicationContext
-            .getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .getString(walletPassphrasePrefKey(walletFile), null)
-            ?: return false
+        val hashFile = walletPassphraseHashFile(walletFile)
+        val expected = runCatching {
+            if (hashFile.isFile) hashFile.readText(Charsets.UTF_8).trim() else null
+        }.getOrNull() ?: return false
         return MessageDigest.isEqual(
             expected.toByteArray(Charsets.UTF_8),
             hashSecret(passphrase).toByteArray(Charsets.UTF_8)
         )
     }
+
 
     fun getTorConfig(scope: CoroutineScope): TorRuntime.Environment {
         val torDir = File(context?.filesDir, "tor")
