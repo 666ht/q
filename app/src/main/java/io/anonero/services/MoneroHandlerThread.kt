@@ -81,6 +81,12 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
             walletState.customRescanInProgress && customDayEnd != null -> {
                 minOf(targetHeight.takeIf { it > 0 } ?: daemonHeight, customDayEnd)
             }
+            walletState.restoreProgressInProgress && restoreStart != null -> {
+                // Restore remaining blocks must end at the daemon's actual current
+                // chain height. target_height is a node synchronization target/
+                // estimate and can be tens of thousands of blocks ahead.
+                daemonHeight
+            }
             else -> targetHeight.takeIf { it > 0 } ?: daemonHeight
         }
 
