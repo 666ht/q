@@ -39,11 +39,12 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
 
     override fun newBlock(height: Long) {
         Timber.tag(name).i("newBlock: %s", height)
-        // Do not recreate the sync progress after the wallet is already synced.
-        // During a custom rescan the Java flag keeps progress updates enabled
-        // until native synchronization completes.
-        if (!wallet.isSynchronized || walletState.customRescanInProgress) {
+        // Do not recreate sync progress after synchronization has finished.
+        // The explicit completion state also clears any stale refresh/loading UI.
+        if (!wallet.isSynchronized && !walletState.customRescanInProgress) {
             updateSyncProgress(height)
+        } else if (wallet.isSynchronized && !walletState.customRescanInProgress) {
+            walletState.finishSync()
         }
     }
 
@@ -118,8 +119,7 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
                 wallet.store()
 
                 refresh(true)
-                walletState.syncUpdate(SyncProgress(1f, 0L))
-                walletState.setLoading(false)
+                walletState.finishSync()
             } else {
                 updateSyncProgress(walletState.customRescanStartHeight ?: chainHeight)
             }
@@ -140,8 +140,7 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
                 walletState.customRescanInProgress = false
                 wallet.store()
                 refresh(true)
-                walletState.syncUpdate(SyncProgress(1f, 0L))
-                walletState.setLoading(false)
+                walletState.finishSync()
             }
 
         }
