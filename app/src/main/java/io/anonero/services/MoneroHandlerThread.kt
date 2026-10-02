@@ -149,11 +149,16 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
             walletState.customRescanDayEndHeight = null
             walletState.customRescanInProgress = false
 
-            // Read the final native wallet state before hiding the progress UI.
-            wallet.store()
-            refresh(true)
+            // End the sync indicator first so completion is visible immediately.
+            // Then load the final balance and transaction history.
             walletState.update()
-        } finally {
+            walletState.finishSync()
+
+            refresh(true)
+            wallet.store()
+            walletState.update()
+        } catch (e: Exception) {
+            Timber.tag(name).e(e, "Failed to finalize synchronized wallet data")
             walletState.finishSync()
         }
     }
