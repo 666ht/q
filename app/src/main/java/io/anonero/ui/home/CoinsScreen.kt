@@ -46,7 +46,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.asLiveData
 import io.anonero.R
 import io.anonero.model.CoinsInfo
@@ -54,6 +53,7 @@ import io.anonero.model.Wallet
 import io.anonero.services.WalletState
 import io.anonero.ui.components.WalletProgressIndicator
 import io.anonero.ui.components.XmrText
+import io.anonero.ui.theme.Orange
 import io.anonero.ui.home.graph.routes.SendScreenRoute
 import io.anonero.util.Formats
 import org.koin.java.KoinJavaComponent.inject
@@ -135,7 +135,7 @@ fun CoinsScreen(
         },
         topBar = {
             TopAppBar(
-                title = { XmrText(text = "XMR", fontSize = 30.sp, color = Color(0xFFFF9800), modifier = Modifier.offset(y = (-2).dp)) },
+                title = { XmrText(text = "XMR", fontSize = 30.sp, color = Orange, modifier = Modifier.offset(y = (-2).dp)) },
                 navigationIcon = {
                     IconButton(onClick = onBackPress) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
