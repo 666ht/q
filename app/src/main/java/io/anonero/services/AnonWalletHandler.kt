@@ -81,6 +81,21 @@ class AnonWalletHandler(
 
     suspend fun startService() {
         val wallet = WalletManager.instance?.wallet ?: return
+
+        // Restore progress must be armed before native callbacks start.
+        // Otherwise the first callbacks are interpreted as a normal scan from 0,
+        // which makes a selected restore height such as 3769707 look like ~3.7M
+        // blocks remaining.
+        val pendingRestoreHeight = prefs.getLong(RESTORE_HEIGHT, 0L)
+        val pendingRestoreRescan = prefs.getBoolean(RESTORE_NEEDS_RESCAN, false)
+        if (pendingRestoreRescan && pendingRestoreHeight > 0L) {
+            walletState.beginRestoreProgress(pendingRestoreHeight)
+            if (wallet.getRestoreHeight() != pendingRestoreHeight) {
+                wallet.setRestoreHeight(pendingRestoreHeight)
+                wallet.store()
+            }
+        }
+
         handler = MoneroHandlerThread(
             wallet,
             walletState
@@ -144,13 +159,19 @@ class AnonWalletHandler(
                     ?: wallet.getRestoreHeight().takeIf { it > 0L }
                 if (effectiveRestoreHeight != null && !wallet.nativeSynchronized) {
                     // A stored restore height is the authoritative start of the
-                    // restore scan. Do not depend on the one-shot preference flag,
-                    // because older wallets/builds can have inconsistent flag state.
-                    walletState.beginRestoreProgress(effectiveRestoreHeight)
+                    // restore scan. The state may already be armed before native
+                    // callbacks start; avoid resetting it.
+                    if (!walletState.restoreProgressInProgress) {
+                        walletState.beginRestoreProgress(effectiveRestoreHeight)
+                    }
                 } else if (needsRestoreRescan && wallet.nativeSynchronized) {
                     // The restore scan is already finished; consume the one-shot flag
-                    // so it cannot re-arm a restore progress cycle on future opens.
-                    prefs.edit { putBoolean(RESTORE_NEEDS_RESCAN, false) }
+                    // and restore-height preference so it cannot re-arm on future opens.
+                    prefs.edit {
+                        putBoolean(RESTORE_NEEDS_RESCAN, false)
+                        remove(RESTORE_HEIGHT)
+                    }
+                    walletState.finishRestoreProgress()
                 }
                 wallet.startRefresh()
                 walletState.update()
