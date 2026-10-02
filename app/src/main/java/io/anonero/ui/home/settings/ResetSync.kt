@@ -21,9 +21,11 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
@@ -35,8 +37,11 @@ import org.koin.compose.koinInject
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-
-private const val BLOCK_TIME_SECONDS = 120L
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -50,9 +55,13 @@ fun ResetSyncPage(
     }
     val dateFormat = remember { SimpleDateFormat("yyyy-MM-dd", Locale.US) }
 
-    fun dateForHeight(value: Long): String {
-        val secondsAgo = (currentHeight - value).coerceAtLeast(0L) * BLOCK_TIME_SECONDS
+    fun approximateDateForHeight(value: Long): String {
+        val secondsAgo = (currentHeight - value).coerceAtLeast(0L) * 120L
         return dateFormat.format(Date(System.currentTimeMillis() - secondsAgo * 1000L))
+    }
+
+    fun dateForTimestamp(timestamp: Long): String {
+        return dateFormat.format(Date(timestamp * 1000L))
     }
 
     fun heightRangeForDate(value: String): Pair<Long, Long>? {
@@ -87,11 +96,25 @@ fun ResetSyncPage(
     var height by remember {
         mutableStateOf(wallet?.getRestoreHeight()?.toString() ?: "")
     }
-    var date by remember {
-        mutableStateOf(wallet?.getRestoreHeight()?.let(::dateForHeight) ?: "")
-    }
+    var date by remember { mutableStateOf("") }
     var selectedDateEndHeight by remember { mutableStateOf<Long?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
+    val coroutineScope = rememberCoroutineScope()
+    var heightDateJob by remember { mutableStateOf<Job?>(null) }
+
+    LaunchedEffect(wallet) {
+        val restoreHeight = wallet?.getRestoreHeight()
+        if (restoreHeight != null) {
+            val timestamp = withContext(Dispatchers.IO) {
+                runCatching { wallet.getBlockTimestamp(restoreHeight) }.getOrDefault(0L)
+            }
+            if (timestamp > 0L && height == restoreHeight.toString()) {
+                date = dateForTimestamp(timestamp)
+            } else if (height == restoreHeight.toString()) {
+                date = approximateDateForHeight(restoreHeight)
+            }
+        }
+    }
     Scaffold(
         topBar = {
             TopAppBar(
@@ -149,9 +172,25 @@ fun ResetSyncPage(
                 value = height,
                 onValueChange = {
                     error = null
+                    heightDateJob?.cancel()
                     height = it.filter(Char::isDigit)
                     selectedDateEndHeight = null
-                    height.toLongOrNull()?.let { h -> date = dateForHeight(h) }
+                    height.toLongOrNull()?.let { h ->
+                        date = approximateDateForHeight(h)
+                        wallet?.let { activeWallet ->
+                            heightDateJob = coroutineScope.launch {
+                                delay(150L)
+                                val timestamp = withContext(Dispatchers.IO) {
+                                    runCatching {
+                                        activeWallet.getBlockTimestamp(h)
+                                    }.getOrDefault(0L)
+                                }
+                                if (timestamp > 0L && height == h.toString()) {
+                                    date = dateForTimestamp(timestamp)
+                                }
+                            }
+                        }
+                    }
                 },
                 shape = MaterialTheme.shapes.medium,
                 modifier = Modifier.fillMaxWidth(),
@@ -166,6 +205,7 @@ fun ResetSyncPage(
                 value = date,
                 onValueChange = {
                     error = null
+                    heightDateJob?.cancel()
                     date = it
                     selectedDateEndHeight = null
                     if (it.length == 10) {

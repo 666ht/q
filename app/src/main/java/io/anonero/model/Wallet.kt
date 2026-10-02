@@ -248,9 +248,14 @@ class Wallet {
     external fun getBlockChainHeight(): Long
     external fun getApproximateBlockChainHeight(): Long
     private external fun getBlockChainHeightByDateJ(year: Int, month: Int, day: Int): Long
+    private external fun getBlockTimestampJ(height: Long): Long
 
     fun getBlockChainHeightByDate(year: Int, month: Int, day: Int): Long {
         return getBlockChainHeightByDateJ(year, month, day)
+    }
+
+    fun getBlockTimestamp(height: Long): Long {
+        return getBlockTimestampJ(height)
     }
 
     external fun getDaemonBlockChainHeight(): Long

@@ -1089,6 +1089,21 @@ Java_io_anonero_model_Wallet_getBlockChainHeightByDateJ(JNIEnv *env, jobject ins
 }
 
 JNIEXPORT jlong JNICALL
+Java_io_anonero_model_Wallet_getBlockTimestampJ(JNIEnv *env, jobject instance,
+                                                jlong height) {
+    Monero::Wallet *wallet = getHandle<Monero::Wallet>(env, instance);
+    if (height < 0)
+        return static_cast<jlong>(0);
+
+    try {
+        return static_cast<jlong>(
+            wallet->getBlockTimestamp(static_cast<uint64_t>(height)));
+    } catch (const std::exception &) {
+        return static_cast<jlong>(0);
+    }
+}
+
+JNIEXPORT jlong JNICALL
 Java_io_anonero_model_Wallet_getDaemonBlockChainHeight(JNIEnv *env, jobject instance) {
     Monero::Wallet *wallet = getHandle<Monero::Wallet>(env, instance);
     return wallet->daemonBlockChainHeight();
