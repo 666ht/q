@@ -50,47 +50,14 @@ fun ResetSyncPage(
 ) {
     val walletState = koinInject<WalletState>()
     val wallet = WalletManager.instance?.wallet
-    val currentHeight = remember(wallet) {
-        wallet?.getBlockChainHeight()?.takeIf { it > 0L } ?: 0L
-    }
-    val dateFormat = remember { SimpleDateFormat("yyyy-MM-dd", Locale.US) }
-
-    fun approximateDateForHeight(value: Long): String {
-        val secondsAgo = (currentHeight - value).coerceAtLeast(0L) * 120L
-        return dateFormat.format(Date(System.currentTimeMillis() - secondsAgo * 1000L))
+    val dateFormat = remember {
+        SimpleDateFormat("yyyy-MM-dd", Locale.US).apply {
+            isLenient = false
+        }
     }
 
     fun dateForTimestamp(timestamp: Long): String {
         return dateFormat.format(Date(timestamp * 1000L))
-    }
-
-    fun heightRangeForDate(value: String): Pair<Long, Long>? {
-        return try {
-            val parsed = dateFormat.parse(value) ?: return null
-            val today = java.util.Calendar.getInstance()
-            val selected = java.util.Calendar.getInstance().apply {
-                time = parsed
-                set(java.util.Calendar.HOUR_OF_DAY, 0)
-                set(java.util.Calendar.MINUTE, 0)
-                set(java.util.Calendar.SECOND, 0)
-                set(java.util.Calendar.MILLISECOND, 0)
-            }
-            today.set(java.util.Calendar.HOUR_OF_DAY, 0)
-            today.set(java.util.Calendar.MINUTE, 0)
-            today.set(java.util.Calendar.SECOND, 0)
-            today.set(java.util.Calendar.MILLISECOND, 0)
-
-            val daysAgo = ((today.timeInMillis - selected.timeInMillis) / (24L * 60L * 60L * 1000L))
-                .coerceAtLeast(0L)
-
-            // Monero targets roughly one block every two minutes. The user allows
-            // up to a day of conversion error, so a local estimate is sufficient
-            // and avoids blocking on daemon RPCs while typing a date.
-            val estimatedStart = (currentHeight - daysAgo * 720L).coerceAtLeast(0L)
-            estimatedStart to (estimatedStart + 720L)
-        } catch (_: Exception) {
-            null
-        }
     }
 
     var height by remember {
@@ -110,8 +77,6 @@ fun ResetSyncPage(
             }
             if (timestamp > 0L && height == restoreHeight.toString()) {
                 date = dateForTimestamp(timestamp)
-            } else if (height == restoreHeight.toString()) {
-                date = approximateDateForHeight(restoreHeight)
             }
         }
     }
@@ -176,7 +141,6 @@ fun ResetSyncPage(
                     height = it.filter(Char::isDigit)
                     selectedDateEndHeight = null
                     height.toLongOrNull()?.let { h ->
-                        date = approximateDateForHeight(h)
                         wallet?.let { activeWallet ->
                             heightDateJob = coroutineScope.launch {
                                 delay(150L)
@@ -207,11 +171,50 @@ fun ResetSyncPage(
                     error = null
                     heightDateJob?.cancel()
                     date = it
+                    heightDateJob?.cancel()
                     selectedDateEndHeight = null
                     if (it.length == 10) {
-                        heightRangeForDate(it)?.let { range ->
-                            height = range.first.toString()
-                            selectedDateEndHeight = range.second
+                        wallet?.let { activeWallet ->
+                            val requestedDate = it
+                            heightDateJob = coroutineScope.launch {
+                                delay(150L)
+                                val range = withContext(Dispatchers.IO) {
+                                    runCatching {
+                                        val formatter = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply {
+                                            isLenient = false
+                                        }
+                                        val selected = formatter.parse(requestedDate)
+                                            ?: throw IllegalArgumentException("invalid date")
+                                        val calendar = java.util.Calendar.getInstance().apply {
+                                            time = selected
+                                            set(java.util.Calendar.HOUR_OF_DAY, 0)
+                                            set(java.util.Calendar.MINUTE, 0)
+                                            set(java.util.Calendar.SECOND, 0)
+                                            set(java.util.Calendar.MILLISECOND, 0)
+                                        }
+
+                                        val startHeight = activeWallet.getBlockChainHeightByDate(
+                                            calendar.get(java.util.Calendar.YEAR),
+                                            calendar.get(java.util.Calendar.MONTH) + 1,
+                                            calendar.get(java.util.Calendar.DAY_OF_MONTH)
+                                        )
+
+                                        calendar.add(java.util.Calendar.DAY_OF_YEAR, 1)
+                                        val endHeight = activeWallet.getBlockChainHeightByDate(
+                                            calendar.get(java.util.Calendar.YEAR),
+                                            calendar.get(java.util.Calendar.MONTH) + 1,
+                                            calendar.get(java.util.Calendar.DAY_OF_MONTH)
+                                        )
+
+                                        startHeight to endHeight
+                                    }.getOrNull()
+                                }
+
+                                if (range != null && date == requestedDate) {
+                                    height = range.first.toString()
+                                    selectedDateEndHeight = range.second
+                                }
+                            }
                         }
                     }
                 },
