@@ -22,7 +22,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -31,10 +30,6 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import io.anonero.model.WalletManager
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import io.anonero.services.WalletState
 import org.koin.compose.koinInject
 import java.text.SimpleDateFormat
@@ -63,34 +58,31 @@ fun ResetSyncPage(
     fun heightRangeForDate(value: String): Pair<Long, Long>? {
         return try {
             val parsed = dateFormat.parse(value) ?: return null
-            val calendar = java.util.Calendar.getInstance().apply {
+            val today = java.util.Calendar.getInstance()
+            val selected = java.util.Calendar.getInstance().apply {
                 time = parsed
+                set(java.util.Calendar.HOUR_OF_DAY, 0)
+                set(java.util.Calendar.MINUTE, 0)
+                set(java.util.Calendar.SECOND, 0)
+                set(java.util.Calendar.MILLISECOND, 0)
             }
-            val year = calendar.get(java.util.Calendar.YEAR)
-            val month = calendar.get(java.util.Calendar.MONTH) + 1
-            val day = calendar.get(java.util.Calendar.DAY_OF_MONTH)
+            today.set(java.util.Calendar.HOUR_OF_DAY, 0)
+            today.set(java.util.Calendar.MINUTE, 0)
+            today.set(java.util.Calendar.SECOND, 0)
+            today.set(java.util.Calendar.MILLISECOND, 0)
 
-            // Use Monero's real block timestamps. The selected height is the
-            // first block of that calendar day and the end is the last block
-            // before the next calendar day.
-            val dayStartHeight = wallet?.getBlockChainHeightByDate(year, month, day) ?: return null
-            val nextDay = (calendar.clone() as java.util.Calendar).apply {
-                add(java.util.Calendar.DAY_OF_YEAR, 1)
-            }
-            val nextDayHeight = wallet.getBlockChainHeightByDate(
-                nextDay.get(java.util.Calendar.YEAR),
-                nextDay.get(java.util.Calendar.MONTH) + 1,
-                nextDay.get(java.util.Calendar.DAY_OF_MONTH)
-            )
-            val dayEndHeight = (nextDayHeight - 1L).coerceAtLeast(dayStartHeight)
+            val daysAgo = ((today.timeInMillis - selected.timeInMillis) / (24L * 60L * 60L * 1000L))
+                .coerceAtLeast(0L)
 
-            dayStartHeight.coerceAtLeast(0L) to dayEndHeight
+            // Monero targets roughly one block every two minutes. The user allows
+            // up to a day of conversion error, so a local estimate is sufficient
+            // and avoids blocking on daemon RPCs while typing a date.
+            val estimatedStart = (currentHeight - daysAgo * 720L).coerceAtLeast(0L)
+            estimatedStart to (estimatedStart + 720L)
         } catch (_: Exception) {
             null
         }
     }
-
-    fun heightForDate(value: String): Long? = heightRangeForDate(value)?.first
 
     var height by remember {
         mutableStateOf(wallet?.getRestoreHeight()?.toString() ?: "")
@@ -100,9 +92,6 @@ fun ResetSyncPage(
     }
     var selectedDateEndHeight by remember { mutableStateOf<Long?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
-    val dateLookupScope = rememberCoroutineScope()
-    var dateLookupJob by remember { mutableStateOf<Job?>(null) }
-
     Scaffold(
         topBar = {
             TopAppBar(
@@ -178,23 +167,11 @@ fun ResetSyncPage(
                 onValueChange = {
                     error = null
                     date = it
-                    dateLookupJob?.cancel()
                     selectedDateEndHeight = null
-
-                    // The native date lookup performs multiple daemon RPCs.
-                    // Never run it from Compose's main/UI thread.
                     if (it.length == 10) {
-                        val requestedDate = it
-                        dateLookupJob = dateLookupScope.launch {
-                            val range = withContext(Dispatchers.IO) {
-                                heightRangeForDate(requestedDate)
-                            }
-                            if (date == requestedDate) {
-                                range?.let {
-                                    height = it.first.toString()
-                                    selectedDateEndHeight = it.second
-                                }
-                            }
+                        heightRangeForDate(it)?.let { range ->
+                            height = range.first.toString()
+                            selectedDateEndHeight = range.second
                         }
                     }
                 },
