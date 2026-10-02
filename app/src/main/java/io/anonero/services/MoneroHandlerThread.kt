@@ -1,5 +1,6 @@
 package io.anonero.services
 
+import androidx.core.content.edit
 import io.anonero.model.PendingTransaction
 import io.anonero.model.Wallet
 import io.anonero.model.WalletListener
@@ -182,6 +183,17 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
             walletState.customRescanDayEndHeight = null
             walletState.customRescanInProgress = false
             walletState.finishRestoreProgress()
+
+            // Restore height is a one-shot scan instruction. The wallet itself
+            // already stores its restore height, so clear the temporary UI
+            // progress flags once the selected height scan has completed.
+            AnonConfig.context?.let { context ->
+                context.getSharedPreferences(AnonConfig.PREFS, android.content.Context.MODE_PRIVATE)
+                    .edit {
+                        putBoolean(io.anonero.util.RESTORE_NEEDS_RESCAN, false)
+                        remove(io.anonero.util.RESTORE_HEIGHT)
+                    }
+            }
 
             // End the sync indicator first so completion is visible immediately.
             // Then load the final balance and transaction history.
