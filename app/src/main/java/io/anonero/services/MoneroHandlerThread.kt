@@ -73,7 +73,7 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
         val customDayEnd = walletState.customRescanDayEndHeight
         val restoreStart = walletState.restoreProgressStartHeight
 
-        if (syncHeight < 0 || daemonHeight < 0) return
+        if (daemonHeight < 0) return
 
         val effectiveTarget = when {
             walletState.customRescanInProgress && customDayEnd != null -> {
@@ -105,10 +105,10 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
                 maxOf(height, customStart)
             }
             walletState.restoreProgressInProgress && restoreStart != null -> {
-                // For mnemonic restore, use the wallet's actual scanned height. The
-                // newBlock callback reports daemon blocks and can be ahead of the
-                // wallet scan cursor.
-                maxOf(syncHeight, restoreStart)
+                // During seed recovery, newBlock(height) is emitted by the native
+                // wallet as blocks are actually processed. getBlockChainHeight()
+                // can remain behind while a refresh batch is being processed.
+                maxOf(height, restoreStart)
             }
             else -> syncHeight
         }
