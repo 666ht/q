@@ -75,6 +75,22 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
 
         if (syncHeight < 0 || daemonHeight < 0) return
 
+        val effectiveTarget = when {
+            walletState.customRescanInProgress && customDayEnd != null -> {
+                minOf(targetHeight.takeIf { it > 0 } ?: daemonHeight, customDayEnd)
+            }
+            else -> targetHeight.takeIf { it > 0 } ?: daemonHeight
+        }
+
+        // Restore progress has two distinct phases. Before the daemon itself has
+        // reached the user-selected restore height, there is no wallet scan cursor
+        // to report yet. Do not present that node catch-up distance as restore blocks.
+        if (walletState.restoreProgressInProgress && restoreStart != null &&
+            daemonHeight < restoreStart) {
+            walletState.syncUpdate(SyncProgress(0f, 0L))
+            return
+        }
+
         val currentHeight = when {
             walletState.customRescanInProgress && customStart != null -> {
                 // Native rescans can lag behind the newBlock callback. The callback
@@ -82,16 +98,12 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
                 maxOf(height, customStart)
             }
             walletState.restoreProgressInProgress && restoreStart != null -> {
-                maxOf(height, restoreStart)
+                // For mnemonic restore, use the wallet's actual scanned height. The
+                // newBlock callback reports daemon blocks and can be ahead of the
+                // wallet scan cursor.
+                maxOf(syncHeight, restoreStart)
             }
             else -> syncHeight
-        }
-
-        val effectiveTarget = when {
-            walletState.customRescanInProgress && customDayEnd != null -> {
-                minOf(targetHeight.takeIf { it > 0 } ?: daemonHeight, customDayEnd)
-            }
-            else -> targetHeight.takeIf { it > 0 } ?: daemonHeight
         }
 
         val progressStart = when {
