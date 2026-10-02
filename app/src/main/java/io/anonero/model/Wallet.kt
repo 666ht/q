@@ -265,10 +265,17 @@ class Wallet {
     external fun pauseRefresh()
     external fun refresh(): Boolean
     external fun refreshAsync()
-    private external fun rescanBlockchainAsyncJ()
-    fun rescanBlockchainAsync() {
+    private external fun rescanBlockchainAsyncJ(): Boolean
+    fun rescanBlockchainAsync(): Boolean {
         isSynchronized = false
-        rescanBlockchainAsyncJ()
+        val started = rescanBlockchainAsyncJ()
+        if (started) {
+            // pauseRefresh() is used by the custom-height reset path before
+            // requesting the rescan. Native rescan only queues the operation;
+            // the refresh worker must be enabled again to execute it.
+            startRefresh()
+        }
+        return started
     }
 
     //TODO virtual void setAutoRefreshInterval(int millis) = 0;
