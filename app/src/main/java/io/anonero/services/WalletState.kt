@@ -320,12 +320,11 @@ class WalletState {
         // This prevents an in-flight refresh from continuing with the old start height.
         wallet.pauseRefresh()
         try {
-            wallet.setRestoreHeight(height)
+            val applied = wallet.setRestoreHeight(height)
 
-            // Native background-wallet mode can silently reject setRestoreHeight().
-            // Verify the value immediately so we never report a false successful reset.
+            // Verify both the native setter result and the stored value immediately.
             val actualHeight = wallet.getRestoreHeight()
-            if (actualHeight != height) {
+            if (!applied || actualHeight != height) {
                 return Result.failure(
                     IllegalStateException(
                         "Restore height was not applied: requested=$height actual=$actualHeight"
@@ -348,7 +347,11 @@ class WalletState {
             }
 
             setLoading(true)
-            wallet.rescanBlockchainAsync()
+            if (!wallet.rescanBlockchainAsync()) {
+                return Result.failure(
+                    IllegalStateException("Blockchain rescan was not started")
+                )
+            }
         } finally {
             // Resume normal wallet refresh after the rescan request is queued.
             wallet.startRefresh()
