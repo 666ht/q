@@ -39,6 +39,7 @@ import java.util.Date
 import java.util.Locale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -151,6 +152,7 @@ fun ResetSyncPage(
                     height.toLongOrNull()?.let { h ->
                         wallet?.let { activeWallet ->
                             heightDateJob = coroutineScope.launch {
+                                delay(60L)
                                 val cachedDate = heightToDateCache[h]
                                 if (cachedDate != null) {
                                     date = cachedDate
@@ -192,6 +194,7 @@ fun ResetSyncPage(
                         wallet?.let { activeWallet ->
                             val requestedDate = it
                             heightDateJob = coroutineScope.launch {
+                                delay(60L)
                                 val cachedRange = dateToHeightCache[requestedDate]
                                 if (cachedRange != null) {
                                     height = cachedRange.first.toString()
