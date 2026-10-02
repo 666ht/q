@@ -64,6 +64,9 @@ class WalletState {
     private val customRescanScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var customRescanJob: Job? = null
     private val customRescanFinishStarted = AtomicBoolean(false)
+    // The async native rescan is queued before wallet2 clears its old blockchain.
+    // Do not let the first poll read the old tip and falsely finish the custom scan.
+    private val customRescanScanStarted = AtomicBoolean(false)
 
     @Volatile
     var customRescanInProgress: Boolean = false
@@ -383,6 +386,7 @@ class WalletState {
         wallet.pauseRefresh()
         try {
             customRescanFinishStarted.set(false)
+            customRescanScanStarted.set(false)
             customRescanFinished = false
 
             // A custom scan always has a hard end: use the requested end height
@@ -398,7 +402,9 @@ class WalletState {
             customRescanInProgress = true
 
             if (!wallet.rescanBlockchainAsyncFromHeight(height)) {
-                customRescanStartHeight = null
+                customRescanScanStarted.set(false)
+                customRescanScanStarted.set(false)
+            customRescanStartHeight = null
                 customRescanDayEndHeight = null
                 customRescanInProgress = false
                 setLoading(false)
@@ -417,6 +423,8 @@ class WalletState {
             Result.success(true)
         } catch (e: Exception) {
             customRescanJob?.cancel()
+            customRescanScanStarted.set(false)
+                customRescanScanStarted.set(false)
             customRescanStartHeight = null
             customRescanDayEndHeight = null
             customRescanInProgress = false
@@ -442,11 +450,29 @@ class WalletState {
         customRescanJob?.cancel()
         customRescanJob = customRescanScope.launch {
             while (isActive && customRescanInProgress) {
-                val currentHeight = runCatching {
+                val rawHeight = runCatching {
                     wallet.getBlockChainHeight()
                 }.getOrDefault(startHeight)
-                    .coerceAtLeast(startHeight)
 
+                // Before the native rescan clears wallet2's old blockchain,
+                // getBlockChainHeight() can still return the previous tip. That
+                // value must never be treated as the custom scan's completion.
+                if (!customRescanScanStarted.get()) {
+                    if (rawHeight <= startHeight) {
+                        customRescanScanStarted.set(true)
+                    } else {
+                        syncUpdate(
+                            SyncProgress(
+                                0f,
+                                (endHeight - startHeight).coerceAtLeast(0L)
+                            )
+                        )
+                        delay(400)
+                        continue
+                    }
+                }
+
+                val currentHeight = rawHeight.coerceAtLeast(startHeight)
                 if (currentHeight >= endHeight) {
                     requestCustomRescanCompletion(wallet, endHeight)
                     break
@@ -473,6 +499,16 @@ class WalletState {
         val wallet = getWallet ?: return
         val start = customRescanStartHeight ?: return
         val end = customRescanDayEndHeight ?: return
+
+        if (!customRescanScanStarted.get()) {
+            // Ignore a callback from the pre-rescan wallet tip. A callback in the
+            // requested range proves that the custom scan has actually started.
+            if (height <= start || height < end) {
+                customRescanScanStarted.set(true)
+            } else {
+                return
+            }
+        }
 
         if (height >= end) {
             requestCustomRescanCompletion(wallet, end)
@@ -508,6 +544,7 @@ class WalletState {
 
         customRescanInProgress = false
         customRescanFinished = true
+        customRescanScanStarted.set(false)
         customRescanJob?.cancel()
         customRescanStartHeight = null
         customRescanDayEndHeight = null
