@@ -159,6 +159,7 @@ class OnboardViewModel(private val prefs: SharedPreferences) : ViewModel() {
                 pin,
                 restorePayload!!.seed.joinToString(" "),
                 passPhrase,
+                restorePayload!!.restoreHeight ?: 0
             )
         } else {
             null

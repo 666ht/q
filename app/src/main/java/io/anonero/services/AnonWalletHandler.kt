@@ -126,10 +126,17 @@ class AnonWalletHandler(
             if (wallet.isInitialized) {
                 wallet.refreshHistory()
                 wallet.setTrustedDaemon(true)
-                if (needsRestoreRescan && savedRestoreHeight > 0L && !wallet.nativeSynchronized) {
-                    // Use the exact height selected during mnemonic recovery as the
-                    // progress origin. The progress target is resolved from the live daemon.
-                    walletState.beginRestoreProgress(savedRestoreHeight)
+                val effectiveRestoreHeight = savedRestoreHeight.takeIf { it > 0L }
+                    ?: wallet.getRestoreHeight().takeIf { it > 0L }
+                if (effectiveRestoreHeight != null && !wallet.nativeSynchronized) {
+                    // A stored restore height is the authoritative start of the
+                    // restore scan. Do not depend on the one-shot preference flag,
+                    // because older wallets/builds can have inconsistent flag state.
+                    walletState.beginRestoreProgress(effectiveRestoreHeight)
+                } else if (needsRestoreRescan && wallet.nativeSynchronized) {
+                    // The restore scan is already finished; consume the one-shot flag
+                    // so it cannot re-arm a restore progress cycle on future opens.
+                    prefs.edit { putBoolean(RESTORE_NEEDS_RESCAN, false) }
                 }
                 wallet.startRefresh()
                 walletState.update()

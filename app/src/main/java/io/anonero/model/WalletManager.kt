@@ -129,12 +129,13 @@ class WalletManager {
 
     fun recoveryWalletPolyseed(
         aFile: File, password: String,
-        mnemonic: String, offset: String
+        mnemonic: String, offset: String,
+        restoreHeight: Long
     ): Wallet {
         val walletHandle = recoveryWalletPolyseedJ(
             aFile.absolutePath, password,
             mnemonic, offset,
-            networkType.value
+            networkType.value, restoreHeight
         )
         val wallet = Wallet(walletHandle)
         manageWallet(wallet)
@@ -144,7 +145,7 @@ class WalletManager {
     private external fun recoveryWalletPolyseedJ(
         path: String, password: String,
         mnemonic: String, offset: String,
-        networkType: Int
+        networkType: Int, restoreHeight: Long
     ): Long
 
     fun createWalletWithKeys(

@@ -113,6 +113,12 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
         }
 
         val left = (effectiveTarget - currentHeight).coerceAtLeast(0L)
+        if (walletState.restoreProgressInProgress && restoreStart != null) {
+            Timber.tag(name).d(
+                "restore progress start=%d wallet=%d daemon=%d target=%d left=%d",
+                restoreStart, syncHeight, daemonHeight, effectiveTarget, left
+            )
+        }
         val progress = if (effectiveTarget <= progressStart) {
             1f
         } else {
@@ -151,12 +157,13 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
         if (status === Wallet.ConnectionStatus.ConnectionStatus_Disconnected || status == null) {
             tryRestartConnection()
         } else {
-            val heightDiff = daemonHeight - chainHeight
-            if (heightDiff >= 2) {
-                tryRestartConnection()
-            } else if (!wallet.isSynchronized) {
-                updateSyncProgress(wallet.getBlockChainHeight())
+            if (wallet.nativeSynchronized) {
                 completeSynchronization()
+            } else {
+                // A single refreshed() callback only means one refresh cycle ended.
+                // Native wallet2 remains authoritative for whether the full chain scan
+                // has actually completed.
+                updateSyncProgress(chainHeight)
             }
 
         }

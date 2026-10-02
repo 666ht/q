@@ -494,7 +494,8 @@ JNIEXPORT jlong JNICALL
 Java_io_anonero_model_WalletManager_recoveryWalletPolyseedJ(JNIEnv *env, jobject instance,
                                                             jstring path, jstring password,
                                                             jstring mnemonic, jstring offset,
-                                                            jint networkType) {
+                                                            jint networkType,
+                                                            jlong restoreHeight) {
     const char *_path = env->GetStringUTFChars(path, nullptr);
     const char *_password = env->GetStringUTFChars(password, nullptr);
     const char *_mnemonic = env->GetStringUTFChars(mnemonic, nullptr);
@@ -507,7 +508,7 @@ Java_io_anonero_model_WalletManager_recoveryWalletPolyseedJ(JNIEnv *env, jobject
                     std::string(_password),
                     _networkType,
                     std::string(_mnemonic),
-                    std::string(_offset), false);
+                    std::string(_offset), false, (uint64_t) restoreHeight);
     bool setupStatus = wallet->setupBackgroundSync(
             Monero::Wallet::BackgroundSync_ReusePassword,
             std::string(_password), {});

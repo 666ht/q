@@ -87,6 +87,10 @@ class WalletState {
     fun beginRestoreProgress(startHeight: Long) {
         restoreProgressStartHeight = startHeight
         restoreProgressInProgress = true
+        // Drop any stale normal-sync "blocks left" value immediately. Until the
+        // daemon reaches the restore height, the restore scan itself has no cursor.
+        _syncProgress.value = SyncProgress(0f, 0L)
+        _isSyncing.set(true)
     }
 
     fun finishRestoreProgress() {
