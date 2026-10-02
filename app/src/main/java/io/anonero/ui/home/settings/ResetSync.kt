@@ -55,7 +55,7 @@ fun ResetSyncPage(
         return dateFormat.format(Date(System.currentTimeMillis() - secondsAgo * 1000L))
     }
 
-    fun heightForDate(value: String): Long? {
+    fun heightRangeForDate(value: String): Pair<Long, Long>? {
         return try {
             val parsed = dateFormat.parse(value) ?: return null
             val calendar = java.util.Calendar.getInstance().apply {
@@ -65,9 +65,9 @@ fun ResetSyncPage(
             val month = calendar.get(java.util.Calendar.MONTH) + 1
             val day = calendar.get(java.util.Calendar.DAY_OF_MONTH)
 
-            // Use Monero's real block timestamps instead of a 120-second estimate.
-            // The returned height is the first block of the selected calendar day,
-            // so it can never spill into the previous/next date.
+            // Use Monero's real block timestamps. The selected height is the
+            // first block of that calendar day and the end is the last block
+            // before the next calendar day.
             val dayStartHeight = wallet?.getBlockChainHeightByDate(year, month, day) ?: return null
             val nextDay = (calendar.clone() as java.util.Calendar).apply {
                 add(java.util.Calendar.DAY_OF_YEAR, 1)
@@ -77,12 +77,15 @@ fun ResetSyncPage(
                 nextDay.get(java.util.Calendar.MONTH) + 1,
                 nextDay.get(java.util.Calendar.DAY_OF_MONTH)
             )
+            val dayEndHeight = (nextDayHeight - 1L).coerceAtLeast(dayStartHeight)
 
-            dayStartHeight.coerceAtLeast(0L).coerceAtMost((nextDayHeight - 1L).coerceAtLeast(dayStartHeight))
+            dayStartHeight.coerceAtLeast(0L) to dayEndHeight
         } catch (_: Exception) {
             null
         }
     }
+
+    fun heightForDate(value: String): Long? = heightRangeForDate(value)?.first
 
     var height by remember {
         mutableStateOf(wallet?.getRestoreHeight()?.toString() ?: "")
@@ -90,6 +93,7 @@ fun ResetSyncPage(
     var date by remember {
         mutableStateOf(wallet?.getRestoreHeight()?.let(::dateForHeight) ?: "")
     }
+    var selectedDateEndHeight by remember { mutableStateOf<Long?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
 
     Scaffold(
@@ -121,7 +125,7 @@ fun ResetSyncPage(
                         error = "请输入有效高度或日期"
                         return@AnonOutlineButton
                     }
-                    val result = walletState.resetSyncFromHeight(restoreHeight)
+                    val result = walletState.resetSyncFromHeight(restoreHeight, selectedDateEndHeight)
                     if (result.isSuccess) {
                         onBackPress()
                     } else {
@@ -150,6 +154,7 @@ fun ResetSyncPage(
                 onValueChange = {
                     error = null
                     height = it.filter(Char::isDigit)
+                    selectedDateEndHeight = null
                     height.toLongOrNull()?.let { h -> date = dateForHeight(h) }
                 },
                 shape = MaterialTheme.shapes.medium,
@@ -166,7 +171,10 @@ fun ResetSyncPage(
                 onValueChange = {
                     error = null
                     date = it
-                    heightForDate(it)?.let { h -> height = h.toString() }
+                    heightRangeForDate(it)?.let { range ->
+                        height = range.first.toString()
+                        selectedDateEndHeight = range.second
+                    }
                 },
                 shape = MaterialTheme.shapes.medium,
                 modifier = Modifier.fillMaxWidth(),
