@@ -46,12 +46,18 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
         val syncHeight = wallet.getBlockChainHeight()
         val deamonHeight = wallet.getDaemonBlockChainHeight()
         val customStart = walletState.customRescanStartHeight
+        val customDayEnd = walletState.customRescanDayEndHeight
         val currentHeight = if (walletState.customRescanInProgress && customStart != null) {
             maxOf(syncHeight, customStart)
         } else {
             syncHeight
         }
-        val left = (deamonHeight - currentHeight).coerceAtLeast(0L)
+        val effectiveTarget = if (walletState.customRescanInProgress && customDayEnd != null) {
+            minOf(deamonHeight, customDayEnd)
+        } else {
+            deamonHeight
+        }
+        val left = (effectiveTarget - currentHeight).coerceAtLeast(0L)
         if (syncHeight < 0 || deamonHeight < 0) {
             return
         }
@@ -60,8 +66,10 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
         val progress = if (walletState.customRescanInProgress && customStart != null &&
             targetHeight > customStart
         ) {
+            val target = minOf(targetHeight, customDayEnd ?: targetHeight)
+            val denominator = (target - customStart).coerceAtLeast(1L)
             ((currentHeight - customStart).toDouble() /
-                (targetHeight - customStart).toDouble())
+                denominator.toDouble())
                 .coerceIn(0.0, 1.0)
                 .toFloat()
         } else if (targetHeight.toDouble() == 0.0) {
@@ -94,6 +102,7 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
                 // The native layer keeps the wallet's original recovery height
                 // untouched. Only the current rescan used the user-supplied height.
                 walletState.customRescanStartHeight = null
+                walletState.customRescanDayEndHeight = null
                 walletState.customRescanInProgress = false
                 wallet.store()
 
