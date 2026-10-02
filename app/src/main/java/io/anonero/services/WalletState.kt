@@ -316,6 +316,18 @@ class WalletState {
         getWallet?.refreshHistory()
     }
 
+    private fun estimateDayEndHeight(wallet: Wallet, startHeight: Long): Long {
+        // Monero targets roughly 2-minute blocks, so one calendar day is about
+        // 720 blocks. This only bounds the progress animation; the actual
+        // rescan still uses the exact height requested by the user.
+        val estimatedEnd = startHeight + 720L
+        val currentHeight = try {
+            WalletManager.instance?.getBlockchainHeight() ?: estimatedEnd
+        } catch (_: Exception) {
+            estimatedEnd
+        }
+        return minOf(estimatedEnd, currentHeight.coerceAtLeast(startHeight))
+    }
     fun resetSyncFromHeight(height: Long): Result<Boolean> = try {
         val wallet = getWallet ?: return Result.failure(Exception("Wallet not initialized"))
         if (wallet.fullStatus.connectionStatus != Wallet.ConnectionStatus.ConnectionStatus_Connected) {
