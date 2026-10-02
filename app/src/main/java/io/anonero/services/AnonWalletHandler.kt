@@ -54,7 +54,18 @@ class AnonWalletHandler(
     }
 
     fun openWallet(pin: String): Boolean {
-        val walletFile = AnonConfig.getDefaultWalletFile(AnonConfig.context!!)
+        val context = AnonConfig.context ?: throw InvalidPin()
+        val routedFile = AnonConfig.getWalletFileForPin(context, pin)
+        val legacyFile = AnonConfig.getDefaultWalletFile(context)
+
+        // Prefer the PIN-routed wallet. Keep the existing "anon" wallet as a
+        // backward-compatible fallback so current installations continue to open.
+        val walletFile = when {
+            routedFile.exists() -> routedFile
+            legacyFile.exists() -> legacyFile
+            else -> routedFile
+        }
+
         val anonWallet = WalletManager.instance?.openWallet(
             walletFile.path,
             pin,
@@ -254,20 +265,31 @@ class AnonWalletHandler(
         val appContext = AnonConfig.context?.applicationContext
         var deleted = true
         if (appContext != null) {
-            val walletDir = File(appContext.filesDir, "wallets")
-            repeat(20) {
-                if (!walletDir.exists()) return@repeat
-                if (!walletDir.deleteRecursively()) {
-                    Thread.sleep(100)
+            // Delete only the wallet that is currently open. Do not
+            // recursively wipe the shared wallets directory, because it may
+            // contain other PIN-routed wallets.
+            val walletFiles = buildList {
+                val openPath = wallet?.path
+                if (!openPath.isNullOrBlank()) add(File(openPath))
+            }.distinctBy { it.absolutePath }
+
+            if (walletFiles.isEmpty()) {
+                walletFiles.add(AnonConfig.getDefaultWalletFile(appContext))
+            }
+
+            walletFiles.forEach { file ->
+                repeat(20) {
+                    if (!file.exists()) return@repeat
+                    if (!file.deleteRecursively()) {
+                        Thread.sleep(100)
+                    }
                 }
             }
-            deleted = !walletDir.exists()
+            deleted = walletFiles.all { !it.exists() }
 
-            repeat(5) {
-                if (AnonConfig.clearAllAppData(appContext)) return@repeat
-                Thread.sleep(100)
-            }
-            deleted = deleted && AnonConfig.clearAllAppData(appContext)
+            // Do not call clearAllAppData(): it would also remove preferences
+            // and every other PIN-routed wallet.
+            AnonConfig.disposeState()
         }
 
         return deleted
