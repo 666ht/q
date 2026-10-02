@@ -115,7 +115,8 @@ class WalletManager {
         offset: String,
         restoreHeight: Long
     ): Wallet {
-        val walletFile = walletFileForPassword(aFile, password)
+        // Recovery must use the original restore path; PIN routing is for created wallets.
+        val walletFile = aFile
         val walletHandle = recoveryWalletJ(
             walletFile.absolutePath, password,
             mnemonic, offset,
@@ -142,7 +143,8 @@ class WalletManager {
         mnemonic: String, offset: String,
         restoreHeight: Long
     ): Wallet {
-        val walletFile = walletFileForPassword(aFile, password)
+        // Polyseed recovery must use the original restore path as well.
+        val walletFile = aFile
         val walletHandle = recoveryWalletPolyseedJ(
             walletFile.absolutePath, password,
             mnemonic, offset,
