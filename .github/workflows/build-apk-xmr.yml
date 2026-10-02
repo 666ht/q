@@ -25,6 +25,12 @@ jobs:
           submodules: recursive
           fetch-depth: 1
 
+      - name: Pin XMR restore-height fix
+        working-directory: external-libs/monero
+        run: |
+          git fetch --depth=1 origin 461a1da8e59286c232ffb24a27b6f08c7b09006e
+          git checkout 461a1da8e59286c232ffb24a27b6f08c7b09006e
+
       - name: Read XMR revision
         id: xmr
         run: echo "sha=$(git -C external-libs/monero rev-parse HEAD)" >> "$GITHUB_OUTPUT"
