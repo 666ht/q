@@ -348,10 +348,12 @@ class WalletState {
             }
 
             setLoading(true)
+            // rescanBlockchainAsync() starts the native wallet rescan. Do not call
+            // startRefresh() immediately afterwards: doing so can replace the
+            // explicit restore height with the wallet's normal refresh position.
             wallet.rescanBlockchainAsync()
         } finally {
-            // Resume normal wallet refresh after the rescan request is queued.
-            wallet.startRefresh()
+            // The rescan owns the refresh lifecycle until its refreshed() callback.
         }
 
         Timber.tag(TAG).i(
