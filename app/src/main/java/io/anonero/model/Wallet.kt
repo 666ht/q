@@ -211,7 +211,7 @@ class Wallet {
     ): Boolean
 
     external fun getRestoreHeight(): Long
-    external fun setRestoreHeight(height: Long): Boolean
+    external fun setRestoreHeight(height: Long)
 
     private val connectionStatus: ConnectionStatus
         get() {
@@ -265,10 +265,10 @@ class Wallet {
     external fun pauseRefresh()
     external fun refresh(): Boolean
     external fun refreshAsync()
-    private external fun rescanBlockchainAsyncJ(): Boolean
-    fun rescanBlockchainAsync(): Boolean {
+    private external fun rescanBlockchainAsyncJ()
+    fun rescanBlockchainAsync() {
         isSynchronized = false
-        return rescanBlockchainAsyncJ()
+        rescanBlockchainAsyncJ()
     }
 
     //TODO virtual void setAutoRefreshInterval(int millis) = 0;
