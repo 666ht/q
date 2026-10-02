@@ -57,9 +57,28 @@ fun ResetSyncPage(
 
     fun heightForDate(value: String): Long? {
         return try {
-            val parsed = dateFormat.parse(value)?.time ?: return null
-            val secondsAgo = ((System.currentTimeMillis() - parsed) / 1000L).coerceAtLeast(0L)
-            (currentHeight - secondsAgo / BLOCK_TIME_SECONDS).coerceAtLeast(0L)
+            val parsed = dateFormat.parse(value) ?: return null
+            val calendar = java.util.Calendar.getInstance().apply {
+                time = parsed
+            }
+            val year = calendar.get(java.util.Calendar.YEAR)
+            val month = calendar.get(java.util.Calendar.MONTH) + 1
+            val day = calendar.get(java.util.Calendar.DAY_OF_MONTH)
+
+            // Use Monero's real block timestamps instead of a 120-second estimate.
+            // The returned height is the first block of the selected calendar day,
+            // so it can never spill into the previous/next date.
+            val dayStartHeight = wallet?.getBlockChainHeightByDate(year, month, day) ?: return null
+            val nextDay = (calendar.clone() as java.util.Calendar).apply {
+                add(java.util.Calendar.DAY_OF_YEAR, 1)
+            }
+            val nextDayHeight = wallet.getBlockChainHeightByDate(
+                nextDay.get(java.util.Calendar.YEAR),
+                nextDay.get(java.util.Calendar.MONTH) + 1,
+                nextDay.get(java.util.Calendar.DAY_OF_MONTH)
+            )
+
+            dayStartHeight.coerceAtLeast(0L).coerceAtMost((nextDayHeight - 1L).coerceAtLeast(dayStartHeight))
         } catch (_: Exception) {
             null
         }
