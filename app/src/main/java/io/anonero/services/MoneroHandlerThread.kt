@@ -56,13 +56,13 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
         }
 
         // Native wallet2 is authoritative for normal synchronization.
-        if (!wallet.isSynchronized && wallet.nativeSynchronized) {
+        if (!wallet.isSynchronized && wallet.nativeSynchronized && !walletState.customRescanInProgress) {
             completeSynchronization()
             return
         }
 
         // Do not recreate sync progress after synchronization has finished.
-        if (!wallet.isSynchronized) {
+        if (!wallet.isSynchronized || walletState.customRescanInProgress) {
             updateSyncProgress(height)
         }
     }
@@ -100,10 +100,10 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
                 maxOf(height, customStart)
             }
             walletState.restoreProgressInProgress && restoreStart != null -> {
-                // For mnemonic restore, use the wallet's actual scanned height. The
-                // newBlock callback reports daemon blocks and can be ahead of the
-                // wallet scan cursor.
-                maxOf(syncHeight, restoreStart)
+                // During seed recovery, newBlock(height) is emitted for processed
+                // blocks at/after the selected restore height. It is the freshest
+                // per-block scan cursor available to the UI.
+                maxOf(height, restoreStart)
             }
             else -> syncHeight
         }
