@@ -57,11 +57,6 @@ class WalletState {
     @Volatile
     var customRescanInProgress: Boolean = false
 
-    // The wallet's original recovery height must remain unchanged. A custom
-    // reset height is only applied in memory for the current rescan.
-    @Volatile
-    var customRescanOriginalRestoreHeight: Long? = null
-
     val transactions: Flow<List<TransactionInfo>> = _transactions
 
     val balanceInfo: Flow<Long?> = _balanceInfo
@@ -324,58 +319,36 @@ class WalletState {
             return Result.failure(IllegalArgumentException("Invalid restore height"))
         }
 
-        // Keep the wallet's original recovery height (for example 3769707)
-        // untouched on disk. The custom height is only applied in memory for
-        // this one rescan operation.
-        val originalRestoreHeight = wallet.getRestoreHeight()
-
-        // Stop the current refresh before changing the temporary rescan height.
+        // This is an in-wallet rescan, not wallet creation/recovery. The height
+        // entered here belongs only to this rescan operation. The wallet's
+        // original recovery height is never read or overwritten by this path.
         wallet.pauseRefresh()
         try {
-            val applied = wallet.setRestoreHeight(height)
-            val actualHeight = wallet.getRestoreHeight()
-            if (!applied || actualHeight != height) {
-                wallet.setRestoreHeight(originalRestoreHeight)
-                return Result.failure(
-                    IllegalStateException(
-                        "Custom reset height was not applied: requested=$height actual=$actualHeight"
-                    )
-                )
-            }
-
-            customRescanOriginalRestoreHeight = originalRestoreHeight
             setLoading(true)
             customRescanInProgress = true
 
-            // Do not store the temporary height and do not modify the saved
-            // RESTORE_HEIGHT preference. Native rescan queues the request and
-            // Wallet.rescanBlockchainAsync() restarts the refresh worker.
-            if (!wallet.rescanBlockchainAsync()) {
-                wallet.setRestoreHeight(originalRestoreHeight)
-                customRescanOriginalRestoreHeight = null
+            if (!wallet.rescanBlockchainAsyncFromHeight(height)) {
                 customRescanInProgress = false
                 setLoading(false)
+                wallet.startRefresh()
                 return Result.failure(
                     IllegalStateException("Blockchain rescan was not started")
                 )
             }
 
             Timber.tag(TAG).i(
-                "Reset sync from custom height: requested=%d original=%d actual=%d",
-                height,
-                originalRestoreHeight,
-                wallet.getRestoreHeight()
+                "Reset wallet scan from custom height: requested=%d",
+                height
             )
             Result.success(true)
         } catch (e: Exception) {
-            wallet.setRestoreHeight(originalRestoreHeight)
-            customRescanOriginalRestoreHeight = null
             customRescanInProgress = false
             setLoading(false)
+            wallet.startRefresh()
             throw e
         }
     } catch (e: Exception) {
-        Timber.tag(TAG).e(e, "Failed to reset sync from custom height: %d", height)
+        Timber.tag(TAG).e(e, "Failed to reset wallet scan from custom height: %d", height)
         Result.failure(e)
     }
 
