@@ -583,7 +583,7 @@ fun TransactionScreen(
                                 text = {
                                     XmrText(
                                         stringResource(R.string.coin_control),
-                                        fontSize = 18.sp
+                                        fontSize = 22.sp
                                     )
                                 },
                                 onClick = {
