@@ -351,6 +351,7 @@ class WalletState {
             Timber.tag(TAG).i(
                 "Reset wallet scan from custom height: requested=%d dayEnd=%s",
                 height, dayEndHeight
+            )
             Result.success(true)
         } catch (e: Exception) {
             customRescanStartHeight = null
