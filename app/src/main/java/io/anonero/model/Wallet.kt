@@ -437,8 +437,8 @@ class Wallet {
 
     external fun startBackgroundSync(): Boolean
 
-    fun refreshCoins() {
-        if (isSynchronized) {
+    fun refreshCoins(force: Boolean = false) {
+        if (force || isSynchronized) {
             Timber.tag("Wallet").d("Coin Refreshed: %s", coins?.getCount())
             coins?.refresh()
         }
