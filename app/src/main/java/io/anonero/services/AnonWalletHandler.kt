@@ -7,6 +7,7 @@ import io.anonero.model.node.Node
 import io.anonero.model.node.NodeFields
 import org.json.JSONObject
 import io.anonero.util.RESTORE_HEIGHT
+import io.anonero.util.RESTORE_NEEDS_RESCAN
 import io.anonero.util.WALLET_PROXY
 import io.anonero.util.WALLET_PROXY_PORT
 import io.anonero.util.WALLET_USE_TOR
@@ -117,6 +118,7 @@ class AnonWalletHandler(
             }
             wallet.init(0)
             val savedRestoreHeight = prefs.getLong(RESTORE_HEIGHT, 0L)
+            val needsRestoreRescan = prefs.getBoolean(RESTORE_NEEDS_RESCAN, false)
             if (savedRestoreHeight > 0L && savedRestoreHeight != wallet.getRestoreHeight()) {
                 wallet.setRestoreHeight(savedRestoreHeight)
                 wallet.store()
@@ -124,6 +126,11 @@ class AnonWalletHandler(
             if (wallet.isInitialized) {
                 wallet.refreshHistory()
                 wallet.setTrustedDaemon(true)
+                if (needsRestoreRescan && savedRestoreHeight > 0L && !wallet.nativeSynchronized) {
+                    // Use the exact height selected during mnemonic recovery as the
+                    // progress origin. The progress target is resolved from the live daemon.
+                    walletState.beginRestoreProgress(savedRestoreHeight)
+                }
                 wallet.startRefresh()
                 walletState.update()
             }
