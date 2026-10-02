@@ -80,10 +80,11 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
                 minOf(targetHeight.takeIf { it > 0 } ?: daemonHeight, customDayEnd)
             }
             walletState.restoreProgressInProgress && restoreStart != null -> {
-                // For mnemonic recovery, use the height from the native newBlock
-                // callback as the live chain tip. Do not use target_height (a future
-                // estimate) or a stale daemon height as the restore endpoint.
-                height.takeIf { it >= restoreStart } ?: daemonHeight
+                // Restore remaining blocks are the remote daemon height minus the
+                // wallet's local scan cursor. daemonBlockChainHeight() is the
+                // documented current daemon height; newBlock(height) is a processed
+                // block callback and is not the network endpoint.
+                daemonHeight
             }
             else -> targetHeight.takeIf { it > 0 } ?: daemonHeight
         }
