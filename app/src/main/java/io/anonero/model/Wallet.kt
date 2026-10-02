@@ -266,6 +266,8 @@ class Wallet {
     external fun refresh(): Boolean
     external fun refreshAsync()
     private external fun rescanBlockchainAsyncJ(): Boolean
+    private external fun rescanBlockchainAsyncFromHeightJ(height: Long): Boolean
+
     fun rescanBlockchainAsync(): Boolean {
         isSynchronized = false
         val started = rescanBlockchainAsyncJ()
@@ -273,6 +275,17 @@ class Wallet {
             // pauseRefresh() is used by the custom-height reset path before
             // requesting the rescan. Native rescan only queues the operation;
             // the refresh worker must be enabled again to execute it.
+            startRefresh()
+        }
+        return started
+    }
+
+    fun rescanBlockchainAsyncFromHeight(height: Long): Boolean {
+        isSynchronized = false
+        val started = rescanBlockchainAsyncFromHeightJ(height)
+        if (started) {
+            // Native rescan only queues the operation; the refresh worker must
+            // be enabled so the one-shot custom-height scan can execute.
             startRefresh()
         }
         return started
