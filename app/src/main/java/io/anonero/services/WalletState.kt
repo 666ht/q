@@ -252,7 +252,9 @@ class WalletState {
     }
 
     fun syncUpdate(syncProgress: SyncProgress) {
-        val done = syncProgress.progress == 1f || syncProgress.left == 0L
+        // "left" can be date-scoped for a custom rescan, so reaching zero
+        // there must not mark the actual native rescan as finished.
+        val done = syncProgress.progress >= 1f
         _syncProgress.update { if (done) null else syncProgress }
         _isSyncing.set(!done)
         if (done) {
@@ -316,19 +318,7 @@ class WalletState {
         getWallet?.refreshHistory()
     }
 
-    private fun estimateDayEndHeight(wallet: Wallet, startHeight: Long): Long {
-        // Monero targets roughly 2-minute blocks, so one calendar day is about
-        // 720 blocks. This only bounds the progress animation; the actual
-        // rescan still uses the exact height requested by the user.
-        val estimatedEnd = startHeight + 720L
-        val currentHeight = try {
-            WalletManager.instance?.getBlockchainHeight() ?: estimatedEnd
-        } catch (_: Exception) {
-            estimatedEnd
-        }
-        return minOf(estimatedEnd, currentHeight.coerceAtLeast(startHeight))
-    }
-    fun resetSyncFromHeight(height: Long): Result<Boolean> = try {
+    fun resetSyncFromHeight(height: Long, dayEndHeight: Long? = null): Result<Boolean> = try {
         val wallet = getWallet ?: return Result.failure(Exception("Wallet not initialized"))
         if (wallet.fullStatus.connectionStatus != Wallet.ConnectionStatus.ConnectionStatus_Connected) {
             return Result.failure(Exception("Please connect to daemon for resync"))
@@ -344,7 +334,7 @@ class WalletState {
         try {
             setLoading(true)
             customRescanStartHeight = height
-            customRescanDayEndHeight = estimateDayEndHeight(wallet, height)
+            customRescanDayEndHeight = dayEndHeight?.takeIf { it >= height }
             customRescanInProgress = true
 
             if (!wallet.rescanBlockchainAsyncFromHeight(height)) {
@@ -359,9 +349,8 @@ class WalletState {
             }
 
             Timber.tag(TAG).i(
-                "Reset wallet scan from custom height: requested=%d",
-                height
-            )
+                "Reset wallet scan from custom height: requested=%d dayEnd=%s",
+                height, dayEndHeight
             Result.success(true)
         } catch (e: Exception) {
             customRescanStartHeight = null
