@@ -67,44 +67,47 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
 
     private fun updateSyncProgress(height: Long) {
         val syncHeight = wallet.getBlockChainHeight()
-        val deamonHeight = wallet.getDaemonBlockChainHeight()
+        val daemonHeight = wallet.getDaemonBlockChainHeight()
+        val targetHeight = wallet.getDaemonBlockChainTargetHeight()
         val customStart = walletState.customRescanStartHeight
         val customDayEnd = walletState.customRescanDayEndHeight
-        val currentHeight = if (walletState.customRescanInProgress && customStart != null) {
-            // During a native rescan getBlockChainHeight() can lag behind the
-            // newBlock callback. Use the callback height so the progress UI
-            // advances with the actual blocks being scanned.
-            maxOf(height, customStart)
-        } else {
-            syncHeight
-        }
-        val effectiveTarget = if (walletState.customRescanInProgress && customDayEnd != null) {
-            minOf(deamonHeight, customDayEnd)
-        } else {
-            deamonHeight
-        }
-        val left = (effectiveTarget - currentHeight).coerceAtLeast(0L)
-        if (syncHeight < 0 || deamonHeight < 0) {
-            return
+        val restoreStart = walletState.restoreProgressStartHeight
+
+        if (syncHeight < 0 || daemonHeight < 0) return
+
+        val currentHeight = when {
+            walletState.customRescanInProgress && customStart != null -> {
+                // Native rescans can lag behind the newBlock callback. The callback
+                // is the freshest actual scan cursor available to the UI.
+                maxOf(height, customStart)
+            }
+            walletState.restoreProgressInProgress && restoreStart != null -> {
+                maxOf(height, restoreStart)
+            }
+            else -> syncHeight
         }
 
-        val targetHeight = wallet.getDaemonBlockChainTargetHeight()
-        val progress = if (walletState.customRescanInProgress && customStart != null) {
-            // Keep the progress bar on the same target as the displayed remaining
-            // blocks, so both reach completion together.
-            val target = effectiveTarget
-            if (target <= customStart) {
-                1f
-            } else {
-                ((currentHeight - customStart).toDouble() /
-                    (target - customStart).toDouble())
-                    .coerceIn(0.0, 1.0)
-                    .toFloat()
+        val effectiveTarget = when {
+            walletState.customRescanInProgress && customDayEnd != null -> {
+                minOf(targetHeight.takeIf { it > 0 } ?: daemonHeight, customDayEnd)
             }
-        } else if (targetHeight.toDouble() == 0.0) {
+            else -> targetHeight.takeIf { it > 0 } ?: daemonHeight
+        }
+
+        val progressStart = when {
+            walletState.customRescanInProgress && customStart != null -> customStart
+            walletState.restoreProgressInProgress && restoreStart != null -> restoreStart
+            else -> 0L
+        }
+
+        val left = (effectiveTarget - currentHeight).coerceAtLeast(0L)
+        val progress = if (effectiveTarget <= progressStart) {
             1f
         } else {
-            (height.toDouble() / targetHeight.toDouble()).coerceIn(0.0, 1.0).toFloat()
+            ((currentHeight - progressStart).toDouble() /
+                (effectiveTarget - progressStart).toDouble())
+                .coerceIn(0.0, 1.0)
+                .toFloat()
         }
         walletState.syncUpdate(SyncProgress(progress, left))
     }
@@ -159,6 +162,7 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
             walletState.customRescanStartHeight = null
             walletState.customRescanDayEndHeight = null
             walletState.customRescanInProgress = false
+            walletState.finishRestoreProgress()
 
             // End the sync indicator first so completion is visible immediately.
             // Then load the final balance and transaction history.
