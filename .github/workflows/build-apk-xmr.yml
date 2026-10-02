@@ -30,8 +30,8 @@ jobs:
       - name: Pin XMR custom-rescan fix
         working-directory: external-libs/monero
         run: |
-          git fetch --depth=1 origin 425d95fa4517ee7d991c63dbb1cd3556291bd27e
-          git checkout 425d95fa4517ee7d991c63dbb1cd3556291bd27e
+          git fetch --depth=1 origin 39c6177076faebbefbc1aca430240e0a4a48dcf7
+          git checkout 39c6177076faebbefbc1aca430240e0a4a48dcf7
 
       - name: Read XMR revision
         id: xmr
