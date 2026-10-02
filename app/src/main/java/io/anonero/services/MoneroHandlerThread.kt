@@ -5,7 +5,6 @@ import io.anonero.model.Wallet
 import io.anonero.model.WalletListener
 import io.anonero.model.WalletManager
 import timber.log.Timber
-import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Handy class for starting a new thread that has a looper. The looper can then be
@@ -15,8 +14,6 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 class MoneroHandlerThread(private val wallet: Wallet, private val walletState: WalletState) :
     Thread(null, null, "MoneroHandler", THREAD_STACK_SIZE), WalletListener {
-
-    private val syncCompletionHandled = AtomicBoolean(false)
 
 
 
@@ -46,7 +43,7 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
         // Native wallet2 is authoritative. Once native synchronization reports
         // completion, finish immediately from the block callback instead of
         // waiting for another refresh cycle.
-        if (wallet.nativeSynchronized) {
+        if (!wallet.isSynchronized && wallet.nativeSynchronized) {
             completeSynchronization()
             return
         }
@@ -108,7 +105,6 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
     }
 
     override fun refreshed() {
-        syncCompletionHandled.set(false)
         val status = wallet.fullStatus.connectionStatus
         val daemonHeight = wallet.getDaemonBlockChainHeight()
         val chainHeight = wallet.getBlockChainHeight()
@@ -116,7 +112,7 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
         Timber.tag(name)
             .i("refreshed() status:${status} daemonHeight:$daemonHeight chainHeight:$chainHeight ")
         if (walletState.customRescanInProgress) {
-            if (wallet.nativeSynchronized) {
+            if (!wallet.isSynchronized && wallet.nativeSynchronized) {
                 // Native wallet2 is authoritative here. Complete the sync and
                 // refresh wallet data immediately when the native scan is done.
                 completeSynchronization()
@@ -132,10 +128,8 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
             val heightDiff = daemonHeight - chainHeight
             if (heightDiff >= 2) {
                 tryRestartConnection()
-            } else {
-                if (!wallet.isSynchronized) {
-                    updateSyncProgress(wallet.getBlockChainHeight())
-                }
+            } else if (!wallet.isSynchronized) {
+                updateSyncProgress(wallet.getBlockChainHeight())
                 completeSynchronization()
             }
 
@@ -144,7 +138,7 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
     }
 
     private fun completeSynchronization() {
-        if (!syncCompletionHandled.compareAndSet(false, true)) {
+        if (wallet.isSynchronized && !walletState.customRescanInProgress) {
             walletState.finishSync()
             return
         }
