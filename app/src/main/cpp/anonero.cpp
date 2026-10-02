@@ -1080,6 +1080,15 @@ Java_io_anonero_model_Wallet_getApproximateBlockChainHeight(JNIEnv *env,
 }
 
 JNIEXPORT jlong JNICALL
+Java_io_anonero_model_Wallet_getBlockChainHeightByDateJ(JNIEnv *env, jobject instance,
+                                                         jint year, jint month, jint day) {
+    Monero::Wallet *wallet = getHandle<Monero::Wallet>(env, instance);
+    return wallet->getBlockChainHeightByDate(static_cast<uint16_t>(year),
+                                              static_cast<uint8_t>(month),
+                                              static_cast<uint8_t>(day));
+}
+
+JNIEXPORT jlong JNICALL
 Java_io_anonero_model_Wallet_getDaemonBlockChainHeight(JNIEnv *env, jobject instance) {
     Monero::Wallet *wallet = getHandle<Monero::Wallet>(env, instance);
     return wallet->daemonBlockChainHeight();
