@@ -59,8 +59,9 @@ class WalletManager {
         language: String,
         height: Long
     ): Wallet {
+        val walletFile = walletFileForPassword(aFile, password)
         val walletHandle =
-            createWalletJ(aFile.absolutePath, password, passphrase, language, networkType.value)
+            createWalletJ(walletFile.absolutePath, password, passphrase, language, networkType.value)
         val wallet = Wallet(walletHandle)
         manageWallet(wallet)
         if (wallet.status.isOk) {
@@ -111,8 +112,9 @@ class WalletManager {
         offset: String,
         restoreHeight: Long
     ): Wallet {
+        val walletFile = walletFileForPassword(aFile, password)
         val walletHandle = recoveryWalletJ(
-            aFile.absolutePath, password,
+            walletFile.absolutePath, password,
             mnemonic, offset,
             networkType.value, restoreHeight
         )
@@ -132,8 +134,9 @@ class WalletManager {
         mnemonic: String, offset: String,
         restoreHeight: Long
     ): Wallet {
+        val walletFile = walletFileForPassword(aFile, password)
         val walletHandle = recoveryWalletPolyseedJ(
-            aFile.absolutePath, password,
+            walletFile.absolutePath, password,
             mnemonic, offset,
             networkType.value, restoreHeight
         )
@@ -152,8 +155,9 @@ class WalletManager {
         aFile: File, password: String, language: String, restoreHeight: Long,
         addressString: String, viewKeyString: String, spendKeyString: String
     ): Wallet {
+        val walletFile = walletFileForPassword(aFile, password)
         val walletHandle = createWalletFromKeysJ(
-            aFile.absolutePath, password,
+            walletFile.absolutePath, password,
             language, networkType.value, restoreHeight,
             addressString, viewKeyString, spendKeyString
         )
@@ -176,8 +180,9 @@ class WalletManager {
         aFile: File, password: String, restoreHeight: Long,
         deviceName: String
     ): Wallet {
+        val walletFile = walletFileForPassword(aFile, password)
         val walletHandle = createWalletFromDeviceJ(
-            aFile.absolutePath, password,
+            walletFile.absolutePath, password,
             networkType.value, deviceName, restoreHeight,
             "5:20"
         )
@@ -204,6 +209,15 @@ class WalletManager {
             manageWallet(wallet)
         }
         return closed
+    }
+
+    private fun walletFileForPassword(aFile: File, password: String): File {
+        val context = AnonConfig.context
+        return if (context != null && password.isNotBlank()) {
+            AnonConfig.getWalletFileForPin(context, password)
+        } else {
+            aFile
+        }
     }
 
     fun walletExists(aFile: File): Boolean {
