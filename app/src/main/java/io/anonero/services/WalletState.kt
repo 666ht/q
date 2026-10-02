@@ -60,6 +60,9 @@ class WalletState {
     @Volatile
     var customRescanStartHeight: Long? = null
 
+    @Volatile
+    var customRescanDayEndHeight: Long? = null
+
     val transactions: Flow<List<TransactionInfo>> = _transactions
 
     val balanceInfo: Flow<Long?> = _balanceInfo
@@ -329,10 +332,12 @@ class WalletState {
         try {
             setLoading(true)
             customRescanStartHeight = height
+            customRescanDayEndHeight = estimateDayEndHeight(wallet, height)
             customRescanInProgress = true
 
             if (!wallet.rescanBlockchainAsyncFromHeight(height)) {
                 customRescanStartHeight = null
+                customRescanDayEndHeight = null
                 customRescanInProgress = false
                 setLoading(false)
                 wallet.startRefresh()
@@ -348,6 +353,7 @@ class WalletState {
             Result.success(true)
         } catch (e: Exception) {
             customRescanStartHeight = null
+            customRescanDayEndHeight = null
             customRescanInProgress = false
             setLoading(false)
             wallet.startRefresh()
