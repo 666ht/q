@@ -61,6 +61,7 @@ class WalletState {
     private val bgSyncMutex = Mutex()
     private val customRescanScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var customRescanJob: Job? = null
+    private val customRescanFinishStarted = AtomicBoolean(false)
 
     @Volatile
     var customRescanInProgress: Boolean = false
@@ -366,6 +367,7 @@ class WalletState {
 
             setLoading(true)
             customRescanJob?.cancel()
+            customRescanFinishStarted.set(false)
             customRescanFinished = false
             customRescanStartHeight = height
             customRescanDayEndHeight = effectiveEnd
@@ -422,7 +424,7 @@ class WalletState {
                     .coerceAtLeast(startHeight)
 
                 if (currentHeight >= endHeight) {
-                    completeCustomRescan(wallet, endHeight)
+                    requestCustomRescanCompletion(wallet, endHeight)
                     break
                 }
 
@@ -449,9 +451,7 @@ class WalletState {
         val end = customRescanDayEndHeight ?: return
 
         if (height >= end) {
-            runCatching { wallet.pauseRefresh() }
-                .onFailure { Timber.tag(TAG).e(it, "Failed to pause custom rescan") }
-            completeCustomRescan(wallet, end)
+            requestCustomRescanCompletion(wallet, end)
             return
         }
 
@@ -464,11 +464,23 @@ class WalletState {
         syncUpdate(SyncProgress(progress, left))
     }
 
-    private fun completeCustomRescan(wallet: Wallet, endHeight: Long) {
+    private fun requestCustomRescanCompletion(wallet: Wallet, endHeight: Long) {
         if (!customRescanInProgress) return
+        if (!customRescanFinishStarted.compareAndSet(false, true)) return
 
+        // Stop the native refresh immediately when the custom end height is reached.
         runCatching { wallet.pauseRefresh() }
             .onFailure { Timber.tag(TAG).e(it, "Failed to stop custom rescan at %d", endHeight) }
+
+        // Native callbacks run under the JNI listener lock. Do the potentially
+        // callback-producing wallet refreshes off that thread.
+        customRescanScope.launch {
+            completeCustomRescan(wallet, endHeight)
+        }
+    }
+
+    private fun completeCustomRescan(wallet: Wallet, endHeight: Long) {
+        if (!customRescanInProgress) return
 
         customRescanInProgress = false
         customRescanFinished = true
