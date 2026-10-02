@@ -86,3 +86,4 @@ jobs:
           path: app/build/outputs/apk/anon/release/*.apk
           if-no-files-found: error
           retention-days: 7
+# Keep the Monero submodule pinned to the tested const-correct revision.
