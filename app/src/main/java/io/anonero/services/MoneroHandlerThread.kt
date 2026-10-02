@@ -71,7 +71,14 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
         Timber.tag(name)
             .i("refreshed() status:${status} daemonHeight:$daemonHeight chainHeight:$chainHeight ")
         if (walletState.customRescanInProgress) {
-            if (!wallet.isSynchronized) {
+            if (wallet.isSynchronized) {
+                // The custom rescan has reached the daemon tip. Only now end the
+                // custom-rescan state and resume the normal history/coin refresh.
+                walletState.customRescanInProgress = false
+                wallet.store()
+                refresh(true)
+                walletState.setLoading(false)
+            } else {
                 updateSyncProgress(wallet.getBlockChainHeight())
             }
             walletState.update()
