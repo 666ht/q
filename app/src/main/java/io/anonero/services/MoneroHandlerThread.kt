@@ -66,15 +66,17 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
         }
 
         val targetHeight = wallet.getDaemonBlockChainTargetHeight()
-        val progress = if (walletState.customRescanInProgress && customStart != null &&
-            targetHeight > customStart
-        ) {
-            val target = minOf(targetHeight, customDayEnd ?: targetHeight)
-            val denominator = (target - customStart).coerceAtLeast(1L)
-            ((currentHeight - customStart).toDouble() /
-                denominator.toDouble())
-                .coerceIn(0.0, 1.0)
-                .toFloat()
+        val progress = if (walletState.customRescanInProgress && customStart != null) {
+            // The progress bar represents the full native rescan. A date-selected
+            // end height only limits the displayed "remaining blocks" value.
+            if (targetHeight <= customStart) {
+                1f
+            } else {
+                ((currentHeight - customStart).toDouble() /
+                    (targetHeight - customStart).toDouble())
+                    .coerceIn(0.0, 1.0)
+                    .toFloat()
+            }
         } else if (targetHeight.toDouble() == 0.0) {
             1f
         } else {
