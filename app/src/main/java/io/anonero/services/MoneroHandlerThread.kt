@@ -113,6 +113,7 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
                 wallet.store()
 
                 refresh(true)
+                walletState.syncUpdate(SyncProgress(1f, 0L))
                 walletState.setLoading(false)
             } else {
                 updateSyncProgress(walletState.customRescanStartHeight ?: chainHeight)
@@ -134,6 +135,7 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
                 walletState.customRescanInProgress = false
                 wallet.store()
                 refresh(true)
+                walletState.syncUpdate(SyncProgress(1f, 0L))
                 walletState.setLoading(false)
             }
 
