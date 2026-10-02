@@ -243,7 +243,8 @@ class AnonWalletHandler(
             ?: AnonConfig.getDefaultWalletFile(appContext)
 
         val pinWalletFile = AnonConfig.getWalletFileForPin(appContext, passPhrase)
-        val isPin = currentWalletFile.absoluteFile == pinWalletFile.absoluteFile
+        val isPin = pinWalletFile.isFile ||
+            AnonConfig.isWalletPin(currentWalletFile, passPhrase)
         val isPassphrase = !isPin &&
             AnonConfig.isWalletPassphrase(appContext, currentWalletFile, passPhrase)
 
