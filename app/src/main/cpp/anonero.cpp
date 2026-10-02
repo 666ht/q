@@ -1267,7 +1267,7 @@ Java_io_anonero_model_Wallet_refreshAsync(JNIEnv *env, jobject instance) {
 JNIEXPORT jboolean JNICALL
 Java_io_anonero_model_Wallet_rescanBlockchainAsyncJ(JNIEnv *env, jobject instance) {
     Monero::Wallet *wallet = getHandle<Monero::Wallet>(env, instance);
-    if (wallet->fullStatus().connectionStatus != Monero::Wallet::ConnectionStatus_Connected)
+    if (wallet->connected() != Monero::Wallet::ConnectionStatus_Connected)
         return static_cast<jboolean>(false);
 
     wallet->rescanBlockchainAsync();
