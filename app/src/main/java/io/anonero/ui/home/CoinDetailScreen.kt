@@ -37,6 +37,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import io.anonero.services.WalletState
 import io.anonero.util.Formats
+import io.anonero.ui.theme.Orange
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
@@ -76,7 +77,7 @@ fun CoinDetailScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("冻结") },
+                title = { Text("冻结", color = if (coin?.frozen == true) Orange else MaterialTheme.colorScheme.onSurface) },
                 navigationIcon = {
                     IconButton(onClick = onBackPress) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
