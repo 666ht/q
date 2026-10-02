@@ -243,13 +243,28 @@ class AnonWalletHandler(
             ?: AnonConfig.getDefaultWalletFile(appContext)
 
         val pinWalletFile = AnonConfig.getWalletFileForPin(appContext, passPhrase)
-        val isPin = pinWalletFile.isFile ||
-            AnonConfig.isWalletPin(currentWalletFile, passPhrase)
+
+        // The PIN is the native wallet password. Prefer direct credential
+        // verification so legacy "anon" wallets also work, not only wallets
+        // whose filename was routed from the PIN.
+        val pinCandidates = buildList {
+            add(currentWalletFile.absolutePath)
+            add(currentWalletFile.absolutePath + ".keys")
+            add(pinWalletFile.absolutePath)
+            add(pinWalletFile.absolutePath + ".keys")
+        }.distinct()
+
+        val isPin = pinCandidates.any { candidate ->
+            runCatching {
+                WalletManager.instance?.verifyWalletPassword(candidate, passPhrase, AnonConfig.viewOnly)
+            }.getOrDefault(false)
+        } || AnonConfig.isWalletPin(currentWalletFile, passPhrase)
+
         val isPassphrase = !isPin &&
             AnonConfig.isWalletPassphrase(appContext, currentWalletFile, passPhrase)
 
-        // PIN: clear app data but keep the existing wallet.
-        // Password phrase: authenticated full wipe, including the wallet.
+        // PIN: delete only the currently opened wallet's files.
+        // Password phrase: authenticated full wipe, including all app data.
         if (!isPin && !isPassphrase) {
             Timber.tag(TAG).w("Safe delete rejected: invalid credential")
             return false
@@ -275,7 +290,40 @@ class AnonWalletHandler(
         return if (isPassphrase) {
             AnonConfig.clearAllAppData(appContext)
         } else {
-            AnonConfig.clearAppDataKeepWallets(appContext)
+            var deleted = true
+            val walletPath = currentWalletFile.absolutePath
+            val walletDir = currentWalletFile.parentFile
+            val walletName = currentWalletFile.name
+
+            if (walletDir != null) {
+                // Monero stores the wallet across several files sharing the
+                // same base name (keys, address data, sidecars, etc.).
+                walletDir.listFiles()
+                    ?.filter { file ->
+                        file.name == walletName || file.name.startsWith("$walletName.")
+                    }
+                    ?.forEach { file ->
+                        var removed = false
+                        repeat(20) {
+                            if (!file.exists()) {
+                                removed = true
+                                return@repeat
+                            }
+                            if (file.deleteRecursively()) {
+                                removed = true
+                                return@repeat
+                            }
+                            Thread.sleep(100)
+                        }
+                        if (!removed && file.exists()) {
+                            deleted = false
+                            Timber.tag(TAG).e("Failed to delete wallet file: %s", file.absolutePath)
+                        }
+                    }
+            }
+
+            AnonConfig.disposeState()
+            deleted
         }
     }
 
