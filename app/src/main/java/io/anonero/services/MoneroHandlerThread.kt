@@ -45,14 +45,29 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
     private fun updateSyncProgress(height: Long) {
         val syncHeight = wallet.getBlockChainHeight()
         val deamonHeight = wallet.getDaemonBlockChainHeight()
-        val left = deamonHeight - syncHeight
-        if (syncHeight < 0 || left < 0) {
+        val customStart = walletState.customRescanStartHeight
+        val currentHeight = if (walletState.customRescanInProgress && customStart != null) {
+            maxOf(syncHeight, customStart)
+        } else {
+            syncHeight
+        }
+        val left = (deamonHeight - currentHeight).coerceAtLeast(0L)
+        if (syncHeight < 0 || deamonHeight < 0) {
             return
         }
-        val progress = if (wallet.getDaemonBlockChainTargetHeight().toDouble() == 0.0) {
+
+        val targetHeight = wallet.getDaemonBlockChainTargetHeight()
+        val progress = if (walletState.customRescanInProgress && customStart != null &&
+            targetHeight > customStart
+        ) {
+            ((currentHeight - customStart).toDouble() /
+                (targetHeight - customStart).toDouble())
+                .coerceIn(0.0, 1.0)
+                .toFloat()
+        } else if (targetHeight.toDouble() == 0.0) {
             1f
         } else {
-            (height.toDouble() / wallet.getDaemonBlockChainTargetHeight().toDouble()).toFloat()
+            (height.toDouble() / targetHeight.toDouble()).coerceIn(0.0, 1.0).toFloat()
         }
         walletState.syncUpdate(SyncProgress(progress, left))
     }
@@ -78,6 +93,7 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
 
                 // The native layer keeps the wallet's original recovery height
                 // untouched. Only the current rescan used the user-supplied height.
+                walletState.customRescanStartHeight = null
                 walletState.customRescanInProgress = false
                 wallet.store()
 
