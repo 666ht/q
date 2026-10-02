@@ -245,23 +245,11 @@ class AnonWalletHandler(
             ?.let(::File)
             ?: AnonConfig.getDefaultWalletFile(appContext)
 
-        val pinWalletFile = AnonConfig.getWalletFileForPin(appContext, passPhrase)
-
-        // The PIN is the native wallet password. Prefer direct credential
-        // verification so legacy "anon" wallets also work, not only wallets
-        // whose filename was routed from the PIN.
-        val pinCandidates = buildList {
-            add(currentWalletFile.absolutePath)
-            add(currentWalletFile.absolutePath + ".keys")
-            add(pinWalletFile.absolutePath)
-            add(pinWalletFile.absolutePath + ".keys")
-        }.distinct()
-
-        val isPin = AnonConfig.isActiveWalletPin(passPhrase) || pinCandidates.any { candidate ->
-            runCatching {
-                WalletManager.instance?.verifyWalletPassword(candidate, passPhrase, AnonConfig.viewOnly)
-            }.getOrDefault(false)
-        } || AnonConfig.isWalletPin(currentWalletFile, passPhrase)
+        // A wallet that is already open was authenticated with its PIN.
+        // Use that in-memory authentication for the safe-delete action instead
+        // of invoking the native password verifier again from the delete screen.
+        val isPin = AnonConfig.isActiveWalletPin(passPhrase) ||
+            AnonConfig.isWalletPin(currentWalletFile, passPhrase)
 
         val isPassphrase = !isPin &&
             AnonConfig.isWalletPassphrase(appContext, currentWalletFile, passPhrase)
