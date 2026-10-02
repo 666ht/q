@@ -76,15 +76,10 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
                 // throughout the custom rescan and is only set after completion.
                 wallet.setSynchronized()
 
-                // The custom reset height is temporary. Restore the original wallet
-                // recovery height (for example 3769707) before normal operation
-                // resumes, and persist only that original value.
-                walletState.customRescanOriginalRestoreHeight?.let { originalHeight ->
-                    wallet.setRestoreHeight(originalHeight)
-                    wallet.store()
-                }
-                walletState.customRescanOriginalRestoreHeight = null
+                // The native layer keeps the wallet's original recovery height
+                // untouched. Only the current rescan used the user-supplied height.
                 walletState.customRescanInProgress = false
+                wallet.store()
 
                 refresh(true)
                 walletState.setLoading(false)
