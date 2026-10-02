@@ -268,16 +268,18 @@ class AnonWalletHandler(
             // Delete only the wallet that is currently open. Do not
             // recursively wipe the shared wallets directory, because it may
             // contain other PIN-routed wallets.
-            val walletFiles = buildList {
-                val openPath = wallet?.path
+            val walletFiles = mutableListOf<File>()
+            run {
+                val openPath = wallet?.getPath()
                 if (!openPath.isNullOrBlank()) add(File(openPath))
-            }.distinctBy { it.absolutePath }
+            }
+            val distinctWalletFiles = walletFiles.distinctBy { it.absolutePath }
 
-            if (walletFiles.isEmpty()) {
+            if (distinctWalletFiles.isEmpty()) {
                 walletFiles.add(AnonConfig.getDefaultWalletFile(appContext))
             }
 
-            walletFiles.forEach { file ->
+            distinctWalletFiles.forEach { file ->
                 repeat(20) {
                     if (!file.exists()) return@repeat
                     if (!file.deleteRecursively()) {
@@ -285,7 +287,7 @@ class AnonWalletHandler(
                     }
                 }
             }
-            deleted = walletFiles.all { !it.exists() }
+            deleted = distinctWalletFiles.all { !it.exists() }
 
             // Do not call clearAllAppData(): it would also remove preferences
             // and every other PIN-routed wallet.
