@@ -68,6 +68,8 @@ import io.anonero.store.NodesRepository
 import io.anonero.ui.MainActivity
 import io.anonero.util.KeyStoreHelper
 import io.anonero.util.PREFS_PASSPHRASE_HASH
+import io.anonero.util.PREFS_PIN_HASH
+import io.anonero.util.CrazyPassEncoder
 import io.anonero.util.ShakeConfig
 import io.anonero.util.WALLET_PREFERENCES
 import io.anonero.util.rememberShakeController
@@ -303,9 +305,19 @@ fun SecureWipe(
         scope.launch {
             val result = withContext(Dispatchers.IO) {
                 runCatching {
-                    val hash = prefs.getString(PREFS_PASSPHRASE_HASH, "")
+                    val passphraseHash = prefs.getString(PREFS_PASSPHRASE_HASH, "")
                     val hashedPass = KeyStoreHelper.getCrazyPass(AnonConfig.context, passPhrase)
-                    hash == hashedPass
+                    val pinHash = prefs.getString(PREFS_PIN_HASH, "")
+                    val hashedPin = CrazyPassEncoder.encode(
+                        passPhrase.toByteArray().let { bytes ->
+                            if (bytes.size < 32) {
+                                bytes + ByteArray(32 - bytes.size)
+                            } else bytes
+                        }
+                    )
+                    passphraseHash == hashedPass ||
+                        pinHash == hashedPin ||
+                        AnonConfig.isActiveWalletPin(passPhrase)
                 }.getOrDefault(false)
             }
             if (result) {
