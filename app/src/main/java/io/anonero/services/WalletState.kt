@@ -13,6 +13,12 @@ import io.anonero.model.node.DaemonInfo
 import io.anonero.ui.util.getAllUsedSubAddresses
 import io.anonero.ui.util.getLatestSubAddress
 import io.anonero.ui.home.LockScreenShortCut
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -53,9 +59,14 @@ class WalletState {
     private val _unlockShortcut = Channel<LockScreenShortCut>(capacity = 1)
     val unlockShortcut = _unlockShortcut.receiveAsFlow()
     private val bgSyncMutex = Mutex()
+    private val customRescanScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private var customRescanJob: Job? = null
 
     @Volatile
     var customRescanInProgress: Boolean = false
+
+    @Volatile
+    var customRescanFinished: Boolean = false
 
     @Volatile
     var customRescanStartHeight: Long? = null
@@ -325,6 +336,7 @@ class WalletState {
         if(getWallet?.isInitialized != true) {
             return;
         }
+        customRescanFinished = false
         if (getWallet?.fullStatus?.connectionStatus == Wallet.ConnectionStatus.ConnectionStatus_Connected) {
             setLoading(true);
             getWallet?.startRefresh();
@@ -347,8 +359,19 @@ class WalletState {
         wallet.pauseRefresh()
         try {
             setLoading(true)
+            customRescanJob?.cancel()
+            customRescanFinished = false
             customRescanStartHeight = height
-            customRescanDayEndHeight = dayEndHeight?.takeIf { it >= height }
+
+            // A custom scan always has a hard end: use the requested end height
+            // when provided, otherwise stop at the daemon's current height.
+            val effectiveEnd = (dayEndHeight ?: wallet.getDaemonBlockChainHeight())
+                .takeIf { it >= height }
+                ?: return Result.failure(
+                    IllegalArgumentException("Invalid custom end height")
+                )
+
+            customRescanDayEndHeight = effectiveEnd
             customRescanInProgress = true
 
             if (!wallet.rescanBlockchainAsyncFromHeight(height)) {
@@ -362,12 +385,15 @@ class WalletState {
                 )
             }
 
+            startCustomRescanProgressPolling(wallet, height, effectiveEnd)
+
             Timber.tag(TAG).i(
-                "Reset wallet scan from custom height: requested=%d dayEnd=%s",
-                height, dayEndHeight
+                "Reset wallet scan from custom height: requested=%d end=%d",
+                height, effectiveEnd
             )
             Result.success(true)
         } catch (e: Exception) {
+            customRescanJob?.cancel()
             customRescanStartHeight = null
             customRescanDayEndHeight = null
             customRescanInProgress = false
@@ -378,6 +404,93 @@ class WalletState {
     } catch (e: Exception) {
         Timber.tag(TAG).e(e, "Failed to reset wallet scan from custom height: %d", height)
         Result.failure(e)
+    }
+
+    /**
+     * Poll the native wallet's real scan cursor every 400ms for the custom-height
+     * rescan. The normal sync callback is intentionally not used for this range,
+     * because the daemon's full target height is not the custom operation's end.
+     */
+    private fun startCustomRescanProgressPolling(
+        wallet: Wallet,
+        startHeight: Long,
+        endHeight: Long
+    ) {
+        customRescanJob?.cancel()
+        customRescanJob = customRescanScope.launch {
+            while (isActive && customRescanInProgress) {
+                val currentHeight = runCatching {
+                    wallet.getBlockChainHeight()
+                }.getOrDefault(startHeight)
+                    .coerceAtLeast(startHeight)
+
+                if (currentHeight >= endHeight) {
+                    completeCustomRescan(wallet, endHeight)
+                    break
+                }
+
+                val total = (endHeight - startHeight).coerceAtLeast(1L)
+                val left = (endHeight - currentHeight).coerceAtLeast(0L)
+                val progress = ((currentHeight - startHeight).toDouble() / total.toDouble())
+                    .coerceIn(0.0, 0.999999)
+                    .toFloat()
+
+                syncUpdate(SyncProgress(progress, left))
+                delay(400)
+            }
+        }
+    }
+
+    /**
+     * Called from the native newBlock callback. This gives us a faster stop at the
+     * custom end height; the 400ms poller remains as a fallback if callbacks lag.
+     */
+    fun onCustomRescanBlock(height: Long) {
+        if (!customRescanInProgress) return
+        val wallet = getWallet ?: return
+        val start = customRescanStartHeight ?: return
+        val end = customRescanDayEndHeight ?: return
+
+        if (height >= end) {
+            runCatching { wallet.pauseRefresh() }
+                .onFailure { Timber.tag(TAG).e(it, "Failed to pause custom rescan") }
+            completeCustomRescan(wallet, end)
+            return
+        }
+
+        val total = (end - start).coerceAtLeast(1L)
+        val current = height.coerceAtLeast(start)
+        val left = (end - current).coerceAtLeast(0L)
+        val progress = ((current - start).toDouble() / total.toDouble())
+            .coerceIn(0.0, 0.999999)
+            .toFloat()
+        syncUpdate(SyncProgress(progress, left))
+    }
+
+    private fun completeCustomRescan(wallet: Wallet, endHeight: Long) {
+        if (!customRescanInProgress) return
+
+        runCatching { wallet.pauseRefresh() }
+            .onFailure { Timber.tag(TAG).e(it, "Failed to stop custom rescan at %d", endHeight) }
+
+        customRescanInProgress = false
+        customRescanFinished = true
+        customRescanJob?.cancel()
+        customRescanStartHeight = null
+        customRescanDayEndHeight = null
+
+        try {
+            // Final wallet data is refreshed before the progress indicator is cleared.
+            wallet.refreshHistory()
+            wallet.refreshCoins(force = true)
+            wallet.store()
+            update()
+            finishSync()
+            Timber.tag(TAG).i("Custom rescan finished at height=%d", endHeight)
+        } catch (e: Exception) {
+            Timber.tag(TAG).e(e, "Failed to finalize custom rescan")
+            finishSync()
+        }
     }
 
     fun resyncBlockchain(): Result<Boolean> {
