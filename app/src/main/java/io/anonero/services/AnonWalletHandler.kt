@@ -232,68 +232,51 @@ class AnonWalletHandler(
     }
 
     fun wipe(passPhrase: String): Boolean {
+        val appContext = AnonConfig.context?.applicationContext ?: return false
         val walletManager = WalletManager.instance
         val wallet = walletManager?.wallet
+
+        val openPath = wallet?.getPath()
+        val currentWalletFile = openPath
+            ?.takeIf { it.isNotBlank() }
+            ?.let(::File)
+            ?: AnonConfig.getDefaultWalletFile(appContext)
+
+        val pinWalletFile = AnonConfig.getWalletFileForPin(appContext, passPhrase)
+        val isPin = currentWalletFile.absoluteFile == pinWalletFile.absoluteFile
+        val isPassphrase = !isPin &&
+            AnonConfig.isWalletPassphrase(appContext, currentWalletFile, passPhrase)
+
+        // PIN: clear app data but keep the existing wallet.
+        // Password phrase: authenticated full wipe, including the wallet.
+        if (!isPin && !isPassphrase) {
+            Timber.tag(TAG).w("Safe delete rejected: invalid credential")
+            return false
+        }
 
         walletState.prepareForWipe()
         _scope.coroutineContext.cancelChildren()
         handler = null
 
         runCatching { wallet?.setListener(null) }
-            .onFailure { Timber.tag(TAG).e(it, "Wallet listener detach failed; continuing secure wipe") }
-
+            .onFailure { Timber.tag(TAG).e(it, "Wallet listener detach failed") }
         runCatching { wallet?.pauseRefresh() }
-            .onFailure { Timber.tag(TAG).e(it, "Wallet pause failed; continuing secure wipe") }
-
+            .onFailure { Timber.tag(TAG).e(it, "Wallet pause failed") }
         runCatching { walletManager?.setDaemon(null) }
-            .onFailure { Timber.tag(TAG).e(it, "Daemon detach failed; continuing secure wipe") }
-
-        var closed = true
-        if (wallet != null) {
-            closed = runCatching { wallet.close() }
-                .onFailure { Timber.tag(TAG).e(it, "Wallet close failed") }
-                .getOrDefault(false)
-            if (!closed) {
-                Timber.tag(TAG).e("Wallet native close returned false; continuing file deletion")
-            }
-        }
+            .onFailure { Timber.tag(TAG).e(it, "Daemon detach failed") }
+        runCatching { wallet?.close() }
+            .onFailure { Timber.tag(TAG).e(it, "Wallet close failed; continuing delete") }
         runCatching { torService.stop() }
-            .onFailure { Timber.tag(TAG).e(it, "Tor stop failed; continuing secure wipe") }
+            .onFailure { Timber.tag(TAG).e(it, "Tor stop failed; continuing delete") }
 
         WalletManager.resetInstance()
 
-        val appContext = AnonConfig.context?.applicationContext
-        var deleted = true
-        if (appContext != null) {
-            // Delete only the wallet that is currently open. Do not
-            // recursively wipe the shared wallets directory, because it may
-            // contain other PIN-routed wallets.
-            val walletFiles = mutableListOf<File>()
-            val openPath = wallet?.getPath()
-            if (!openPath.isNullOrBlank()) {
-                walletFiles.add(File(openPath))
-            } else {
-                // Legacy installations may not expose a native path after close.
-                walletFiles.add(AnonConfig.getDefaultWalletFile(appContext))
-            }
-            val distinctWalletFiles = walletFiles.distinctBy { it.absolutePath }
-
-            distinctWalletFiles.forEach { file ->
-                repeat(20) {
-                    if (!file.exists()) return@repeat
-                    if (!file.deleteRecursively()) {
-                        Thread.sleep(100)
-                    }
-                }
-            }
-            deleted = distinctWalletFiles.all { !it.exists() }
-
-            // Do not call clearAllAppData(): it would also remove preferences
-            // and every other PIN-routed wallet.
-            AnonConfig.disposeState()
+        return if (isPassphrase) {
+            AnonConfig.clearAllAppData(appContext)
+        } else {
+            AnonConfig.clearAppDataKeepWallets(appContext)
         }
-
-        return deleted
     }
+
 
 }
