@@ -116,9 +116,18 @@ class AnonWalletHandler(
             if (wallet.isSynchronized) {
                 wallet.refreshHistory()
             }
-            wallet.init(0)
+
+            // Arm restore-progress mode before wallet.init(0). init() can cause
+            // native refresh callbacks; without the restore state already armed,
+            // an old normal-sync callback can publish the stale ~100k target
+            // estimate before the selected mnemonic restore height is applied.
             val savedRestoreHeight = prefs.getLong(RESTORE_HEIGHT, 0L)
             val needsRestoreRescan = prefs.getBoolean(RESTORE_NEEDS_RESCAN, false)
+            if (savedRestoreHeight > 0L && needsRestoreRescan) {
+                walletState.beginRestoreProgress(savedRestoreHeight)
+            }
+
+            wallet.init(0)
             if (savedRestoreHeight > 0L && savedRestoreHeight != wallet.getRestoreHeight()) {
                 wallet.setRestoreHeight(savedRestoreHeight)
                 wallet.store()
