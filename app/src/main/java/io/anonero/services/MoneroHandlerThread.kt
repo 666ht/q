@@ -304,9 +304,8 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
             walletState.finishRestoreProgress()
             walletState.finishSync()
 
-            // Reset the transient sync-progress state first, then run the
-            // existing normal wallet refresh. No completion animation is started.
-            walletState.resetRefreshCompletionProgress()
+            // Replace the old three-second completion animation with the
+            // existing normal wallet refresh immediately after synchronization.
             refresh(true)
             wallet.store()
             walletState.update()
