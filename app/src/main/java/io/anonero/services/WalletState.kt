@@ -732,18 +732,30 @@ class WalletState {
         customRescanDayEndHeight = null
 
         try {
-            // Re-enter the normal refresh lifecycle. The first refreshed() callback
-            // is the synchronization barrier for the post-rescan wallet data.
+            // The custom rescan is complete at the user-selected end height.
+            // Do not start a second normal synchronization and do not wait for a
+            // future refreshed() callback to hide the progress indicator.
+            // Refresh wallet data directly, then finish this custom operation.
             setLoading(true)
-            wallet.startRefresh()
+            wallet.refreshHistory()
+            wallet.refreshCoins(force = true)
+            wallet.store()
+            update()
+
+            // Publish the terminal state before clearing the progress indicator.
+            syncUpdate(SyncProgress(1f, 0L))
+            customRescanFinalizing = false
+            customRescanFinished = true
+            finishSync()
+
             Timber.tag(TAG).i(
-                "Custom rescan reached end height=%d; entering final refresh",
+                "Custom rescan reached end height=%d; final wallet refresh complete",
                 endHeight
             )
         } catch (e: Exception) {
             customRescanFinalizing = false
             customRescanFinished = true
-            Timber.tag(TAG).e(e, "Failed to restart refresh after custom rescan")
+            Timber.tag(TAG).e(e, "Failed to finalize custom rescan wallet data")
             finishSync()
         }
     }
