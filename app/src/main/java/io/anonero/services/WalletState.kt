@@ -55,6 +55,7 @@ class WalletState {
     private val _nextAddress = MutableStateFlow<Subaddress?>(null)
     private val _coins = MutableStateFlow<List<CoinsInfo>>(arrayListOf())
     private val _syncProgress = MutableStateFlow<SyncProgress?>(null)
+    private val _refreshCompletionProgress = MutableStateFlow(0f)
     private val _connectedDaemon = MutableStateFlow<DaemonInfo?>(null)
     private val _connectionStatus = MutableStateFlow<Wallet.ConnectionStatus?>(null)
     private val _previousConnectionStatus = AtomicReference<Wallet.ConnectionStatus?>(null)
@@ -63,6 +64,7 @@ class WalletState {
     private val bgSyncMutex = Mutex()
     private val customRescanScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var customRescanJob: Job? = null
+    private var refreshCompletionJob: Job? = null
     private val customRescanFinishStarted = AtomicBoolean(false)
     // The async native request is queued before wallet2 clears its old blockchain.
     // Do not let the first poll of the old tip falsely finish the custom rescan.
@@ -148,6 +150,7 @@ class WalletState {
 
     val walletStatus: Flow<Wallet.Status?> = _walletStatus
     val syncProgress: Flow<SyncProgress?> = _syncProgress
+    val refreshCompletionProgress: Flow<Float> = _refreshCompletionProgress
 
     val nextAddress: Flow<Subaddress?> = _nextAddress
     val coins: Flow<List<CoinsInfo>> = _coins
@@ -365,6 +368,22 @@ class WalletState {
         _isSyncing.set(false)
         _isLoading.value = false
         _connectionStatus.update { Wallet.ConnectionStatus.ConnectionStatus_Connected }
+    }
+
+    /**
+     * Show a short completion-only refresh transition after restore data is ready.
+     * This is not a second wallet synchronization: it only drives the existing
+     * progress indicator briefly, then returns it to idle.
+     */
+    fun startRefreshCompletionTransition() {
+        refreshCompletionJob?.cancel()
+        refreshCompletionJob = customRescanScope.launch {
+            for (step in 0..5) {
+                _refreshCompletionProgress.value = step / 5f
+                delay(60)
+            }
+            _refreshCompletionProgress.value = 0f
+        }
     }
 
     fun toggleHideAmounts() {
