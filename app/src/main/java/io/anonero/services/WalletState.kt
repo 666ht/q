@@ -55,7 +55,6 @@ class WalletState {
     private val _nextAddress = MutableStateFlow<Subaddress?>(null)
     private val _coins = MutableStateFlow<List<CoinsInfo>>(arrayListOf())
     private val _syncProgress = MutableStateFlow<SyncProgress?>(null)
-    private val _refreshCompletionProgress = MutableStateFlow(0f)
     private val _connectedDaemon = MutableStateFlow<DaemonInfo?>(null)
     private val _connectionStatus = MutableStateFlow<Wallet.ConnectionStatus?>(null)
     private val _previousConnectionStatus = AtomicReference<Wallet.ConnectionStatus?>(null)
@@ -64,7 +63,6 @@ class WalletState {
     private val bgSyncMutex = Mutex()
     private val customRescanScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var customRescanJob: Job? = null
-    private var refreshCompletionJob: Job? = null
     private val customRescanFinishStarted = AtomicBoolean(false)
 
     // During mnemonic restore, expose discovered wallet data while the native
@@ -231,7 +229,6 @@ class WalletState {
 
     val walletStatus: Flow<Wallet.Status?> = _walletStatus
     val syncProgress: Flow<SyncProgress?> = _syncProgress
-    val refreshCompletionProgress: Flow<Float> = _refreshCompletionProgress
 
     val nextAddress: Flow<Subaddress?> = _nextAddress
     val coins: Flow<List<CoinsInfo>> = _coins
@@ -483,23 +480,13 @@ class WalletState {
     }
 
     /**
-     * Show a short completion-only refresh transition after restore data is ready.
-     * This is not a second wallet synchronization: it only drives the existing
-     * progress indicator briefly, then returns it to idle.
+     * Reset the restore-completion refresh state before the normal wallet refresh.
+     * This never starts an animation or another synchronization pass.
      */
-    fun startRefreshCompletionTransition() {
-        refreshCompletionJob?.cancel()
-        refreshCompletionJob = customRescanScope.launch {
-            // Reuse the existing normal pull-to-refresh progress bar. This is
-            // visual-only and starts only after the restore data has finished
-            // refreshing; it never starts another wallet synchronization.
-            val steps = 58
-            for (step in 1..steps) {
-                _refreshCompletionProgress.value = step.toFloat() / steps.toFloat()
-                delay(50)
-            }
-            _refreshCompletionProgress.value = 0f
-        }
+    fun resetRefreshCompletionProgress() {
+        // Keep this operation explicit so restore completion always follows the
+        // same order: reset transient progress state -> refresh wallet data.
+        _syncProgress.value = null
     }
 
     fun toggleHideAmounts() {
