@@ -47,8 +47,13 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
             return
         }
 
-        // A completed custom scan stays paused until the user explicitly starts
-        // a normal refresh again.
+        // Between custom-scan end and the final refreshed() callback, the wallet
+        // is being moved through the normal refresh lifecycle. Do not let a new
+        // block callback prematurely terminate that finalization phase.
+        if (walletState.customRescanFinalizing) {
+            return
+        }
+
         if (walletState.customRescanFinished) {
             return
         }
