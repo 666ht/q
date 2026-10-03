@@ -4,6 +4,8 @@ import io.anonero.model.PendingTransaction
 import io.anonero.model.Wallet
 import io.anonero.model.WalletListener
 import io.anonero.model.WalletManager
+import io.anonero.util.RESTORE_HEIGHT
+import io.anonero.util.RESTORE_NEEDS_RESCAN
 import timber.log.Timber
 
 /**
@@ -134,6 +136,14 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
                 "restore progress start=%d wallet=%d daemon=%d target=%d left=%d",
                 restoreStart, syncHeight, daemonHeight, effectiveTarget, left
             )
+            // Once the real wallet scan cursor reaches the live daemon tip,
+            // close restore synchronization immediately. Do not start another
+            // refresh/sync cycle after the progress reaches 100%.
+            if (currentHeight >= daemonHeight) {
+                walletState.syncUpdate(SyncProgress(1f, 0L))
+                completeSynchronization()
+                return
+            }
         }
         val progress = if (effectiveTarget <= progressStart) {
             1f
@@ -214,12 +224,15 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
     }
 
     private fun completeSynchronization() {
+        val restoreWasActive = walletState.restoreProgressInProgress
+
         if (wallet.isSynchronized && !walletState.customRescanInProgress) {
-            // A restore can reach the native synchronized state before the normal
-            // status flag is observed. Always close the restore progress window
-            // before clearing the visible sync indicator.
-            walletState.finishRestoreProgress()
-            walletState.finishSync()
+            if (restoreWasActive) {
+                finalizeRestoreSynchronization()
+            } else {
+                walletState.finishRestoreProgress()
+                walletState.finishSync()
+            }
             return
         }
 
@@ -228,19 +241,59 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
             walletState.customRescanStartHeight = null
             walletState.customRescanDayEndHeight = null
             walletState.customRescanInProgress = false
-            walletState.finishRestoreProgress()
 
-            // End the sync indicator first so completion is visible immediately.
-            // Then load the final balance and transaction history.
-            walletState.update()
-            walletState.finishSync()
+            // Consume the one-shot mnemonic restore marker so reopening the wallet
+            // cannot arm the restore progress/rescan cycle a second time.
+            if (restoreWasActive) {
+                finalizeRestorePreferenceState()
+                walletState.finishRestoreProgress()
+            } else {
+                walletState.finishRestoreProgress()
+            }
 
+            // Publish the completed scan first, then refresh the already-complete
+            // wallet data. No wallet.startRefresh() is called here, so completion
+            // cannot turn into a second full synchronization pass.
+            walletState.syncUpdate(SyncProgress(1f, 0L))
             refresh(true)
             wallet.store()
             walletState.update()
+            walletState.finishSync()
+            walletState.update()
         } catch (e: Exception) {
             Timber.tag(name).e(e, "Failed to finalize synchronized wallet data")
+            if (restoreWasActive) {
+                finalizeRestorePreferenceState()
+                walletState.finishRestoreProgress()
+            }
             walletState.finishSync()
+        }
+    }
+
+    private fun finalizeRestoreSynchronization() {
+        try {
+            finalizeRestorePreferenceState()
+            // Native synchronization is already complete here. Only refresh the
+            // final wallet data; never restart the daemon refresh worker.
+            wallet.refreshHistory()
+            wallet.refreshCoins(force = true)
+            wallet.store()
+            walletState.finishRestoreProgress()
+            walletState.update()
+            walletState.finishSync()
+            walletState.update()
+        } catch (e: Exception) {
+            Timber.tag(name).e(e, "Failed to finalize restored wallet data")
+            finalizeRestorePreferenceState()
+            walletState.finishRestoreProgress()
+            walletState.finishSync()
+        }
+    }
+
+    private fun finalizeRestorePreferenceState() {
+        prefs.edit {
+            putBoolean(RESTORE_NEEDS_RESCAN, false)
+            remove(RESTORE_HEIGHT)
         }
     }
 
