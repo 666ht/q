@@ -66,6 +66,14 @@ class WalletState {
     private var customRescanJob: Job? = null
     private var refreshCompletionJob: Job? = null
     private val customRescanFinishStarted = AtomicBoolean(false)
+
+    // During mnemonic restore, expose discovered wallet data while the native
+    // scan is still running. Throttle the refresh to keep JNI/native work off
+    // the per-block callback path and avoid refreshing once synchronization ends.
+    private val restoreDataRefreshRunning = AtomicBoolean(false)
+    @Volatile
+    private var lastRestoreDataRefreshAt = 0L
+
     // The async native request is queued before wallet2 clears its old blockchain.
     // Do not let the first poll of the old tip falsely finish the custom rescan.
     private val customRescanScanStarted = AtomicBoolean(false)
@@ -105,6 +113,8 @@ class WalletState {
     var restoreProgressCompleted: Boolean = false
 
     fun beginRestoreProgress(startHeight: Long) {
+        lastRestoreDataRefreshAt = 0L
+        restoreDataRefreshRunning.set(false)
         restoreProgressStartHeight = startHeight
         restoreProgressRescanStarted = false
         restoreProgressCompleted = false
@@ -143,6 +153,45 @@ class WalletState {
         restoreProgressStartHeight = null
         restoreProgressRescanStarted = false
         restoreProgressInProgress = false
+        // Do not let a late incremental refresh publish a second sync pass.
+        // A final refresh is performed by MoneroHandlerThread after remaining=0.
+        restoreDataRefreshRunning.set(false)
+    }
+
+    /**
+     * Refresh balance/history during mnemonic restore without waiting for the
+     * scan to finish. Calls are throttled to about 400ms and run off the native
+     * block callback thread.
+     */
+    fun requestRestoreDataRefresh() {
+        if (!restoreProgressInProgress || restoreProgressCompleted) return
+
+        val now = System.currentTimeMillis()
+        if (now - lastRestoreDataRefreshAt < 400L) return
+        if (!restoreDataRefreshRunning.compareAndSet(false, true)) return
+
+        lastRestoreDataRefreshAt = now
+        customRescanScope.launch {
+            try {
+                val wallet = getWallet ?: return@launch
+                if (!wallet.isInitialized ||
+                    !restoreProgressInProgress ||
+                    restoreProgressCompleted
+                ) {
+                    return@launch
+                }
+
+                // The native restore scan is already discovering new wallet
+                // transactions/balance. Refresh only the visible wallet data;
+                // do not start another synchronization.
+                wallet.refreshHistory()
+                update()
+            } catch (e: Exception) {
+                Timber.tag(TAG).e(e, "Incremental restore data refresh failed")
+            } finally {
+                restoreDataRefreshRunning.set(false)
+            }
+        }
     }
 
     val transactions: Flow<List<TransactionInfo>> = _transactions
@@ -236,6 +285,8 @@ class WalletState {
         restoreProgressRescanStarted = false
         restoreProgressInProgress = false
         restoreProgressCompleted = false
+        lastRestoreDataRefreshAt = 0L
+        restoreDataRefreshRunning.set(false)
         _syncProgress.value = null
         _isSyncing.set(false)
     }
