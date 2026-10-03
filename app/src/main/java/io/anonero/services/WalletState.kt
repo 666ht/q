@@ -65,13 +65,6 @@ class WalletState {
     private var customRescanJob: Job? = null
     private val customRescanFinishStarted = AtomicBoolean(false)
 
-    // Explicit lifecycle for a user-triggered one-shot refresh. This is kept
-    // separate from normal synchronization/custom-rescan state.
-    private val manualRefreshInProgress = AtomicBoolean(false)
-
-    @Volatile
-    var isManualRefreshInProgress: Boolean = false
-        private set
 
     // During mnemonic restore, expose discovered wallet data while the native
     // scan is still running. Throttle the refresh to keep JNI/native work off
@@ -533,34 +526,23 @@ class WalletState {
         }
     }
 
-    fun beginManualRefresh() {
-        val wallet = getWallet ?: return
-        if (!wallet.isInitialized ||
-            wallet.fullStatus.connectionStatus != Wallet.ConnectionStatus.ConnectionStatus_Connected) {
-            return
+    fun refresh() {
+        if(getWallet?.isInitialized != true) {
+            return;
         }
+        customRescanFinished = false
 
-        manualRefreshInProgress.set(true)
-        isManualRefreshInProgress = true
-        setLoading(true)
+        // A user-triggered refresh starts the normal background refresh loop,
+        // exactly like the upstream wallet implementation. Clear only the
+        // completed-restore gate so its next refreshed() callback is handled as
+        // a normal refresh completion.
+        restoreProgressCompleted = false
 
-        // refreshAsync() is a one-shot request. The refreshed() callback closes
-        // this lifecycle; no timeout or artificial delay is used.
-        try {
-            wallet.refreshAsync()
-        } catch (e: Exception) {
-            Timber.tag(TAG).e(e, "Manual refresh failed to start")
-            completeManualRefresh()
+        if (getWallet?.fullStatus?.connectionStatus == Wallet.ConnectionStatus.ConnectionStatus_Connected) {
+            setLoading(true)
+            getWallet?.startRefresh()
         }
-    }
-
-    fun completeManualRefresh() {
-        if (!manualRefreshInProgress.compareAndSet(true, false)) return
-        isManualRefreshInProgress = false
-        _syncProgress.value = null
-        _isSyncing.set(false)
-        _isLoading.value = false
-        _connectionStatus.update { Wallet.ConnectionStatus.ConnectionStatus_Connected }
+        getWallet?.refreshHistory()
     }
 
     fun refresh() {
