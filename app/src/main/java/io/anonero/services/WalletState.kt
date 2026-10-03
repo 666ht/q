@@ -562,7 +562,12 @@ class WalletState {
                 manualRefreshJob = null
             }
         }
-        wallet.refreshAsync()
+        try {
+            wallet.refreshAsync()
+        } catch (e: Exception) {
+            Timber.tag(TAG).e(e, "Manual refresh failed to start")
+            completeManualRefresh()
+        }
     }
 
     fun completeManualRefresh() {
