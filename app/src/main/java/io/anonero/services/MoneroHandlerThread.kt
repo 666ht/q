@@ -250,6 +250,8 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
             walletState.finishRestoreProgress()
             walletState.finishSync()
             walletState.update()
+            // Let the completed-sync indicator disappear and the refreshed
+            // balance/history render before showing the short refresh tail.
             walletState.startRefreshCompletionTransition()
         } catch (e: Exception) {
             Timber.tag(name).e(e, "Failed to finalize synchronized wallet data")
