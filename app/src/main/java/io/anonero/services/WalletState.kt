@@ -277,35 +277,35 @@ class WalletState {
                 }
             }
             val oldTransactions = _transactions.value
-            val oldTxByKey = oldTransactions.associateBy { it.getListKey() }
-            val updatedTxs = (wallet.history?.all?.sortedWith(comparator = { o1, o2 ->
+            val discoveredTxs = (wallet.history?.all?.sortedWith(comparator = { o1, o2 ->
                 o2.timestamp.compareTo(o1.timestamp)
             }) ?: listOf()).fastDistinctBy {
                 it.getListKey()
-            }.map { fresh ->
-                val old = oldTxByKey[fresh.getListKey()]
-                // Keep the already-rendered object when its visible transaction
-                // state has not changed. This prevents a final full refresh from
-                // making existing rows look like newly inserted records.
-                if (old != null && transactionDisplayState(old) == transactionDisplayState(fresh)) {
-                    old
-                } else {
-                    fresh
-                }
             }
 
-            val oldKeys = oldTransactions.map { it.getListKey() }
-            val newKeys = updatedTxs.map { it.getListKey() }
-            val hasActualChange = oldKeys != newKeys ||
-                oldTransactions.zip(updatedTxs).any { (old, fresh) ->
-                    old !== fresh
+            // During the final restore refresh, do NOT replace the already visible
+            // transaction list. Keep every transaction the user has already seen
+            // and append only records that were not discovered during the scan.
+            // This turns the final pass into a pure "fill missing" operation and
+            // prevents the visible list from disappearing/reappearing.
+            val updatedTxs = if (restoreProgressFinalizing) {
+                val existingKeys = oldTransactions.asSequence()
+                    .map { it.getListKey() }
+                    .toHashSet()
+                oldTransactions + discoveredTxs.filter {
+                    it.getListKey() !in existingKeys
                 }
+            } else {
+                discoveredTxs
+            }
 
-            if (hasActualChange) {
+            if (updatedTxs.size != oldTransactions.size ||
+                updatedTxs.zip(oldTransactions).any { (fresh, old) -> fresh !== old }
+            ) {
                 _transactions.update { updatedTxs }
             }
 
-            if (oldTransactions.size > 0 && updatedTxs.size > oldTransactions.size) {
+            if (updatedTxs.size > oldTransactions.size) {
                 val oldKeySet = oldTransactions.asSequence()
                     .map { it.getListKey() }
                     .toHashSet()
@@ -317,33 +317,8 @@ class WalletState {
                     _incomingTx.tryEmit(Unit)
                 }
             }
-            if (!backgroundSync) {
-                _nextAddress.update { (wallet.getLatestSubAddress()) }
-                _subAddresses.update { (wallet.getAllUsedSubAddresses()).reversed() }
-                _coins.update { (wallet.coins?.all ?: listOf()).fastFilter { !it.spent } }
-            }
-        }
-    }
 
-    private fun transactionDisplayState(tx: TransactionInfo): String {
-        return buildString {
-            append(tx.getListKey()).append('|')
-            append(tx.direction.value).append('|')
-            append(tx.isPending).append('|')
-            append(tx.isFailed).append('|')
-            append(tx.amount).append('|')
-            append(tx.fee).append('|')
-            append(tx.blockheight).append('|')
-            append(tx.timestamp).append('|')
-            append(tx.paymentId).append('|')
-            append(tx.accountIndex).append('|')
-            append(tx.addressIndex).append('|')
-            append(tx.confirmations).append('|')
-            append(tx.subaddressLabel).append('|')
-            append(tx.notes).append('|')
-            append(tx.transfers)
-        }
-    }
+
 
     fun prepareForWipe() {
         _isWiping.set(true)
