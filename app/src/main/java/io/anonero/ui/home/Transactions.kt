@@ -465,6 +465,7 @@ fun TransactionScreen(
     }
     val showIndefiniteLoading by walletState.isLoading.asLiveData().observeAsState(false)
     val refreshState = rememberPullToRefreshState();
+    val refreshCompletionProgress by walletState.refreshCompletionProgress.asLiveData().observeAsState(0f)
     val view = LocalView.current;
     val torConnected by torService.socksFlow.asLiveData().observeAsState(torService.socks != null)
     val useTor = anonPrefs.getBoolean(WALLET_USE_TOR, true)
@@ -664,7 +665,7 @@ fun TransactionScreen(
                 stickyHeader(key = "progress") {
                     Column {
                         WalletProgressIndicator(
-                            refreshIndicatorProgress = refreshState.distanceFraction
+                            refreshIndicatorProgress = maxOf(refreshState.distanceFraction, refreshCompletionProgress)
                         )
                         AnimatedVisibility(
                             visible = refreshState.distanceFraction > .2f && !showIndefiniteLoading,
