@@ -66,10 +66,8 @@ class WalletState {
     private val customRescanFinishStarted = AtomicBoolean(false)
 
     // Explicit lifecycle for a user-triggered one-shot refresh. This is kept
-    // separate from normal synchronization/custom-rescan state so a manual
-    // pull cannot leave the generic loading indicator running forever.
+    // separate from normal synchronization/custom-rescan state.
     private val manualRefreshInProgress = AtomicBoolean(false)
-    private var manualRefreshJob: Job? = null
 
     @Volatile
     var isManualRefreshInProgress: Boolean = false
@@ -542,26 +540,12 @@ class WalletState {
             return
         }
 
-        manualRefreshJob?.cancel()
         manualRefreshInProgress.set(true)
         isManualRefreshInProgress = true
         setLoading(true)
 
-        // refreshAsync() normally completes through WalletListener.refreshed().
-        // Keep a safety timeout so a lost native callback can never leave the
-        // loading indicator spinning forever.
-        manualRefreshJob = customRescanScope.launch {
-            delay(15_000L)
-            if (manualRefreshInProgress.compareAndSet(true, false)) {
-                isManualRefreshInProgress = false
-                Timber.tag(TAG).w("Manual refresh callback timed out; finishing refresh state")
-                _syncProgress.value = null
-                _isSyncing.set(false)
-                _isLoading.value = false
-                _connectionStatus.update { Wallet.ConnectionStatus.ConnectionStatus_Connected }
-                manualRefreshJob = null
-            }
-        }
+        // refreshAsync() is a one-shot request. The refreshed() callback closes
+        // this lifecycle; no timeout or artificial delay is used.
         try {
             wallet.refreshAsync()
         } catch (e: Exception) {
@@ -573,8 +557,6 @@ class WalletState {
     fun completeManualRefresh() {
         if (!manualRefreshInProgress.compareAndSet(true, false)) return
         isManualRefreshInProgress = false
-        manualRefreshJob?.cancel()
-        manualRefreshJob = null
         _syncProgress.value = null
         _isSyncing.set(false)
         _isLoading.value = false
