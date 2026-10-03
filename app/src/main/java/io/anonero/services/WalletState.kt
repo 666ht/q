@@ -112,9 +112,17 @@ class WalletState {
     @Volatile
     var restoreProgressCompleted: Boolean = false
 
+    // Final restore refresh is a transactional UI update: native callbacks may
+    // temporarily expose an empty/partial history while the wallet refreshes.
+    // Suppress those intermediate publications until the final data snapshot
+    // is ready and MoneroHandlerThread explicitly calls update().
+    @Volatile
+    var restoreProgressFinalizing: Boolean = false
+
     fun beginRestoreProgress(startHeight: Long) {
         lastRestoreDataRefreshAt = 0L
         restoreDataRefreshRunning.set(false)
+        restoreProgressFinalizing = false
         restoreProgressStartHeight = startHeight
         restoreProgressRescanStarted = false
         restoreProgressCompleted = false
@@ -164,7 +172,10 @@ class WalletState {
      * block callback thread.
      */
     fun requestRestoreDataRefresh() {
-        if (!restoreProgressInProgress || restoreProgressCompleted) return
+        if (!restoreProgressInProgress ||
+            restoreProgressCompleted ||
+            restoreProgressFinalizing
+        ) return
 
         val now = System.currentTimeMillis()
         if (now - lastRestoreDataRefreshAt < 400L) return
@@ -285,6 +296,7 @@ class WalletState {
         restoreProgressRescanStarted = false
         restoreProgressInProgress = false
         restoreProgressCompleted = false
+        restoreProgressFinalizing = false
         lastRestoreDataRefreshAt = 0L
         restoreDataRefreshRunning.set(false)
         _syncProgress.value = null
