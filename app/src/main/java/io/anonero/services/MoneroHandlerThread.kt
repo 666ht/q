@@ -249,18 +249,6 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
             Timber.tag(name).i("refreshed() ignored during restore final refresh")
             return
         }
-        if (walletState.isManualRefreshInProgress) {
-            // This callback is the completion barrier for a user-triggered
-            // one-shot refresh. Update wallet data once, then close loading.
-            try {
-                wallet.refreshHistory()
-                wallet.refreshCoins(force = true)
-                walletState.update()
-            } finally {
-                walletState.completeManualRefresh()
-            }
-            return
-        }
         if (walletState.restoreProgressCompleted) {
             walletState.update()
             return
