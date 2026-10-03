@@ -193,21 +193,6 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
         /// height
         Timber.tag(name)
             .i("refreshed() status:${status} daemonHeight:$daemonHeight chainHeight:$chainHeight ")
-        if (walletState.isManualRefreshInProgress) {
-            // A user-triggered refresh is independent of completed restore/custom
-            // scan state. Handle it first so stale completion flags cannot swallow
-            // the refreshed() callback and leave the loading indicator active.
-            try {
-                wallet.refreshHistory()
-                wallet.refreshCoins(force = true)
-                wallet.store()
-                walletState.update()
-            } finally {
-                walletState.completeManualRefresh()
-            }
-            return
-        }
-
         if (walletState.customRescanInProgress) {
             // The 400ms custom-height poller reads the actual native scan height.
             // A refresh callback must not promote the custom end into a full sync.
@@ -260,17 +245,20 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
         if (status === Wallet.ConnectionStatus.ConnectionStatus_Disconnected || status == null) {
             tryRestartConnection()
         } else {
-            if (wallet.nativeSynchronized) {
-                if (!walletState.restoreProgressInProgress ||
-                    walletState.restoreProgressRescanStarted) {
-                    completeSynchronization()
+            val heightDiff = daemonHeight - chainHeight
+            if (heightDiff >= 2) {
+                tryRestartConnection()
+            } else {
+                if (!wallet.isSynchronized) {
+                    updateSyncProgress(wallet.getBlockChainHeight())
                 }
-            } else if (!walletState.restoreProgressInProgress) {
-                // During mnemonic restore, progress is driven by newBlock(height).
-                // chainHeight is the wallet scan cursor, not the live network tip.
-                updateSyncProgress(chainHeight)
+                // Match upstream refresh completion: mark synchronized, persist,
+                // refresh the complete wallet data set, then stop the loading state.
+                wallet.setSynchronized()
+                wallet.store()
+                refresh(true)
+                walletState.finishSync()
             }
-
         }
         walletState.update()
     }
