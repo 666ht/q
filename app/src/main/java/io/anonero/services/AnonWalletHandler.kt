@@ -67,6 +67,15 @@ class AnonWalletHandler(
 
     suspend fun startService() {
         val wallet = WalletManager.instance?.wallet ?: return
+        // Read and arm mnemonic-restore progress before attaching the native
+        // listener. Otherwise an early normal-sync callback can publish the old
+        // daemon target estimate (~100k) before restore mode takes control.
+        val savedRestoreHeight = prefs.getLong(RESTORE_HEIGHT, 0L)
+        val needsRestoreRescan = prefs.getBoolean(RESTORE_NEEDS_RESCAN, false)
+        if (savedRestoreHeight > 0L && needsRestoreRescan) {
+            walletState.beginRestoreProgress(savedRestoreHeight)
+        }
+
         handler = MoneroHandlerThread(
             wallet,
             walletState
@@ -115,16 +124,6 @@ class AnonWalletHandler(
             walletState.update()
             if (wallet.isSynchronized) {
                 wallet.refreshHistory()
-            }
-
-            // Arm restore-progress mode before wallet.init(0). init() can cause
-            // native refresh callbacks; without the restore state already armed,
-            // an old normal-sync callback can publish the stale ~100k target
-            // estimate before the selected mnemonic restore height is applied.
-            val savedRestoreHeight = prefs.getLong(RESTORE_HEIGHT, 0L)
-            val needsRestoreRescan = prefs.getBoolean(RESTORE_NEEDS_RESCAN, false)
-            if (savedRestoreHeight > 0L && needsRestoreRescan) {
-                walletState.beginRestoreProgress(savedRestoreHeight)
             }
 
             wallet.init(0)
