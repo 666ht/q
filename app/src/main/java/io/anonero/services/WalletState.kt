@@ -228,6 +228,9 @@ class WalletState {
     fun isWiping(): Boolean = _isWiping.get()
 
     fun setLoading(b: Boolean) {
+        // Once mnemonic restore owns progress, the generic loading flag must not
+        // replace the real restore SyncProgress with an indeterminate bar.
+        if (b && restoreProgressInProgress) return
         this._isLoading.update { b }
     }
 
