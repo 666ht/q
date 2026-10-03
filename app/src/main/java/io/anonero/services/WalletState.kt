@@ -479,15 +479,6 @@ class WalletState {
         _connectionStatus.update { Wallet.ConnectionStatus.ConnectionStatus_Connected }
     }
 
-    /**
-     * Reset the restore-completion refresh state before the normal wallet refresh.
-     * This never starts an animation or another synchronization pass.
-     */
-    fun resetRefreshCompletionProgress() {
-        // Keep this operation explicit so restore completion always follows the
-        // same order: reset transient progress state -> refresh wallet data.
-        _syncProgress.value = null
-    }
 
     fun toggleHideAmounts() {
         hideAmountsFlow.update { !it }
