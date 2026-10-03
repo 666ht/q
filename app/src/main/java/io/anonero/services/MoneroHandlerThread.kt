@@ -4,8 +4,6 @@ import io.anonero.model.PendingTransaction
 import io.anonero.model.Wallet
 import io.anonero.model.WalletListener
 import io.anonero.model.WalletManager
-import io.anonero.util.RESTORE_HEIGHT
-import io.anonero.util.RESTORE_NEEDS_RESCAN
 import timber.log.Timber
 
 /**
@@ -245,7 +243,6 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
             // Consume the one-shot mnemonic restore marker so reopening the wallet
             // cannot arm the restore progress/rescan cycle a second time.
             if (restoreWasActive) {
-                finalizeRestorePreferenceState()
                 walletState.finishRestoreProgress()
             } else {
                 walletState.finishRestoreProgress()
@@ -263,7 +260,6 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
         } catch (e: Exception) {
             Timber.tag(name).e(e, "Failed to finalize synchronized wallet data")
             if (restoreWasActive) {
-                finalizeRestorePreferenceState()
                 walletState.finishRestoreProgress()
             }
             walletState.finishSync()
@@ -290,12 +286,6 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
         }
     }
 
-    private fun finalizeRestorePreferenceState() {
-        prefs.edit {
-            putBoolean(RESTORE_NEEDS_RESCAN, false)
-            remove(RESTORE_HEIGHT)
-        }
-    }
 
     private fun tryRestartConnection() {
         wallet.init(0)
