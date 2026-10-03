@@ -74,6 +74,11 @@ class WalletState {
     @Volatile
     var customRescanFinished: Boolean = false
 
+    // True between the custom scan reaching its end and the first normal
+    // refresh callback that confirms the wallet data is fully refreshed.
+    @Volatile
+    var customRescanFinalizing: Boolean = false
+
     @Volatile
     var customRescanStartHeight: Long? = null
 
@@ -436,6 +441,7 @@ class WalletState {
             customRescanFinishStarted.set(false)
             customRescanScanStarted.set(false)
             customRescanFinished = false
+            customRescanFinalizing = false
 
             // A custom scan always has a hard end: use the requested end height
             // when provided, otherwise stop at the daemon's current height.
@@ -587,22 +593,26 @@ class WalletState {
         if (!customRescanInProgress) return
 
         customRescanInProgress = false
-        customRescanFinished = true
+        customRescanFinalizing = true
+        customRescanFinished = false
         customRescanScanStarted.set(false)
         customRescanJob?.cancel()
         customRescanStartHeight = null
         customRescanDayEndHeight = null
 
         try {
-            // Final wallet data is refreshed before the progress indicator is cleared.
-            wallet.refreshHistory()
-            wallet.refreshCoins(force = true)
-            wallet.store()
-            update()
-            finishSync()
-            Timber.tag(TAG).i("Custom rescan finished at height=%d", endHeight)
+            // Re-enter the normal refresh lifecycle. The first refreshed() callback
+            // is the synchronization barrier for the post-rescan wallet data.
+            setLoading(true)
+            wallet.startRefresh()
+            Timber.tag(TAG).i(
+                "Custom rescan reached end height=%d; entering final refresh",
+                endHeight
+            )
         } catch (e: Exception) {
-            Timber.tag(TAG).e(e, "Failed to finalize custom rescan")
+            customRescanFinalizing = false
+            customRescanFinished = true
+            Timber.tag(TAG).e(e, "Failed to restart refresh after custom rescan")
             finishSync()
         }
     }
