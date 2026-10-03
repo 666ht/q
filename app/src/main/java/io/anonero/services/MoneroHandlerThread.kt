@@ -75,23 +75,30 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
 
         if (daemonHeight < 0) return
 
+        if (walletState.restoreProgressInProgress && restoreStart != null) {
+            // Never use daemon target height for mnemonic restore progress: it can
+            // be an estimate ahead of the live chain. Capture the live daemon tip
+            // once it is valid for this restore window, then keep using that same
+            // endpoint while the scan advances.
+            if (daemonHeight >= restoreStart) {
+                walletState.setRestoreProgressTargetHeight(daemonHeight)
+            }
+        }
+
         val effectiveTarget = when {
             walletState.customRescanInProgress && customDayEnd != null -> {
                 minOf(targetHeight.takeIf { it > 0 } ?: daemonHeight, customDayEnd)
             }
             walletState.restoreProgressInProgress && restoreStart != null -> {
-                // Restore remaining blocks are the remote daemon height minus the
-                // wallet's local scan cursor. daemonBlockChainHeight() is the
-                // documented current daemon height; newBlock(height) is a processed
-                // block callback and is not the network endpoint.
-                daemonHeight
+                walletState.restoreProgressTargetHeight ?: return
             }
             else -> targetHeight.takeIf { it > 0 } ?: daemonHeight
         }
 
         // Restore progress has two distinct phases. Before the daemon itself has
         // reached the user-selected restore height, there is no wallet scan cursor
-        // to report yet. Do not present that node catch-up distance as restore blocks.
+        // to report yet. Keep the loading indicator alive without displaying a fake
+        // remaining-block count.
         if (walletState.restoreProgressInProgress && restoreStart != null &&
             daemonHeight < restoreStart) {
             walletState.syncUpdate(SyncProgress(0f, 0L))
