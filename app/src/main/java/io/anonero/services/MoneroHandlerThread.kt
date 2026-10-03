@@ -193,6 +193,21 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
         /// height
         Timber.tag(name)
             .i("refreshed() status:${status} daemonHeight:$daemonHeight chainHeight:$chainHeight ")
+        if (walletState.isManualRefreshInProgress) {
+            // A user-triggered refresh is independent of completed restore/custom
+            // scan state. Handle it first so stale completion flags cannot swallow
+            // the refreshed() callback and leave the loading indicator active.
+            try {
+                wallet.refreshHistory()
+                wallet.refreshCoins(force = true)
+                wallet.store()
+                walletState.update()
+            } finally {
+                walletState.completeManualRefresh()
+            }
+            return
+        }
+
         if (walletState.customRescanInProgress) {
             // The 400ms custom-height poller reads the actual native scan height.
             // A refresh callback must not promote the custom end into a full sync.
