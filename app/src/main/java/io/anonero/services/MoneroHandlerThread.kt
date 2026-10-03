@@ -240,12 +240,13 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
             walletState.customRescanDayEndHeight = null
             walletState.customRescanInProgress = false
 
+            // Publish the completed scan while restore mode is still active so
+            // the existing progress bar can make a brief 100% completion transition.
+            walletState.syncUpdate(SyncProgress(1f, 0L))
             walletState.finishRestoreProgress()
 
-            // Publish the completed scan first, then refresh the already-complete
-            // wallet data. No wallet.startRefresh() is called here, so completion
-            // cannot turn into a second full synchronization pass.
-            walletState.syncUpdate(SyncProgress(1f, 0L))
+            // Refresh the already-complete wallet data. No wallet.startRefresh() is
+            // called here, so completion cannot turn into a second sync pass.
             refresh(true)
             wallet.store()
             walletState.update()
@@ -262,8 +263,10 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
 
     private fun finalizeRestoreSynchronization() {
         try {
-            // Native synchronization is already complete here. Only refresh the
-            // final wallet data; never restart the daemon refresh worker.
+            // Native synchronization is already complete here. Keep the existing
+            // bar at 100% during the final data refresh, then remove it.
+            walletState.syncUpdate(SyncProgress(1f, 0L))
+            // Only refresh the final wallet data; never restart the daemon worker.
             wallet.refreshHistory()
             wallet.refreshCoins(force = true)
             wallet.store()
