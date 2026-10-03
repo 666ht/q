@@ -531,9 +531,12 @@ class WalletState {
         }
         customRescanFinished = false
         if (getWallet?.fullStatus?.connectionStatus == Wallet.ConnectionStatus.ConnectionStatus_Connected) {
-            setLoading(true);
-            getWallet?.startRefresh();
-        };
+            setLoading(true)
+            // Manual refresh is a one-shot operation. startRefresh() starts the
+            // continuous background refresh loop, which leaves the loading bar
+            // active indefinitely after the user pulls to refresh.
+            getWallet?.refreshAsync()
+        }
         getWallet?.refreshHistory()
     }
 
