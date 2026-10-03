@@ -174,6 +174,13 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
     }
 
     override fun updated() {
+        // During the final restore refresh, wallet2 can emit an intermediate
+        // callback while history/coins are temporarily incomplete. Do not
+        // publish that transient state to the UI.
+        if (walletState.restoreProgressFinalizing) {
+            Timber.tag(name).i("updated() ignored during restore final refresh")
+            return
+        }
         refresh(false)
         Timber.tag(name).i("updated()")
         walletState.update()
@@ -220,6 +227,11 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
         }
         if (walletState.customRescanFinished) {
             walletState.update()
+            return
+        }
+        if (walletState.restoreProgressFinalizing) {
+            // Final restore refresh owns the single UI publication.
+            Timber.tag(name).i("refreshed() ignored during restore final refresh")
             return
         }
         if (walletState.restoreProgressCompleted) {
@@ -282,26 +294,30 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
     }
 
     private fun finalizeRestoreSynchronization() {
+        walletState.restoreProgressFinalizing = true
         try {
             wallet.setSynchronized()
 
-            // The restore scan has already reached remaining=0. Remove the
-            // synchronization indicator first; balance/history refresh is the
-            // next operation and must not depend on another sync pass.
+            // Remaining blocks already reached zero. Hide synchronization first,
+            // then refresh history/coins without exposing intermediate empty data.
             walletState.syncUpdate(SyncProgress(1f, 0L))
             walletState.finishRestoreProgress()
             walletState.finishSync()
-            walletState.update()
 
-            // Immediately expose the completed wallet data.
+            // refresh(true) is intentionally performed while finalization is
+            // locked. Native updated/refreshed callbacks cannot publish partial
+            // history or balance during this operation.
             refresh(true)
             wallet.store()
             walletState.update()
+
+            walletState.restoreProgressFinalizing = false
 
             // Only this short animation follows the actual restore completion.
             walletState.startRefreshCompletionTransition()
         } catch (e: Exception) {
             Timber.tag(name).e(e, "Failed to finalize restored wallet data")
+            walletState.restoreProgressFinalizing = false
             walletState.finishRestoreProgress()
             walletState.finishSync()
         }
