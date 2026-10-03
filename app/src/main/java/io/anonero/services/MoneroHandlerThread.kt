@@ -138,8 +138,10 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
             // close restore synchronization immediately. Do not start another
             // refresh/sync cycle after the progress reaches 100%.
             if (currentHeight >= daemonHeight) {
+                // The scan cursor has reached the live tip. Show 0 remaining,
+                // but do not declare synchronization complete here. Native
+                // wallet2 must confirm the final synchronized state first.
                 walletState.syncUpdate(SyncProgress(1f, 0L))
-                completeSynchronization()
                 return
             }
         }
@@ -240,18 +242,15 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
             walletState.customRescanDayEndHeight = null
             walletState.customRescanInProgress = false
 
-            // Publish the completed scan while restore mode is still active so
-            // the existing progress bar can make a brief 100% completion transition.
-            walletState.syncUpdate(SyncProgress(1f, 0L))
-            walletState.finishRestoreProgress()
-
-            // Refresh the already-complete wallet data. No wallet.startRefresh() is
-            // called here, so completion cannot turn into a second sync pass.
+            // Native synchronization is now confirmed. Refresh the final wallet
+            // data first so balance/history become visible immediately.
             refresh(true)
             wallet.store()
             walletState.update()
+            walletState.finishRestoreProgress()
             walletState.finishSync()
             walletState.update()
+            walletState.startRefreshCompletionTransition()
         } catch (e: Exception) {
             Timber.tag(name).e(e, "Failed to finalize synchronized wallet data")
             if (restoreWasActive) {
@@ -274,6 +273,7 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
             walletState.update()
             walletState.finishSync()
             walletState.update()
+            walletState.startRefreshCompletionTransition()
         } catch (e: Exception) {
             Timber.tag(name).e(e, "Failed to finalize restored wallet data")
             walletState.finishRestoreProgress()
