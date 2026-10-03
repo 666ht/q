@@ -240,13 +240,7 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
             walletState.customRescanDayEndHeight = null
             walletState.customRescanInProgress = false
 
-            // Consume the one-shot mnemonic restore marker so reopening the wallet
-            // cannot arm the restore progress/rescan cycle a second time.
-            if (restoreWasActive) {
-                walletState.finishRestoreProgress()
-            } else {
-                walletState.finishRestoreProgress()
-            }
+            walletState.finishRestoreProgress()
 
             // Publish the completed scan first, then refresh the already-complete
             // wallet data. No wallet.startRefresh() is called here, so completion
@@ -268,7 +262,6 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
 
     private fun finalizeRestoreSynchronization() {
         try {
-            finalizeRestorePreferenceState()
             // Native synchronization is already complete here. Only refresh the
             // final wallet data; never restart the daemon refresh worker.
             wallet.refreshHistory()
@@ -280,7 +273,6 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
             walletState.update()
         } catch (e: Exception) {
             Timber.tag(name).e(e, "Failed to finalize restored wallet data")
-            finalizeRestorePreferenceState()
             walletState.finishRestoreProgress()
             walletState.finishSync()
         }
