@@ -58,6 +58,16 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
             return
         }
 
+        // For mnemonic restore, the displayed remaining-block counter is the
+        // completion authority. Never switch to nativeSynchronized early.
+        if (walletState.restoreProgressCompleted) {
+            return
+        }
+        if (walletState.restoreProgressInProgress) {
+            updateSyncProgress(height)
+            return
+        }
+
         // Native wallet2 is authoritative for normal synchronization.
         if (!wallet.isSynchronized && wallet.nativeSynchronized) {
             // A restore callback can report nativeSynchronized before the recovery
@@ -130,6 +140,7 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
 
         val left = (effectiveTarget - currentHeight).coerceAtLeast(0L)
         if (restoreActive) {
+            if (walletState.restoreProgressCompleted) return
             Timber.tag(name).d(
                 "restore progress start=%d wallet=%d daemon=%d target=%d left=%d",
                 restoreStart, syncHeight, daemonHeight, effectiveTarget, left
@@ -137,11 +148,14 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
             // Once the real wallet scan cursor reaches the live daemon tip,
             // close restore synchronization immediately. Do not start another
             // refresh/sync cycle after the progress reaches 100%.
-            if (currentHeight >= daemonHeight) {
-                // The scan cursor has reached the live tip. Show 0 remaining,
-                // but do not declare synchronization complete here. Native
-                // wallet2 must confirm the final synchronized state first.
+            if (left == 0L) {
+                // Remaining blocks are the restore completion authority.
+                // Publish the final zero-remaining state, then close sync and
+                // refresh wallet data immediately. Any later native callbacks
+                // are ignored until a new restore starts.
                 walletState.syncUpdate(SyncProgress(1f, 0L))
+                walletState.restoreProgressCompleted = true
+                completeSynchronization()
                 return
             }
         }
@@ -205,6 +219,14 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
             walletState.update()
             return
         }
+        if (walletState.restoreProgressCompleted) {
+            walletState.update()
+            return
+        }
+        if (walletState.restoreProgressInProgress) {
+            updateSyncProgress(chainHeight)
+            return
+        }
         if (status === Wallet.ConnectionStatus.ConnectionStatus_Disconnected || status == null) {
             tryRestartConnection()
         } else {
@@ -224,15 +246,17 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
     }
 
     private fun completeSynchronization() {
-        val restoreWasActive = walletState.restoreProgressInProgress
+        val restoreWasActive = walletState.restoreProgressInProgress ||
+            walletState.restoreProgressCompleted
+
+        if (restoreWasActive) {
+            finalizeRestoreSynchronization()
+            return
+        }
 
         if (wallet.isSynchronized && !walletState.customRescanInProgress) {
-            if (restoreWasActive) {
-                finalizeRestoreSynchronization()
-            } else {
-                walletState.finishRestoreProgress()
-                walletState.finishSync()
-            }
+            walletState.finishRestoreProgress()
+            walletState.finishSync()
             return
         }
 
@@ -242,39 +266,36 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
             walletState.customRescanDayEndHeight = null
             walletState.customRescanInProgress = false
 
-            // Native synchronization is now confirmed. Refresh the final wallet
-            // data first so balance/history become visible immediately.
             refresh(true)
             wallet.store()
             walletState.update()
             walletState.finishRestoreProgress()
             walletState.finishSync()
             walletState.update()
-            // Let the completed-sync indicator disappear and the refreshed
-            // balance/history render before showing the short refresh tail.
-            walletState.startRefreshCompletionTransition()
         } catch (e: Exception) {
             Timber.tag(name).e(e, "Failed to finalize synchronized wallet data")
-            if (restoreWasActive) {
-                walletState.finishRestoreProgress()
-            }
             walletState.finishSync()
         }
     }
 
     private fun finalizeRestoreSynchronization() {
         try {
-            // Native synchronization is already complete here. Keep the existing
-            // bar at 100% during the final data refresh, then remove it.
+            wallet.setSynchronized()
+
+            // The restore scan has already reached remaining=0. Remove the
+            // synchronization indicator first; balance/history refresh is the
+            // next operation and must not depend on another sync pass.
             walletState.syncUpdate(SyncProgress(1f, 0L))
-            // Only refresh the final wallet data; never restart the daemon worker.
-            wallet.refreshHistory()
-            wallet.refreshCoins(force = true)
-            wallet.store()
             walletState.finishRestoreProgress()
-            walletState.update()
             walletState.finishSync()
             walletState.update()
+
+            // Immediately expose the completed wallet data.
+            refresh(true)
+            wallet.store()
+            walletState.update()
+
+            // Only this short animation follows the actual restore completion.
             walletState.startRefreshCompletionTransition()
         } catch (e: Exception) {
             Timber.tag(name).e(e, "Failed to finalize restored wallet data")
