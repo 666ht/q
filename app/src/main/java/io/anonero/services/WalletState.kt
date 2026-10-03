@@ -545,15 +545,6 @@ class WalletState {
         getWallet?.refreshHistory()
     }
 
-    fun refresh() {
-        if(getWallet?.isInitialized != true) {
-            return;
-        }
-        customRescanFinished = false
-        beginManualRefresh()
-        getWallet?.refreshHistory()
-    }
-
     fun resetSyncFromHeight(height: Long, dayEndHeight: Long? = null): Result<Boolean> = try {
         val wallet = getWallet ?: return Result.failure(Exception("Wallet not initialized"))
         if (wallet.fullStatus.connectionStatus != Wallet.ConnectionStatus.ConnectionStatus_Connected) {
