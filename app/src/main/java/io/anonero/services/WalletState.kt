@@ -112,6 +112,20 @@ class WalletState {
         }
     }
 
+    fun initializeRestoreProgress(daemonHeight: Long, scanHeight: Long) {
+        val start = restoreProgressStartHeight ?: return
+        if (!restoreProgressInProgress || daemonHeight < start) {
+            return
+        }
+        val current = maxOf(scanHeight, start)
+        val left = (daemonHeight - current).coerceAtLeast(0L)
+        val total = (daemonHeight - start).coerceAtLeast(1L)
+        val progress = ((current - start).toDouble() / total.toDouble())
+            .coerceIn(0.0, 1.0)
+            .toFloat()
+        syncUpdate(SyncProgress(progress, left))
+    }
+
     fun finishRestoreProgress() {
         restoreProgressStartHeight = null
         restoreProgressRescanStarted = false
