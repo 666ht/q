@@ -304,17 +304,14 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
             walletState.finishRestoreProgress()
             walletState.finishSync()
 
-            // refresh(true) is intentionally performed while finalization is
-            // locked. Native updated/refreshed callbacks cannot publish partial
-            // history or balance during this operation.
+            // Reset the transient sync-progress state first, then run the
+            // existing normal wallet refresh. No completion animation is started.
+            walletState.resetRefreshCompletionProgress()
             refresh(true)
             wallet.store()
             walletState.update()
 
             walletState.restoreProgressFinalizing = false
-
-            // Only this short animation follows the actual restore completion.
-            walletState.startRefreshCompletionTransition()
         } catch (e: Exception) {
             Timber.tag(name).e(e, "Failed to finalize restored wallet data")
             walletState.restoreProgressFinalizing = false
