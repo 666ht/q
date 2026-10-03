@@ -174,11 +174,13 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
     }
 
     override fun updated() {
-        // During the final restore refresh, wallet2 can emit an intermediate
+        // During either finalization phase, wallet2 can emit an intermediate
         // callback while history/coins are temporarily incomplete. Do not
-        // publish that transient state to the UI.
-        if (walletState.restoreProgressFinalizing) {
-            Timber.tag(name).i("updated() ignored during restore final refresh")
+        // publish a transient snapshot or start another refresh loop.
+        if (walletState.restoreProgressFinalizing ||
+            walletState.customRescanFinalizing
+        ) {
+            Timber.tag(name).i("updated() ignored during final wallet refresh")
             return
         }
         refresh(false)
@@ -201,28 +203,10 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
             return
         }
         if (walletState.customRescanFinalizing) {
-            // The custom scan itself has ended. This callback is the normal refresh
-            // barrier: only now reload the complete transaction/coin state and end
-            // the progress indicator. This avoids exposing a partially refreshed
-            // transaction list immediately after the scan cursor hits the end.
-            try {
-                wallet.refreshHistory()
-                wallet.refreshCoins(force = true)
-                wallet.store()
-                walletState.update()
-                walletState.customRescanFinalizing = false
-                walletState.customRescanFinished = true
-                walletState.finishSync()
-                Timber.tag(name).i(
-                    "Custom rescan final refresh complete: daemonHeight=%d chainHeight=%d",
-                    daemonHeight, chainHeight
-                )
-            } catch (e: Exception) {
-                Timber.tag(name).e(e, "Failed to finalize custom rescan refresh")
-                walletState.customRescanFinalizing = false
-                walletState.customRescanFinished = true
-                walletState.finishSync()
-            }
+            // WalletState completes the custom rescan directly after the selected
+            // end height. Ignore late native refresh callbacks so they cannot start
+            // a second refresh or recreate the progress indicator.
+            Timber.tag(name).i("refreshed() ignored during custom rescan finalization")
             return
         }
         if (walletState.customRescanFinished) {
