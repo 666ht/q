@@ -199,6 +199,15 @@ class WalletState {
         _isWiping.set(true)
         _blockUpdates.set(true)
         _backgroundSync.value = false
+
+        // Do not carry restore/sync UI state into a newly restored wallet in
+        // the same process. A secure wipe must also terminate the old progress
+        // window held by this singleton state object.
+        restoreProgressStartHeight = null
+        restoreProgressTargetHeight = null
+        restoreProgressInProgress = false
+        _syncProgress.value = null
+        _isSyncing.set(false)
     }
 
     fun isWiping(): Boolean = _isWiping.get()
@@ -313,12 +322,17 @@ class WalletState {
     }
 
     fun syncUpdate(syncProgress: SyncProgress) {
-        // "left" can be date-scoped for a custom rescan, so reaching zero
-        // there must not mark the actual native rescan as finished.
+        // For mnemonic restore, reaching 100% only means the wallet scan cursor
+        // reached the captured daemon tip. Native wallet synchronization can still
+        // be finishing its final callbacks, so keep the progress visible until
+        // MoneroHandlerThread calls finishSync().
         val done = syncProgress.progress >= 1f
-        _syncProgress.update { if (done) null else syncProgress }
-        _isSyncing.set(!done)
-        if (done) {
+        val restoreActive = restoreProgressInProgress
+        _syncProgress.update {
+            if (done && !restoreActive) null else syncProgress
+        }
+        _isSyncing.set(!(done && !restoreActive))
+        if (done && !restoreActive) {
             _connectionStatus.update { Wallet.ConnectionStatus.ConnectionStatus_Connected }
         }
     }
