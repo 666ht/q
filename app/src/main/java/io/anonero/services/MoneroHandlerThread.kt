@@ -64,6 +64,9 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
             return
         }
         if (walletState.restoreProgressInProgress) {
+            // Show discovered balance/transactions while the restore scan is
+            // still running, without changing the sync/progress lifecycle.
+            walletState.requestRestoreDataRefresh()
             updateSyncProgress(height)
             return
         }
