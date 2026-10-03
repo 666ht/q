@@ -128,6 +128,17 @@ class AnonWalletHandler(
 
             wallet.init(0)
 
+            if (walletState.restoreProgressInProgress) {
+                runCatching {
+                    walletState.initializeRestoreProgress(
+                        wallet.getDaemonBlockChainHeight(),
+                        wallet.getBlockChainHeight()
+                    )
+                }.onFailure {
+                    Timber.tag(TAG).w(it, "Unable to initialize restore progress")
+                }
+            }
+
             if (savedRestoreHeight > 0L && savedRestoreHeight != wallet.getRestoreHeight()) {
                 wallet.setRestoreHeight(savedRestoreHeight)
                 wallet.store()
