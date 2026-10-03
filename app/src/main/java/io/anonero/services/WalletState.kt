@@ -378,6 +378,9 @@ class WalletState {
     fun startRefreshCompletionTransition() {
         refreshCompletionJob?.cancel()
         refreshCompletionJob = customRescanScope.launch {
+            // Give the completed-sync indicator one frame to disappear and
+            // let the freshly updated balance/history render first.
+            delay(80)
             for (step in 0..5) {
                 _refreshCompletionProgress.value = step / 5f
                 delay(60)
