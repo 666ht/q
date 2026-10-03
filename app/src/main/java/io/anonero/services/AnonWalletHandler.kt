@@ -151,13 +151,21 @@ class AnonWalletHandler(
                     ?: wallet.getRestoreHeight().takeIf { it > 0L }
                 if (effectiveRestoreHeight != null && !wallet.nativeSynchronized) {
                     // A stored restore height is the authoritative start of the
-                    // restore scan. Do not depend on the one-shot preference flag,
-                    // because older wallets/builds can have inconsistent flag state.
-                    walletState.beginRestoreProgress(effectiveRestoreHeight)
+                    // restore scan. Do not reset an already-armed restore window,
+                    // because that would erase the live daemon target captured
+                    // immediately after wallet.init(0).
+                    if (!walletState.restoreProgressInProgress ||
+                        walletState.restoreProgressStartHeight != effectiveRestoreHeight) {
+                        walletState.beginRestoreProgress(effectiveRestoreHeight)
+                    }
                 } else if (needsRestoreRescan && wallet.nativeSynchronized) {
-                    // The restore scan is already finished; consume the one-shot flag
+                    // The restore scan is already finished; consume the one-shot state
                     // so it cannot re-arm a restore progress cycle on future opens.
-                    prefs.edit { putBoolean(RESTORE_NEEDS_RESCAN, false) }
+                    prefs.edit {
+                        putBoolean(RESTORE_NEEDS_RESCAN, false)
+                        remove(RESTORE_HEIGHT)
+                    }
+                    walletState.finishRestoreProgress()
                 }
                 var restoreRescanStarted = false
                 if (effectiveRestoreHeight != null && !wallet.nativeSynchronized) {
