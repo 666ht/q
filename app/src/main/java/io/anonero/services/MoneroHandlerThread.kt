@@ -185,6 +185,10 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
 
     private fun completeSynchronization() {
         if (wallet.isSynchronized && !walletState.customRescanInProgress) {
+            // A restore can reach the native synchronized state before the normal
+            // status flag is observed. Always close the restore progress window
+            // before clearing the visible sync indicator.
+            walletState.finishRestoreProgress()
             walletState.finishSync()
             return
         }
