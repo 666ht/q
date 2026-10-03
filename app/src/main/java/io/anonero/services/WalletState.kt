@@ -87,15 +87,14 @@ class WalletState {
     @Volatile
     var restoreProgressInProgress: Boolean = false
 
-    // Restore progress uses one authoritative end point for the current scan
-    // window. It is captured from the live daemon height once that height is
-    // actually available, instead of moving with daemon target estimates.
+    // True only after the native recovery rescan request has actually been queued.
+    // Until then, an early native callback must not terminate restore progress.
     @Volatile
-    var restoreProgressTargetHeight: Long? = null
+    var restoreProgressRescanStarted: Boolean = false
 
     fun beginRestoreProgress(startHeight: Long) {
         restoreProgressStartHeight = startHeight
-        restoreProgressTargetHeight = null
+        restoreProgressRescanStarted = false
         restoreProgressInProgress = true
         // Drop any stale normal-sync "blocks left" value immediately. Until the
         // daemon reaches the restore height, the restore scan itself has no cursor.
@@ -103,17 +102,15 @@ class WalletState {
         _isSyncing.set(true)
     }
 
-    fun setRestoreProgressTargetHeight(targetHeight: Long) {
-        val start = restoreProgressStartHeight ?: return
-        if (!restoreProgressInProgress || targetHeight < start) return
-        if (restoreProgressTargetHeight == null || targetHeight > restoreProgressTargetHeight!!) {
-            restoreProgressTargetHeight = targetHeight
+    fun markRestoreProgressRescanStarted() {
+        if (restoreProgressInProgress) {
+            restoreProgressRescanStarted = true
         }
     }
 
     fun finishRestoreProgress() {
         restoreProgressStartHeight = null
-        restoreProgressTargetHeight = null
+        restoreProgressRescanStarted = false
         restoreProgressInProgress = false
     }
 
@@ -204,7 +201,7 @@ class WalletState {
         // the same process. A secure wipe must also terminate the old progress
         // window held by this singleton state object.
         restoreProgressStartHeight = null
-        restoreProgressTargetHeight = null
+        restoreProgressRescanStarted = false
         restoreProgressInProgress = false
         _syncProgress.value = null
         _isSyncing.set(false)
