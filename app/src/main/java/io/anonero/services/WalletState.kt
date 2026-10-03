@@ -98,8 +98,12 @@ class WalletState {
         restoreProgressInProgress = true
         // Drop any stale normal-sync "blocks left" value immediately. Until the
         // daemon reaches the restore height, the restore scan itself has no cursor.
-        _syncProgress.value = SyncProgress(0f, 0L)
+        // Restore progress owns the sync indicator. Do not leave the generic
+        // loading indicator active, otherwise the UI can show a progress bar
+        // while there is no restore SyncProgress/remaining-block value yet.
+        _syncProgress.value = null
         _isSyncing.set(true)
+        _isLoading.value = false
     }
 
     fun markRestoreProgressRescanStarted() {
