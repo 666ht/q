@@ -490,14 +490,13 @@ class WalletState {
     fun startRefreshCompletionTransition() {
         refreshCompletionJob?.cancel()
         refreshCompletionJob = customRescanScope.launch {
-            // Give the completed-sync indicator one frame to disappear and
-            // let the freshly updated balance/history render first.
-            delay(80)
-            // This is only a visual 3-second completion tail. It starts
-            // after restore completion/data refresh and never controls sync.
-            for (step in 0..30) {
-                _refreshCompletionProgress.value = step / 30f
-                delay(100)
+            // Reuse the existing normal pull-to-refresh progress bar. This is
+            // visual-only and starts only after the restore data has finished
+            // refreshing; it never starts another wallet synchronization.
+            val steps = 58
+            for (step in 1..steps) {
+                _refreshCompletionProgress.value = step.toFloat() / steps.toFloat()
+                delay(50)
             }
             _refreshCompletionProgress.value = 0f
         }
