@@ -99,9 +99,15 @@ class WalletState {
     @Volatile
     var restoreProgressRescanStarted: Boolean = false
 
+    // Once the restore remaining-block counter reaches zero, this locks the
+    // completion path so late native callbacks cannot recreate sync progress.
+    @Volatile
+    var restoreProgressCompleted: Boolean = false
+
     fun beginRestoreProgress(startHeight: Long) {
         restoreProgressStartHeight = startHeight
         restoreProgressRescanStarted = false
+        restoreProgressCompleted = false
         restoreProgressInProgress = true
         // Drop any stale normal-sync "blocks left" value immediately. Until the
         // daemon reaches the restore height, the restore scan itself has no cursor.
@@ -229,6 +235,7 @@ class WalletState {
         restoreProgressStartHeight = null
         restoreProgressRescanStarted = false
         restoreProgressInProgress = false
+        restoreProgressCompleted = false
         _syncProgress.value = null
         _isSyncing.set(false)
     }
