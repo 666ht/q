@@ -281,18 +281,28 @@ class WalletState {
                 it.getListKey()
             }
 
-            // During the final restore refresh, do NOT replace the already visible
-            // transaction list. Keep every transaction the user has already seen
-            // and append only records that were not discovered during the scan.
-            // This turns the final pass into a pure "fill missing" operation and
-            // prevents the visible list from disappearing/reappearing.
-            val updatedTxs = if (restoreProgressFinalizing) {
+            // A native refresh can publish a transient empty/partial history while
+            // wallet2 is rebuilding its in-memory transaction list. Never expose that
+            // transient snapshot as the UI list when a refresh/sync is still active.
+            // Keep already visible records, replace matching records with their fresh
+            // native versions, and append newly discovered records. After the refresh
+            // completes, the next normal update() restores the exact native ordering.
+            val keepVisibleTransactions = restoreProgressFinalizing ||
+                _isLoading.value ||
+                _isSyncing.get()
+
+            val updatedTxs = if (keepVisibleTransactions) {
+                val discoveredByKey = discoveredTxs.associateBy { it.getListKey() }
+                val merged = oldTransactions.map { oldTx ->
+                    discoveredByKey[oldTx.getListKey()] ?: oldTx
+                }
                 val existingKeys = oldTransactions.asSequence()
                     .map { it.getListKey() }
                     .toHashSet()
-                oldTransactions + discoveredTxs.filter {
+
+                (merged + discoveredTxs.filter {
                     it.getListKey() !in existingKeys
-                }
+                }).sortedWith(compareByDescending<TransactionInfo> { it.timestamp })
             } else {
                 discoveredTxs
             }
