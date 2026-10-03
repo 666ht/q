@@ -65,6 +65,12 @@ class WalletState {
     private var customRescanJob: Job? = null
     private val customRescanFinishStarted = AtomicBoolean(false)
 
+    // Explicit lifecycle for a user-triggered one-shot refresh. This is kept
+    // separate from normal synchronization/custom-rescan state so a manual
+    // pull cannot leave the generic loading indicator running forever.
+    private val manualRefreshInProgress = AtomicBoolean(false)
+    private var manualRefreshJob: Job? = null
+
     // During mnemonic restore, expose discovered wallet data while the native
     // scan is still running. Throttle the refresh to keep JNI/native work off
     // the per-block callback path and avoid refreshing once synchronization ends.
@@ -525,18 +531,50 @@ class WalletState {
         }
     }
 
+    fun beginManualRefresh() {
+        val wallet = getWallet ?: return
+        if (!wallet.isInitialized ||
+            wallet.fullStatus.connectionStatus != Wallet.ConnectionStatus.ConnectionStatus_Connected) {
+            return
+        }
+
+        manualRefreshJob?.cancel()
+        manualRefreshInProgress.set(true)
+        setLoading(true)
+
+        // refreshAsync() normally completes through WalletListener.refreshed().
+        // Keep a safety timeout so a lost native callback can never leave the
+        // loading indicator spinning forever.
+        manualRefreshJob = customRescanScope.launch {
+            delay(15_000L)
+            if (manualRefreshInProgress.compareAndSet(true, false)) {
+                Timber.tag(TAG).w("Manual refresh callback timed out; finishing refresh state")
+                _syncProgress.value = null
+                _isSyncing.set(false)
+                _isLoading.value = false
+                _connectionStatus.update { Wallet.ConnectionStatus.ConnectionStatus_Connected }
+                manualRefreshJob = null
+            }
+        }
+        wallet.refreshAsync()
+    }
+
+    fun completeManualRefresh() {
+        if (!manualRefreshInProgress.compareAndSet(true, false)) return
+        manualRefreshJob?.cancel()
+        manualRefreshJob = null
+        _syncProgress.value = null
+        _isSyncing.set(false)
+        _isLoading.value = false
+        _connectionStatus.update { Wallet.ConnectionStatus.ConnectionStatus_Connected }
+    }
+
     fun refresh() {
         if(getWallet?.isInitialized != true) {
             return;
         }
         customRescanFinished = false
-        if (getWallet?.fullStatus?.connectionStatus == Wallet.ConnectionStatus.ConnectionStatus_Connected) {
-            setLoading(true)
-            // Manual refresh is a one-shot operation. startRefresh() starts the
-            // continuous background refresh loop, which leaves the loading bar
-            // active indefinitely after the user pulls to refresh.
-            getWallet?.refreshAsync()
-        }
+        beginManualRefresh()
         getWallet?.refreshHistory()
     }
 
