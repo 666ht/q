@@ -87,8 +87,15 @@ class WalletState {
     @Volatile
     var restoreProgressInProgress: Boolean = false
 
+    // Restore progress uses one authoritative end point for the current scan
+    // window. It is captured from the live daemon height once that height is
+    // actually available, instead of moving with daemon target estimates.
+    @Volatile
+    var restoreProgressTargetHeight: Long? = null
+
     fun beginRestoreProgress(startHeight: Long) {
         restoreProgressStartHeight = startHeight
+        restoreProgressTargetHeight = null
         restoreProgressInProgress = true
         // Drop any stale normal-sync "blocks left" value immediately. Until the
         // daemon reaches the restore height, the restore scan itself has no cursor.
@@ -96,8 +103,17 @@ class WalletState {
         _isSyncing.set(true)
     }
 
+    fun setRestoreProgressTargetHeight(targetHeight: Long) {
+        val start = restoreProgressStartHeight ?: return
+        if (!restoreProgressInProgress || targetHeight < start) return
+        if (restoreProgressTargetHeight == null || targetHeight > restoreProgressTargetHeight!!) {
+            restoreProgressTargetHeight = targetHeight
+        }
+    }
+
     fun finishRestoreProgress() {
         restoreProgressStartHeight = null
+        restoreProgressTargetHeight = null
         restoreProgressInProgress = false
     }
 
