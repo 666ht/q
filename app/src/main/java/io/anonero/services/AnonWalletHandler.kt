@@ -128,6 +128,18 @@ class AnonWalletHandler(
             }
 
             wallet.init(0)
+
+            // Seed restore progress needs the live daemon tip as soon as the
+            // daemon is initialized, so the first Home frame can show the same
+            // remaining-block value used by the restore progress calculation.
+            if (savedRestoreHeight > 0L && needsRestoreRescan && wallet.isInitialized) {
+                runCatching {
+                    wallet.getDaemonBlockChainHeight()
+                }.getOrNull()?.let { daemonHeight ->
+                    walletState.setRestoreProgressTargetHeight(daemonHeight)
+                }
+            }
+
             if (savedRestoreHeight > 0L && savedRestoreHeight != wallet.getRestoreHeight()) {
                 wallet.setRestoreHeight(savedRestoreHeight)
                 wallet.store()
