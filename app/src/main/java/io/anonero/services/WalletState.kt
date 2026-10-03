@@ -318,7 +318,13 @@ class WalletState {
                 }
             }
 
-
+            if (!backgroundSync) {
+                _nextAddress.update { wallet.getLatestSubAddress() }
+                _subAddresses.update { wallet.getAllUsedSubAddresses().reversed() }
+                _coins.update { (wallet.coins?.all ?: listOf()).fastFilter { !it.spent } }
+            }
+        }
+    }
 
     fun prepareForWipe() {
         _isWiping.set(true)
