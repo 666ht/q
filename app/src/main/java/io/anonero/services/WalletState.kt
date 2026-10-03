@@ -71,6 +71,10 @@ class WalletState {
     private val manualRefreshInProgress = AtomicBoolean(false)
     private var manualRefreshJob: Job? = null
 
+    @Volatile
+    var isManualRefreshInProgress: Boolean = false
+        private set
+
     // During mnemonic restore, expose discovered wallet data while the native
     // scan is still running. Throttle the refresh to keep JNI/native work off
     // the per-block callback path and avoid refreshing once synchronization ends.
@@ -540,6 +544,7 @@ class WalletState {
 
         manualRefreshJob?.cancel()
         manualRefreshInProgress.set(true)
+        isManualRefreshInProgress = true
         setLoading(true)
 
         // refreshAsync() normally completes through WalletListener.refreshed().
@@ -548,6 +553,7 @@ class WalletState {
         manualRefreshJob = customRescanScope.launch {
             delay(15_000L)
             if (manualRefreshInProgress.compareAndSet(true, false)) {
+                isManualRefreshInProgress = false
                 Timber.tag(TAG).w("Manual refresh callback timed out; finishing refresh state")
                 _syncProgress.value = null
                 _isSyncing.set(false)
@@ -561,6 +567,7 @@ class WalletState {
 
     fun completeManualRefresh() {
         if (!manualRefreshInProgress.compareAndSet(true, false)) return
+        isManualRefreshInProgress = false
         manualRefreshJob?.cancel()
         manualRefreshJob = null
         _syncProgress.value = null
