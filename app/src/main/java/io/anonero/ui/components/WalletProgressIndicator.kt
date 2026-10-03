@@ -64,6 +64,7 @@ fun WalletProgressIndicator(modifier: Modifier = Modifier, refreshIndicatorProgr
 
     val showIndefiniteLoading by walletState.isLoading.asLiveData().observeAsState(false)
     val syncProgress by walletState.syncProgress.asLiveData().observeAsState(null)
+    val refreshCompletionProgress by walletState.refreshCompletionProgress.asLiveData().observeAsState(0f)
     val connectionStatus by walletState.connectionStatus.asLiveData().observeAsState(null)
     val isConnected = connectionStatus == Wallet.ConnectionStatus.ConnectionStatus_Connected
     val isNetworkConnected by networkConnected()
@@ -71,8 +72,9 @@ fun WalletProgressIndicator(modifier: Modifier = Modifier, refreshIndicatorProgr
     // native rescan is still running. The presence of syncProgress is the
     // authoritative UI signal; completion clears it explicitly.
     val isSyncing = syncProgress != null
+    val isCompletionTransition = refreshCompletionProgress > 0f
     AnimatedVisibility(
-        (showIndefiniteLoading || syncProgress != null || !isConnected || !isNetworkConnected || refreshIndicatorProgress != 0.0f),
+        (showIndefiniteLoading || syncProgress != null || isCompletionTransition || !isConnected || !isNetworkConnected || refreshIndicatorProgress != 0.0f),
         modifier = modifier
             .animateContentSize()
     ) {
@@ -112,6 +114,18 @@ fun WalletProgressIndicator(modifier: Modifier = Modifier, refreshIndicatorProgr
                     )
                 }
             }
+        } else if (isCompletionTransition && !showIndefiniteLoading && isConnected && isNetworkConnected) {
+            LinearProgressIndicator(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                progress = {
+                    refreshCompletionProgress
+                },
+                trackColor = MaterialTheme.colorScheme.primary.copy(
+                    alpha = 0.2f
+                ),
+            )
         } else if (refreshIndicatorProgress != 0.0f && !showIndefiniteLoading && isConnected && isNetworkConnected) {
             LinearProgressIndicator(
                 modifier = Modifier
