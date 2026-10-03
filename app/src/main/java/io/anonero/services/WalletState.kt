@@ -71,6 +71,7 @@ class WalletState {
     // scan is still running. Throttle the refresh to keep JNI/native work off
     // the per-block callback path and avoid refreshing once synchronization ends.
     private val restoreDataRefreshRunning = AtomicBoolean(false)
+    private var restoreDataRefreshJob: Job? = null
     @Volatile
     private var lastRestoreDataRefreshAt = 0L
 
@@ -161,6 +162,10 @@ class WalletState {
         restoreProgressStartHeight = null
         restoreProgressRescanStarted = false
         restoreProgressInProgress = false
+        // Cancel any queued/running incremental refresh so it cannot race
+        // the final restore refresh or publish a transient empty history.
+        restoreDataRefreshJob?.cancel()
+        restoreDataRefreshJob = null
         // Do not let a late incremental refresh publish a second sync pass.
         // A final refresh is performed by MoneroHandlerThread after remaining=0.
         restoreDataRefreshRunning.set(false)
@@ -182,12 +187,13 @@ class WalletState {
         if (!restoreDataRefreshRunning.compareAndSet(false, true)) return
 
         lastRestoreDataRefreshAt = now
-        customRescanScope.launch {
+        restoreDataRefreshJob = customRescanScope.launch {
             try {
                 val wallet = getWallet ?: return@launch
                 if (!wallet.isInitialized ||
                     !restoreProgressInProgress ||
-                    restoreProgressCompleted
+                    restoreProgressCompleted ||
+                    restoreProgressFinalizing
                 ) {
                     return@launch
                 }
@@ -196,11 +202,20 @@ class WalletState {
                 // transactions/balance. Refresh only the visible wallet data;
                 // do not start another synchronization.
                 wallet.refreshHistory()
-                update()
+
+                // A final restore refresh may have started while this native call
+                // was running. Never publish its stale/intermediate snapshot.
+                if (!restoreProgressFinalizing &&
+                    restoreProgressInProgress &&
+                    !restoreProgressCompleted
+                ) {
+                    update()
+                }
             } catch (e: Exception) {
                 Timber.tag(TAG).e(e, "Incremental restore data refresh failed")
             } finally {
                 restoreDataRefreshRunning.set(false)
+                restoreDataRefreshJob = null
             }
         }
     }
