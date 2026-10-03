@@ -276,16 +276,42 @@ class WalletState {
                     }
                 }
             }
-            val oldTxCount = _transactions.value.size
+            val oldTransactions = _transactions.value
+            val oldTxByKey = oldTransactions.associateBy { it.getListKey() }
             val updatedTxs = (wallet.history?.all?.sortedWith(comparator = { o1, o2 ->
                 o2.timestamp.compareTo(o1.timestamp)
             }) ?: listOf()).fastDistinctBy {
                 it.getListKey()
+            }.map { fresh ->
+                val old = oldTxByKey[fresh.getListKey()]
+                // Keep the already-rendered object when its visible transaction
+                // state has not changed. This prevents a final full refresh from
+                // making existing rows look like newly inserted records.
+                if (old != null && transactionDisplayState(old) == transactionDisplayState(fresh)) {
+                    old
+                } else {
+                    fresh
+                }
             }
-            _transactions.update { updatedTxs }
-            if (oldTxCount > 0 && updatedTxs.size > oldTxCount) {
-                val hasNewIncoming = updatedTxs.take(updatedTxs.size - oldTxCount).any {
-                    it.direction == TransactionInfo.Direction.Direction_In
+
+            val oldKeys = oldTransactions.map { it.getListKey() }
+            val newKeys = updatedTxs.map { it.getListKey() }
+            val hasActualChange = oldKeys != newKeys ||
+                oldTransactions.zip(updatedTxs).any { (old, fresh) ->
+                    old !== fresh
+                }
+
+            if (hasActualChange) {
+                _transactions.update { updatedTxs }
+            }
+
+            if (oldTransactions.size > 0 && updatedTxs.size > oldTransactions.size) {
+                val oldKeySet = oldTransactions.asSequence()
+                    .map { it.getListKey() }
+                    .toHashSet()
+                val hasNewIncoming = updatedTxs.any {
+                    it.getListKey() !in oldKeySet &&
+                        it.direction == TransactionInfo.Direction.Direction_In
                 }
                 if (hasNewIncoming) {
                     _incomingTx.tryEmit(Unit)
@@ -296,6 +322,26 @@ class WalletState {
                 _subAddresses.update { (wallet.getAllUsedSubAddresses()).reversed() }
                 _coins.update { (wallet.coins?.all ?: listOf()).fastFilter { !it.spent } }
             }
+        }
+    }
+
+    private fun transactionDisplayState(tx: TransactionInfo): String {
+        return buildString {
+            append(tx.getListKey()).append('|')
+            append(tx.direction.value).append('|')
+            append(tx.isPending).append('|')
+            append(tx.isFailed).append('|')
+            append(tx.amount).append('|')
+            append(tx.fee).append('|')
+            append(tx.blockheight).append('|')
+            append(tx.timestamp).append('|')
+            append(tx.paymentId).append('|')
+            append(tx.accountIndex).append('|')
+            append(tx.addressIndex).append('|')
+            append(tx.confirmations).append('|')
+            append(tx.subaddressLabel).append('|')
+            append(tx.notes).append('|')
+            append(tx.transfers)
         }
     }
 
