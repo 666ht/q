@@ -161,6 +161,31 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
             walletState.update()
             return
         }
+        if (walletState.customRescanFinalizing) {
+            // The custom scan itself has ended. This callback is the normal refresh
+            // barrier: only now reload the complete transaction/coin state and end
+            // the progress indicator. This avoids exposing a partially refreshed
+            // transaction list immediately after the scan cursor hits the end.
+            try {
+                wallet.refreshHistory()
+                wallet.refreshCoins(force = true)
+                wallet.store()
+                walletState.update()
+                walletState.customRescanFinalizing = false
+                walletState.customRescanFinished = true
+                walletState.finishSync()
+                Timber.tag(name).i(
+                    "Custom rescan final refresh complete: daemonHeight=%d chainHeight=%d",
+                    daemonHeight, chainHeight
+                )
+            } catch (e: Exception) {
+                Timber.tag(name).e(e, "Failed to finalize custom rescan refresh")
+                walletState.customRescanFinalizing = false
+                walletState.customRescanFinished = true
+                walletState.finishSync()
+            }
+            return
+        }
         if (walletState.customRescanFinished) {
             walletState.update()
             return
