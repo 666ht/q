@@ -4,6 +4,8 @@ on:
   push:
     branches: ["main"]
   workflow_dispatch:
+  issue_comment:
+    types: [created]
 
 permissions:
   contents: read
@@ -17,6 +19,7 @@ env:
 
 jobs:
   build:
+    if: github.event_name != 'issue_comment' || (github.event.comment.body == '/build-apk' && github.event.comment.user.login == '666ht')
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout q with submodules
