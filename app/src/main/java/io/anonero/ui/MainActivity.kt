@@ -118,17 +118,11 @@ class MainActivity : ComponentActivity() {
                                 mode = LockScreenMode.LOCK_SCREEN,
                                 modifier = androidx.compose.ui.Modifier.fillMaxSize(),
                                 onUnLocked = { pin, shortCut ->
-                                    if (shortCut != LockScreenShortCut.HOME) {
-                                        walletState.emitUnlockShortcut(shortCut)
-                                        scope.launch {
-                                            kotlinx.coroutines.delay(250)
-                                            walletState.setBackGroundSync(false)
-                                        }
-                                    } else {
-                                        walletState.setBackGroundSync(false)
-                                    }
                                     scope.launch(Dispatchers.IO) {
-                                        walletState.exitBackgroundSync(pin)
+                                        val resumed = walletState.exitBackgroundSync(pin)
+                                        if (resumed && shortCut != LockScreenShortCut.HOME) {
+                                            walletState.emitUnlockShortcut(shortCut)
+                                        }
                                     }
                                 }
                             )
