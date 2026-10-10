@@ -221,7 +221,7 @@ fun CoinDetailScreen(
                             }.getOrNull()
                         } ?: "____",
                         modifier = Modifier.weight(1f),
-                        textAlign = TextAlign.End,
+                        textAlign = TextAlign.Start,
                         style = MaterialTheme.typography.titleMedium
                     )
                 }
