@@ -139,6 +139,18 @@ fun CoinDetailScreen(
                         .padding(top = 12.dp),
                     style = MaterialTheme.typography.titleMedium
                 )
+                Text(
+                    text = "区块高度  " + (
+                        coin?.let { selected ->
+                            transactions.firstOrNull { it.hash == selected.hash }?.blockheight
+                                ?.takeIf { it > 0L }
+                        } ?: "____"
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp),
+                    style = MaterialTheme.typography.titleMedium
+                )
                 androidx.compose.foundation.layout.Row(
                     modifier = Modifier
                         .fillMaxWidth()
