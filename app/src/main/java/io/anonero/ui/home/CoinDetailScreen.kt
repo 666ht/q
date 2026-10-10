@@ -38,6 +38,9 @@ import androidx.compose.ui.unit.dp
 import io.anonero.services.WalletState
 import io.anonero.util.Formats
 import kotlinx.coroutines.Dispatchers
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 
@@ -179,6 +182,26 @@ fun CoinDetailScreen(
                     Text("地址", modifier = Modifier.size(width = 40.dp, height = 24.dp), style = MaterialTheme.typography.titleMedium)
                     Text(
                         text = outputAddress?.let { if (addressState == 1) it else abbreviatedValue(it, 32) } ?: "____",
+                        modifier = Modifier.weight(1f),
+                        textAlign = TextAlign.End,
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                }
+                androidx.compose.foundation.layout.Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp),
+                    verticalAlignment = Alignment.Top
+                ) {
+                    Text("时间", modifier = Modifier.size(width = 40.dp, height = 24.dp), style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        text = coin?.creationTime?.takeIf { it > 0L }?.let {
+                            runCatching {
+                                Instant.ofEpochSecond(it)
+                                    .atZone(ZoneId.of("Asia/Shanghai"))
+                                    .format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))
+                            }.getOrNull()
+                        } ?: "____",
                         modifier = Modifier.weight(1f),
                         textAlign = TextAlign.End,
                         style = MaterialTheme.typography.titleMedium
