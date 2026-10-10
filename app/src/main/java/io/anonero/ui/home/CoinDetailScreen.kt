@@ -132,25 +132,37 @@ fun CoinDetailScreen(
                         Spacer(modifier = Modifier.size(28.dp))
                     }
                 }
-                Text(
-                    text = "全局索引  " + (coin?.globalOutputIndex ?: "____"),
+                androidx.compose.foundation.layout.Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 12.dp),
-                    style = MaterialTheme.typography.titleMedium
-                )
-                Text(
-                    text = "区块高度  " + (
-                        coin?.let { selected ->
-                            transactions.firstOrNull { it.hash == selected.hash }?.blockheight
-                                ?.takeIf { it > 0L }
-                        } ?: "____"
-                    ),
+                    verticalAlignment = Alignment.Top
+                ) {
+                    Text("全局索引", modifier = Modifier.size(width = 32.dp, height = 24.dp), style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        text = coin?.globalOutputIndex?.toString() ?: "____",
+                        modifier = Modifier.weight(1f),
+                        textAlign = TextAlign.Start,
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                }
+                androidx.compose.foundation.layout.Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 8.dp),
-                    style = MaterialTheme.typography.titleMedium
-                )
+                    verticalAlignment = Alignment.Top
+                ) {
+                    Text("区块高度", modifier = Modifier.size(width = 32.dp, height = 24.dp), style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        text = coin?.let { selected ->
+                            transactions.firstOrNull { it.hash == selected.hash }?.blockheight
+                                ?.takeIf { it > 0L }?.toString()
+                        } ?: "____",
+                        modifier = Modifier.weight(1f),
+                        textAlign = TextAlign.Start,
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                }
                 androidx.compose.foundation.layout.Row(
                     modifier = Modifier
                         .fillMaxWidth()
