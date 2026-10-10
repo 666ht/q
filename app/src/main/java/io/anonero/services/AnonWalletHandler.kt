@@ -70,16 +70,31 @@ class AnonWalletHandler(
         // Read and arm mnemonic-restore progress before attaching the native
         // listener. Otherwise an early normal-sync callback can publish the old
         // daemon target estimate (~100k) before restore mode takes control.
-        val savedRestoreHeight = prefs.getLong(RESTORE_HEIGHT, 0L)
         val needsRestoreRescan = prefs.getBoolean(RESTORE_NEEDS_RESCAN, false)
-        if (savedRestoreHeight > 0L && needsRestoreRescan && !wallet.nativeSynchronized) {
+        // RESTORE_HEIGHT is a one-shot restore instruction, not a permanent
+        // sync start height. Ignore and clean stale values once that restore has
+        // finished; otherwise a temporary unsynchronized state after refresh can
+        // incorrectly queue another full rescan when the app is reopened.
+        val savedRestoreHeight = if (needsRestoreRescan) {
+            prefs.getLong(RESTORE_HEIGHT, 0L)
+        } else {
+            0L
+        }
+        if (savedRestoreHeight > 0L && !wallet.nativeSynchronized) {
             walletState.beginRestoreProgress(savedRestoreHeight)
         }
 
         handler = MoneroHandlerThread(
             wallet,
             walletState
-        )
+        ) {
+            // Consume the one-shot restore request when the restore scan has
+            // actually completed, not on a later app launch.
+            prefs.edit(commit = true) {
+                putBoolean(RESTORE_NEEDS_RESCAN, false)
+                remove(RESTORE_HEIGHT)
+            }
+        }
 
         wallet.setListener(handler)
         wallet.refreshHistory()
@@ -146,8 +161,12 @@ class AnonWalletHandler(
             if (wallet.isInitialized) {
                 wallet.refreshHistory()
                 wallet.setTrustedDaemon(true)
-                val effectiveRestoreHeight = savedRestoreHeight.takeIf { it > 0L }
-                    ?: wallet.getRestoreHeight().takeIf { it > 0L }
+                val effectiveRestoreHeight = if (needsRestoreRescan) {
+                    savedRestoreHeight.takeIf { it > 0L }
+                        ?: wallet.getRestoreHeight().takeIf { it > 0L }
+                } else {
+                    null
+                }
                 if (effectiveRestoreHeight != null && !wallet.nativeSynchronized) {
                     // A stored restore height is the authoritative start of the
                     // restore scan. Do not reset an already-armed restore window,
@@ -158,13 +177,16 @@ class AnonWalletHandler(
                         walletState.beginRestoreProgress(effectiveRestoreHeight)
                     }
                 } else if (needsRestoreRescan && wallet.nativeSynchronized) {
-                    // The restore scan is already finished; consume the one-shot state
-                    // so it cannot re-arm a restore progress cycle on future opens.
-                    prefs.edit {
+                    // Native wallet state confirms the previous restore already
+                    // finished. Consume the one-shot instruction immediately.
+                    prefs.edit(commit = true) {
                         putBoolean(RESTORE_NEEDS_RESCAN, false)
                         remove(RESTORE_HEIGHT)
                     }
                     walletState.finishRestoreProgress()
+                } else if (!needsRestoreRescan && prefs.contains(RESTORE_HEIGHT)) {
+                    // Backward-compatible cleanup for stale one-shot height values.
+                    prefs.edit { remove(RESTORE_HEIGHT) }
                 }
                 var restoreRescanStarted = false
                 if (effectiveRestoreHeight != null && !wallet.nativeSynchronized) {

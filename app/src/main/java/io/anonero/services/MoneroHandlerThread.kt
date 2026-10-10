@@ -12,7 +12,11 @@ import timber.log.Timber
  * The started Thread has a stck size of STACK_SIZE (=5MB)
  */
 
-class MoneroHandlerThread(private val wallet: Wallet, private val walletState: WalletState) :
+class MoneroHandlerThread(
+    private val wallet: Wallet,
+    private val walletState: WalletState,
+    private val onRestoreCompleted: () -> Unit = {}
+) :
     Thread(null, null, "MoneroHandler", THREAD_STACK_SIZE), WalletListener {
 
 
@@ -298,6 +302,8 @@ class MoneroHandlerThread(private val wallet: Wallet, private val walletState: W
             walletState.update()
 
             walletState.restoreProgressFinalizing = false
+            runCatching { onRestoreCompleted() }
+                .onFailure { Timber.tag(name).e(it, "Failed to clear completed restore request") }
         } catch (e: Exception) {
             Timber.tag(name).e(e, "Failed to finalize restored wallet data")
             walletState.restoreProgressFinalizing = false
