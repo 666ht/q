@@ -301,10 +301,10 @@ class AnonNeroService : Service() {
     }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
-        Timber.tag(TAG).i("onTaskRemoved: ")
-        torService.dispose()
-        updateJob?.cancel()
-        job.cancel()
+        // Removing the launcher task does not mean the user asked to stop syncing.
+        // The foreground service owns the background sync notification and must keep
+        // its collectors and the application-scoped Tor runtime alive for re-entry.
+        Timber.tag(TAG).i("onTaskRemoved: keeping background sync alive")
         super.onTaskRemoved(rootIntent)
     }
 }
