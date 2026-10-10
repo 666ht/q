@@ -261,8 +261,18 @@ class MoneroHandlerThread(
         }
 
         if (wallet.isSynchronized && !walletState.customRescanInProgress) {
+            // Another native callback may have marked the wallet synchronized first.
+            // Do not exit before refreshing/publishing the final balance and outputs.
+            runCatching {
+                wallet.refreshHistory()
+                wallet.refreshCoins(force = true)
+                wallet.store()
+            }.onFailure {
+                Timber.tag(name).e(it, "Failed to refresh already-synchronized wallet data")
+            }
             walletState.finishRestoreProgress()
             walletState.finishSync()
+            walletState.update()
             return
         }
 
