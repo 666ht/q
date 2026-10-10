@@ -397,23 +397,41 @@ class WalletState {
             update()
             return true
         }
+
+        // Keep the UI locked and suppress state publications while the native
+        // wallet leaves background sync. The previous implementation called
+        // update() while _blockUpdates was still true, so it returned without
+        // repopulating outputs/transactions before the overlay disappeared.
         _blockUpdates.set(true)
-        try {
+        val exited = try {
             if (wallet.stopBackgroundSync(pin)) {
-                _backgroundSync.value = false
-                update()
-                wallet.startRefresh()
-                Timber.tag(TAG).i("Exited background sync")
-                return true
+                Timber.tag(TAG).i("Native background sync stopped")
+                true
+            } else {
+                Timber.tag(TAG).e("stopBackgroundSync returned false")
+                false
             }
-            Timber.tag(TAG).e("stopBackgroundSync returned false")
-            return false
         } catch (e: Exception) {
             Timber.tag(TAG).e(e, "stopBackgroundSync error")
-            return false
+            false
         } finally {
             _blockUpdates.set(false)
         }
+
+        if (!exited) return false
+
+        // Re-read native wallet data after the background worker has stopped,
+        // then publish the fresh output list while still holding the overlay.
+        runCatching { wallet.refreshHistory() }
+            .onFailure { Timber.tag(TAG).e(it, "History refresh after background sync failed") }
+        runCatching { wallet.refreshCoins(force = true) }
+            .onFailure { Timber.tag(TAG).e(it, "Output refresh after background sync failed") }
+
+        _backgroundSync.value = false
+        update()
+        wallet.startRefresh()
+        Timber.tag(TAG).i("Exited background sync and refreshed wallet data")
+        true
     }
 
     fun setConnectionStatus(status: Wallet.ConnectionStatus) {
