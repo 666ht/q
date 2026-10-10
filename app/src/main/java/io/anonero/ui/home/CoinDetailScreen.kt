@@ -135,7 +135,7 @@ fun CoinDetailScreen(
                 androidx.compose.foundation.layout.Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = 12.dp),
+                        .padding(start = 40.dp, top = 12.dp),
                     verticalAlignment = Alignment.Top
                 ) {
                     Text("全局索引", modifier = Modifier.padding(end = 4.dp), style = MaterialTheme.typography.titleMedium)
@@ -149,7 +149,7 @@ fun CoinDetailScreen(
                 androidx.compose.foundation.layout.Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = 8.dp),
+                        .padding(start = 40.dp, top = 8.dp),
                     verticalAlignment = Alignment.Top
                 ) {
                     Text("区块高度", modifier = Modifier.padding(end = 4.dp), style = MaterialTheme.typography.titleMedium)
@@ -170,8 +170,9 @@ fun CoinDetailScreen(
                         .combinedClickable(
                         onClick = { pubKeyState = if (pubKeyState == 1) 0 else 1 },
                         onLongClick = { coin?.pub_key?.let { clipboardManager.setText(AnnotatedString(it)) } }
-                    ),
-                    verticalAlignment = Alignment.Top
+                    )
+                        .padding(start = 40.dp),
+7341
                 ) {
                     Text("公钥", modifier = Modifier.padding(end = 4.dp), style = MaterialTheme.typography.titleMedium)
                     Text(
@@ -188,8 +189,9 @@ fun CoinDetailScreen(
                         .combinedClickable(
                         onClick = { hashState = if (hashState == 1) 0 else 1 },
                         onLongClick = { coin?.hash?.let { clipboardManager.setText(AnnotatedString(it)) } }
-                    ),
-                    verticalAlignment = Alignment.Top
+                    )
+                        .padding(start = 40.dp),
+8346
                 ) {
                     Text("哈希", modifier = Modifier.padding(end = 4.dp), style = MaterialTheme.typography.titleMedium)
                     Text(
@@ -206,8 +208,9 @@ fun CoinDetailScreen(
                         .combinedClickable(
                         onClick = { addressState = if (addressState == 1) 0 else 1 },
                         onLongClick = { outputAddress?.let { clipboardManager.setText(AnnotatedString(it)) } }
-                    ),
-                    verticalAlignment = Alignment.Top
+                    )
+                        .padding(start = 40.dp),
+9335
                 ) {
                     Text("地址", modifier = Modifier.padding(end = 4.dp), style = MaterialTheme.typography.titleMedium)
                     Text(
@@ -220,7 +223,7 @@ fun CoinDetailScreen(
                 androidx.compose.foundation.layout.Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = 8.dp),
+                        .padding(start = 40.dp, top = 8.dp),
                     verticalAlignment = Alignment.Top
                 ) {
                     Text("时间", modifier = Modifier.padding(end = 4.dp), style = MaterialTheme.typography.titleMedium)
