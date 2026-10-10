@@ -61,6 +61,9 @@ class WalletState {
     private val _unlockShortcut = Channel<LockScreenShortCut>(capacity = 1)
     val unlockShortcut = _unlockShortcut.receiveAsFlow()
     private val bgSyncMutex = Mutex()
+    // Activity teardown must not cancel a wallet background-transition operation
+    // while native wallet2 is switching refresh modes.
+    private val backgroundLifecycleScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     // Distinguish the UI PIN lock from native wallet2 background-sync mode.
     // Switching the native wallet while a foreground scan is active can race its refresh worker.
     private val nativeBackgroundSyncActive = AtomicBoolean(false)
@@ -369,6 +372,17 @@ class WalletState {
     fun emitUnlockShortcut(shortcut: LockScreenShortCut) {
         _unlockShortcut.trySend(shortcut)
     }
+
+    /**
+     * Run the leave-app transition independently of Activity teardown. The native
+     * wallet operation must not be cancelled merely because Android destroys the UI.
+     */
+    fun requestBackgroundSyncOnLeave() {
+        backgroundLifecycleScope.launch {
+            runCatching { enterBackgroundSync() }
+                .onFailure { Timber.tag(TAG).e(it, "Background wallet transition failed") }
+        }
+    }
     
     suspend fun enterBackgroundSync(): Boolean = bgSyncMutex.withLock {
         val wallet = getWallet ?: return false
@@ -386,7 +400,8 @@ class WalletState {
             restoreProgressFinalizing ||
             customRescanInProgress ||
             customRescanFinalizing ||
-            !wallet.isSynchronized
+            !wallet.isSynchronized ||
+            !wallet.nativeSynchronized
         if (scanActive) {
             nativeBackgroundSyncActive.set(false)
             Timber.tag(TAG).i("Keeping foreground scan active; PIN lock only")
