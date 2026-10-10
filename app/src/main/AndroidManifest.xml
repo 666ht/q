@@ -57,8 +57,7 @@
         <service
             android:name=".services.AnonNeroService"
             android:exported="false"
-            android:foregroundServiceType="dataSync"
-            android:stopWithTask="true" />
+            android:foregroundServiceType="dataSync" />
     </application>
 
 </manifest>
