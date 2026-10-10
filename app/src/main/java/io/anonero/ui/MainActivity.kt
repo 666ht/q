@@ -32,9 +32,7 @@ import androidx.lifecycle.asLiveData
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.rememberNavController
 import io.anonero.AnonConfig
-import io.anonero.model.WalletManager
 import io.anonero.services.AnonNeroService
-import io.anonero.services.TorService
 import io.anonero.services.WalletState
 import io.anonero.services.startAnonService
 import io.anonero.ui.home.LockScreen
@@ -63,7 +61,6 @@ class MainActivity : ComponentActivity() {
 
     private val scope: CoroutineScope = CoroutineScope(Dispatchers.IO)
     private val walletState: WalletState by inject()
-    private val torService: TorService by inject()
     val anonPrefs: SharedPreferences by inject(named(WALLET_PREFERENCES))
 
     override fun onNewIntent(intent: Intent) {
@@ -180,25 +177,11 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
-        if (walletState.isWiping()) {
-            scope.cancel()
-            torService.dispose()
-            super.onDestroy()
-            return
-        }
-        scope.launch(Dispatchers.IO) {
-            runCatching {
-                WalletManager.instance?.wallet?.let {
-                    if (it.isInitialized) {
-                        it.store()
-                    }
-                    it.close()
-                }
-            }.onFailure {
-                Timber.tag(TAG).e(it, "Wallet shutdown during activity destroy failed")
-            }
-        }
-        torService.dispose()
+        // Activity destruction is not wallet shutdown. The native wallet can still be
+        // scanning on wallet2's worker thread, so closing it here can race JNI callbacks
+        // and crash the next Activity launch. TorService and the wallet manager are
+        // application-scoped; keep them alive across Activity recreation/re-entry.
+        // Explicit wallet wipe already performs its own ordered native teardown.
         scope.cancel()
         super.onDestroy()
     }
