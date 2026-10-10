@@ -163,7 +163,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
-        scope.launch { walletState.enterBackgroundSync() }
+        walletState.requestBackgroundSyncOnLeave()
     }
 
     override fun onDestroy() {
