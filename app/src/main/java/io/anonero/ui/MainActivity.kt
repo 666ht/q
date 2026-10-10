@@ -84,7 +84,6 @@ class MainActivity : ComponentActivity() {
             var useTor by remember { mutableStateOf(true) }
             val onboardViewModel = koinViewModel<OnboardViewModel>()
             val context = LocalContext.current
-            val scope = rememberCoroutineScope()
 
             LaunchedEffect(key1 = true) {
                 scope.launch(Dispatchers.IO) {
@@ -117,12 +116,9 @@ class MainActivity : ComponentActivity() {
                             LockScreen(
                                 mode = LockScreenMode.LOCK_SCREEN,
                                 modifier = androidx.compose.ui.Modifier.fillMaxSize(),
-                                onUnLocked = { pin, shortCut ->
-                                    scope.launch(Dispatchers.IO) {
-                                        val resumed = walletState.exitBackgroundSync(pin)
-                                        if (resumed && shortCut != LockScreenShortCut.HOME) {
-                                            walletState.emitUnlockShortcut(shortCut)
-                                        }
+                                onUnLocked = { _, shortCut ->
+                                    if (shortCut != LockScreenShortCut.HOME) {
+                                        walletState.emitUnlockShortcut(shortCut)
                                     }
                                 }
                             )
