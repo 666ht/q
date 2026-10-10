@@ -553,6 +553,11 @@ class WalletState {
         _isSyncing.set(false)
         _isLoading.value = false
         _connectionStatus.update { Wallet.ConnectionStatus.ConnectionStatus_Connected }
+
+        // Publish the final wallet snapshot after clearing sync/loading flags.
+        // This guarantees the balance is refreshed even when the last native
+        // callback updated the progress state before the final data was ready.
+        update()
     }
 
 
