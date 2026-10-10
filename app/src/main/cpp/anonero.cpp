@@ -1234,9 +1234,23 @@ JNIEXPORT jboolean JNICALL
 Java_io_anonero_model_Wallet_startBackgroundSync(JNIEnv *env, jobject instance) {
     LOGD("startBackgroundSync(): start");
     Monero::Wallet *wallet = getHandle<Monero::Wallet>(env, instance);
+    if (wallet == nullptr) {
+        LOGD("startBackgroundSync(): wallet handle is null");
+        return JNI_FALSE;
+    }
 
-    bool bgsyncStatus = wallet->startBackgroundSync();
-    if (bgsyncStatus == true) {
+    // Never allow a C++ exception to escape across the JNI boundary: doing so
+    // can terminate the Android process when the wallet cannot change refresh mode.
+    bool bgsyncStatus = false;
+    try {
+        bgsyncStatus = wallet->startBackgroundSync();
+    } catch (const std::exception &e) {
+        LOGD("startBackgroundSync(): native exception: %s", e.what());
+    } catch (...) {
+        LOGD("startBackgroundSync(): unknown native exception");
+    }
+
+    if (bgsyncStatus) {
         LOGD("startBackgroundSync(): end: success!");
     } else {
         LOGD("startBackgroundSync(): end: fail!");
