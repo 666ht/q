@@ -31,7 +31,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
@@ -39,9 +38,6 @@ import androidx.compose.ui.unit.dp
 import io.anonero.services.WalletState
 import io.anonero.util.Formats
 import kotlinx.coroutines.Dispatchers
-import java.time.Instant
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 
@@ -61,24 +57,16 @@ fun CoinDetailScreen(
 ) {
     val walletState = koinInject<WalletState>()
     val coins by walletState.coins.collectAsState(arrayListOf())
-    val transactions by walletState.transactions.collectAsState(emptyList())
     val hideAmounts by walletState.hideAmountsFlow.collectAsState(false)
     val coinIndex = coins.indexOfFirst { it.key == coinKey }
     val coin = coins.getOrNull(coinIndex)
     val scope = rememberCoroutineScope()
     val clipboardManager = LocalClipboardManager.current
-    val density = LocalDensity.current
-    var outputNumberStart by remember { mutableStateOf(0.dp) }
     var busy by remember { mutableStateOf(false) }
     var pubKeyState by remember { mutableStateOf(0) }
     var hashState by remember { mutableStateOf(0) }
     var addressState by remember { mutableStateOf(0) }
     val outputAddress = coin?.let { walletState.getAddressForCoin(it.hash) }
-    // CoinsInfo.creationTime is not a timestamp in the native bridge; it currently
-    // receives internalOutputIndex. Resolve the actual transaction time by tx hash.
-    val transactionTimestamp = coin?.let { selected ->
-        transactions.firstOrNull { it.hash == selected.hash }?.timestamp
-    }
     val outputColor = if (coin?.frozen == true) {
         MaterialTheme.colorScheme.onSurfaceVariant
     } else {
@@ -109,23 +97,12 @@ fun CoinDetailScreen(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    val outputLabel = "输出 " + if (coinIndex >= 0) coinIndex + 1 else ""
                     Text(
-                        outputLabel,
+                        "输出 " + if (coinIndex >= 0) coinIndex + 1 else "",
                         modifier = Modifier.size(width = 52.dp, height = 24.dp),
                         color = outputColor,
                         style = MaterialTheme.typography.titleMedium,
-                        textAlign = TextAlign.Start,
-                        onTextLayout = { layout ->
-                            if (outputLabel.length > 3) {
-                                val digitStart = with(density) {
-                                    layout.getBoundingBox(3).left.toDp()
-                                }
-                                if (outputNumberStart != digitStart) {
-                                    outputNumberStart = digitStart
-                                }
-                            }
-                        }
+                        textAlign = TextAlign.Start
                     )
                     Text(
                         coin?.let {
@@ -146,48 +123,24 @@ fun CoinDetailScreen(
                         Spacer(modifier = Modifier.size(28.dp))
                     }
                 }
+                Text(
+                    text = "全局索引  " + (coin?.globalOutputIndex ?: "____"),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 12.dp),
+                    style = MaterialTheme.typography.titleMedium
+                )
                 androidx.compose.foundation.layout.Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(start = outputNumberStart, top = 12.dp),
-                    verticalAlignment = Alignment.Top
-                ) {
-                    Text("全局索引", modifier = Modifier.padding(end = 4.dp), style = MaterialTheme.typography.titleMedium)
-                    Text(
-                        text = coin?.globalOutputIndex?.toString() ?: "____",
-                        modifier = Modifier.weight(1f),
-                        textAlign = TextAlign.Start,
-                        style = MaterialTheme.typography.titleMedium
-                    )
-                }
-                androidx.compose.foundation.layout.Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = outputNumberStart, top = 8.dp),
-                    verticalAlignment = Alignment.Top
-                ) {
-                    Text("区块高度", modifier = Modifier.padding(end = 4.dp), style = MaterialTheme.typography.titleMedium)
-                    Text(
-                        text = coin?.let { selected ->
-                            transactions.firstOrNull { it.hash == selected.hash }?.blockheight
-                                ?.takeIf { it > 0L }?.toString()
-                        } ?: "____",
-                        modifier = Modifier.weight(1f),
-                        textAlign = TextAlign.Start,
-                        style = MaterialTheme.typography.titleMedium
-                    )
-                }
-                androidx.compose.foundation.layout.Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = outputNumberStart, top = 12.dp)
+                        .padding(top = 12.dp)
                         .combinedClickable(
                         onClick = { pubKeyState = if (pubKeyState == 1) 0 else 1 },
                         onLongClick = { coin?.pub_key?.let { clipboardManager.setText(AnnotatedString(it)) } }
-                    )
-
+                    ),
+                    verticalAlignment = Alignment.Top
                 ) {
-                    Text("公钥", modifier = Modifier.padding(end = 4.dp), style = MaterialTheme.typography.titleMedium)
+                    Text("公钥", modifier = Modifier.size(width = 40.dp, height = 24.dp), style = MaterialTheme.typography.titleMedium)
                     Text(
                         text = coin?.let { if (pubKeyState == 1) it.pub_key else abbreviatedValue(it.pub_key, 32) } ?: "____",
                         modifier = Modifier.weight(1f),
@@ -198,14 +151,14 @@ fun CoinDetailScreen(
                 androidx.compose.foundation.layout.Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(start = outputNumberStart, top = 8.dp)
+                        .padding(top = 8.dp)
                         .combinedClickable(
                         onClick = { hashState = if (hashState == 1) 0 else 1 },
                         onLongClick = { coin?.hash?.let { clipboardManager.setText(AnnotatedString(it)) } }
-                    )
-
+                    ),
+                    verticalAlignment = Alignment.Top
                 ) {
-                    Text("哈希", modifier = Modifier.padding(end = 4.dp), style = MaterialTheme.typography.titleMedium)
+                    Text("哈希", modifier = Modifier.size(width = 40.dp, height = 24.dp), style = MaterialTheme.typography.titleMedium)
                     Text(
                         text = coin?.let { if (hashState == 1) it.hash else abbreviatedValue(it.hash, 32) } ?: "____",
                         modifier = Modifier.weight(1f),
@@ -216,38 +169,18 @@ fun CoinDetailScreen(
                 androidx.compose.foundation.layout.Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(start = outputNumberStart, top = 8.dp)
+                        .padding(top = 8.dp)
                         .combinedClickable(
                         onClick = { addressState = if (addressState == 1) 0 else 1 },
                         onLongClick = { outputAddress?.let { clipboardManager.setText(AnnotatedString(it)) } }
-                    )
-
+                    ),
+                    verticalAlignment = Alignment.Top
                 ) {
-                    Text("地址", modifier = Modifier.padding(end = 4.dp), style = MaterialTheme.typography.titleMedium)
+                    Text("地址", modifier = Modifier.size(width = 40.dp, height = 24.dp), style = MaterialTheme.typography.titleMedium)
                     Text(
                         text = outputAddress?.let { if (addressState == 1) it else abbreviatedValue(it, 32) } ?: "____",
                         modifier = Modifier.weight(1f),
                         textAlign = TextAlign.End,
-                        style = MaterialTheme.typography.titleMedium
-                    )
-                }
-                androidx.compose.foundation.layout.Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = outputNumberStart, top = 8.dp),
-                    verticalAlignment = Alignment.Top
-                ) {
-                    Text("时间", modifier = Modifier.padding(end = 4.dp), style = MaterialTheme.typography.titleMedium)
-                    Text(
-                        text = transactionTimestamp?.takeIf { it > 0L }?.let {
-                            runCatching {
-                                Instant.ofEpochSecond(it)
-                                    .atZone(ZoneId.systemDefault())
-                                    .format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))
-                            }.getOrNull()
-                        } ?: "____",
-                        modifier = Modifier.weight(1f),
-                        textAlign = TextAlign.Start,
                         style = MaterialTheme.typography.titleMedium
                     )
                 }
