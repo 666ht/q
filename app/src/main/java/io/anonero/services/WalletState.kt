@@ -341,6 +341,7 @@ class WalletState {
         _isWiping.set(true)
         _blockUpdates.set(true)
         _backgroundSync.value = false
+        nativeBackgroundSyncActive.set(false)
 
         // Do not carry restore/sync UI state into a newly restored wallet in
         // the same process. A secure wipe must also terminate the old progress
