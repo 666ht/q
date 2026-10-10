@@ -1,0 +1,1 @@
+Temporary trigger file for an APK build of the current main branch. This file is not part of the wallet application.
