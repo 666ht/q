@@ -61,6 +61,9 @@ class WalletState {
     private val _unlockShortcut = Channel<LockScreenShortCut>(capacity = 1)
     val unlockShortcut = _unlockShortcut.receiveAsFlow()
     private val bgSyncMutex = Mutex()
+    // Distinguish the UI PIN lock from native wallet2 background-sync mode.
+    // Switching the native wallet while a foreground scan is active can race its refresh worker.
+    private val nativeBackgroundSyncActive = AtomicBoolean(false)
     private val customRescanScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var customRescanJob: Job? = null
     private val customRescanFinishStarted = AtomicBoolean(false)
@@ -372,16 +375,36 @@ class WalletState {
         emitUnlockShortcut(LockScreenShortCut.HOME)
         _backgroundSync.value = true
         if (AnonConfig.viewOnly) return true
+
+        // Never switch wallet2 into native background-sync mode while its normal
+        // refresh/rescan worker is active. That transition can race the native scan
+        // when the user leaves the app mid-sync and crash on the next activity launch.
+        val scanActive = isSyncing ||
+            _isLoading.value ||
+            restoreProgressInProgress ||
+            restoreProgressFinalizing ||
+            customRescanInProgress ||
+            customRescanFinalizing ||
+            !wallet.isSynchronized
+        if (scanActive) {
+            nativeBackgroundSyncActive.set(false)
+            Timber.tag(TAG).i("Keeping foreground scan active; PIN lock only")
+            return true
+        }
+
         _blockUpdates.set(true)
         try {
             if (wallet.startBackgroundSync()) {
-                Timber.tag(TAG).i("Entered background sync")
+                nativeBackgroundSyncActive.set(true)
+                Timber.tag(TAG).i("Entered native background sync")
                 return true
             }
+            nativeBackgroundSyncActive.set(false)
             _backgroundSync.value = false
             Timber.tag(TAG).e("startBackgroundSync returned false")
             return false
         } catch (e: Exception) {
+            nativeBackgroundSyncActive.set(false)
             _backgroundSync.value = false
             Timber.tag(TAG).e(e, "startBackgroundSync error")
             return false
@@ -398,13 +421,21 @@ class WalletState {
             return true
         }
 
+        // If this was only a UI lock during an active foreground scan, do not call
+        // native stopBackgroundSync(): that native mode was never started.
+        if (!nativeBackgroundSyncActive.get()) {
+            _backgroundSync.value = false
+            update()
+            Timber.tag(TAG).i("Released PIN lock; foreground scan remained active")
+            return true
+        }
+
         // Keep the UI locked and suppress state publications while the native
-        // wallet leaves background sync. The previous implementation called
-        // update() while _blockUpdates was still true, so it returned without
-        // repopulating outputs/transactions before the overlay disappeared.
+        // wallet leaves background sync.
         _blockUpdates.set(true)
         val exited = try {
             if (wallet.stopBackgroundSync(pin)) {
+                nativeBackgroundSyncActive.set(false)
                 Timber.tag(TAG).i("Native background sync stopped")
                 true
             } else {
