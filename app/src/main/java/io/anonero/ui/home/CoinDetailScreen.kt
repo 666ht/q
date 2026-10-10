@@ -60,6 +60,7 @@ fun CoinDetailScreen(
 ) {
     val walletState = koinInject<WalletState>()
     val coins by walletState.coins.collectAsState(arrayListOf())
+    val transactions by walletState.transactions.collectAsState(emptyList())
     val hideAmounts by walletState.hideAmountsFlow.collectAsState(false)
     val coinIndex = coins.indexOfFirst { it.key == coinKey }
     val coin = coins.getOrNull(coinIndex)
@@ -70,6 +71,11 @@ fun CoinDetailScreen(
     var hashState by remember { mutableStateOf(0) }
     var addressState by remember { mutableStateOf(0) }
     val outputAddress = coin?.let { walletState.getAddressForCoin(it.hash) }
+    // CoinsInfo.creationTime is not a timestamp in the native bridge; it currently
+    // receives internalOutputIndex. Resolve the actual transaction time by tx hash.
+    val transactionTimestamp = coin?.let { selected ->
+        transactions.firstOrNull { it.hash == selected.hash }?.timestamp
+    }
     val outputColor = if (coin?.frozen == true) {
         MaterialTheme.colorScheme.onSurfaceVariant
     } else {
@@ -195,10 +201,10 @@ fun CoinDetailScreen(
                 ) {
                     Text("时间", modifier = Modifier.size(width = 40.dp, height = 24.dp), style = MaterialTheme.typography.titleMedium)
                     Text(
-                        text = coin?.creationTime?.takeIf { it > 0L }?.let {
+                        text = transactionTimestamp?.takeIf { it > 0L }?.let {
                             runCatching {
                                 Instant.ofEpochSecond(it)
-                                    .atZone(ZoneId.of("Asia/Shanghai"))
+                                    .atZone(ZoneId.systemDefault())
                                     .format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))
                             }.getOrNull()
                         } ?: "____",
