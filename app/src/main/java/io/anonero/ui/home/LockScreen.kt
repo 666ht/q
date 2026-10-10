@@ -193,11 +193,21 @@ fun LockScreen(
                     }
 
                     LockScreenMode.LOCK_SCREEN -> {
-                        withContext(Dispatchers.Main) {
-                            if (prefsHash == pinHash) {
-                                onUnLocked(pin, shortCut)
-                            } else {
+                        if (prefsHash != pinHash) {
+                            withContext(Dispatchers.Main) {
                                 showError()
+                            }
+                        } else {
+                            // Do the native background-sync exit inside this guarded
+                            // PIN task. A failed stop must not silently leave the keypad
+                            // looking unresponsive or escape as an uncaught coroutine error.
+                            val resumed = walletState.exitBackgroundSync(pin)
+                            withContext(Dispatchers.Main) {
+                                if (resumed) {
+                                    onUnLocked(pin, shortCut)
+                                } else {
+                                    showError()
+                                }
                             }
                         }
                     }
