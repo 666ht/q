@@ -201,7 +201,7 @@ fun CoinDetailScreen(
                     Text(
                         text = outputAddress?.let { if (addressState == 1) it else abbreviatedValue(it, 32) } ?: "____",
                         modifier = Modifier.weight(1f),
-                        textAlign = TextAlign.End,
+                        textAlign = TextAlign.Start,
                         style = MaterialTheme.typography.titleMedium
                     )
                 }
