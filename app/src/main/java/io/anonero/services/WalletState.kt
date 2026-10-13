@@ -479,9 +479,17 @@ class WalletState {
     fun isWiping(): Boolean = _isWiping.get()
 
     fun setLoading(b: Boolean) {
-        // Once mnemonic restore owns progress, the generic loading flag must not
-        // replace the real restore SyncProgress with an indeterminate bar.
-        if (b && restoreProgressInProgress) return
+        // Generic loading is reserved for explicit refreshes and non-scan operations.
+        // Restore/custom-rescan progress owns the indicator from preparation through
+        // final data refresh; never replace its real cursor progress with a spinner.
+        if (b && (
+                restoreProgressInProgress ||
+                restoreProgressFinalizing ||
+                customRescanPreparing ||
+                customRescanInProgress ||
+                customRescanFinalizing
+            )
+        ) return
         this._isLoading.update { b }
     }
 
@@ -1126,7 +1134,9 @@ class WalletState {
                     // start height. Clear stale numbers and keep waiting.
                     _syncProgress.value = null
                     _isSyncing.set(false)
-                    _isLoading.value = true
+                    // Waiting for the native scan cursor is not a manual refresh.
+                    // Keep the generic refresh spinner off until real scan progress exists.
+                    _isLoading.value = false
                     withTimeoutOrNull(400L) { customRescanProgressSignals.receive() }
                     continue
                 }
@@ -1148,7 +1158,9 @@ class WalletState {
                         // to the pre-reset wallet. Do not publish a fabricated total.
                         _syncProgress.value = null
                         _isSyncing.set(false)
-                        _isLoading.value = true
+                        // The old wallet tip is not scan progress and must not show
+                        // the generic refresh spinner while native rescan is queued.
+                        _isLoading.value = false
                         withTimeoutOrNull(400L) { customRescanProgressSignals.receive() }
                         continue
                     }
