@@ -64,13 +64,12 @@ fun ResetSyncPage(
         mutableStateOf(wallet?.getRestoreHeight()?.toString() ?: "")
     }
     var date by remember { mutableStateOf("") }
-    var selectedDateEndHeight by remember { mutableStateOf<Long?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var resetting by remember { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
     var heightDateJob by remember { mutableStateOf<Job?>(null) }
     val heightToDateCache = remember(wallet) { mutableMapOf<Long, String>() }
-    val dateToHeightCache = remember(wallet) { mutableMapOf<String, Pair<Long, Long>>() }
+    val dateToHeightCache = remember(wallet) { mutableMapOf<String, Long>() }
 
     LaunchedEffect(wallet) {
         val restoreHeight = wallet?.getRestoreHeight()
@@ -127,10 +126,10 @@ fun ResetSyncPage(
                                     error = "请输入有效高度或日期"
                                     return@launch
                                 }
-                                val endHeight = selectedDateEndHeight
-
                                 val result = withContext(Dispatchers.IO) {
-                                    walletState.resetSyncFromHeight(restoreHeight, endHeight)
+                                    // A selected date determines the scan start, not a one-day scan window.
+                                    // Let WalletState use the daemon's current height as the end.
+                                    walletState.resetSyncFromHeight(restoreHeight)
                                 }
                                 resetting = false
                                 if (result.isSuccess) {
@@ -163,7 +162,6 @@ fun ResetSyncPage(
                     error = null
                     heightDateJob?.cancel()
                     height = it.filter(Char::isDigit)
-                    selectedDateEndHeight = null
                     height.toLongOrNull()?.let { h ->
                         wallet?.let { activeWallet ->
                             heightDateJob = coroutineScope.launch {
@@ -205,19 +203,17 @@ fun ResetSyncPage(
                     error = null
                     heightDateJob?.cancel()
                     date = it
-                    selectedDateEndHeight = null
                     if (it.length == 10) {
                         wallet?.let { activeWallet ->
                             val requestedDate = it
                             heightDateJob = coroutineScope.launch {
                                 delay(60L)
-                                val cachedRange = dateToHeightCache[requestedDate]
-                                if (cachedRange != null) {
-                                    height = cachedRange.first.toString()
-                                    selectedDateEndHeight = cachedRange.second
+                                val cachedHeight = dateToHeightCache[requestedDate]
+                                if (cachedHeight != null) {
+                                    height = cachedHeight.toString()
                                     return@launch
                                 }
-                                val range = withContext(Dispatchers.IO) {
+                                val resolvedHeight = withContext(Dispatchers.IO) {
                                     runCatching {
                                         val formatter = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply {
                                             isLenient = false
@@ -232,32 +228,22 @@ fun ResetSyncPage(
                                             set(java.util.Calendar.MILLISECOND, 0)
                                         }
 
-                                        val startHeight = activeWallet.getBlockChainHeightByDate(
+                                        activeWallet.getBlockChainHeightByDate(
                                             calendar.get(java.util.Calendar.YEAR),
                                             calendar.get(java.util.Calendar.MONTH) + 1,
                                             calendar.get(java.util.Calendar.DAY_OF_MONTH)
                                         )
-
-                                        calendar.add(java.util.Calendar.DAY_OF_YEAR, 1)
-                                        val endHeight = activeWallet.getBlockChainHeightByDate(
-                                            calendar.get(java.util.Calendar.YEAR),
-                                            calendar.get(java.util.Calendar.MONTH) + 1,
-                                            calendar.get(java.util.Calendar.DAY_OF_MONTH)
-                                        )
-
-                                        startHeight to endHeight
                                     }.getOrNull()
                                 }
 
-                                if (range != null && date == requestedDate && range.first >= 0L && range.second >= range.first) {
-                                    dateToHeightCache[requestedDate] = range
-                                    heightToDateCache[range.first]?.let { cachedDate ->
+                                if (resolvedHeight != null && date == requestedDate && resolvedHeight >= 0L) {
+                                    dateToHeightCache[requestedDate] = resolvedHeight
+                                    heightToDateCache[resolvedHeight]?.let { cachedDate ->
                                         if (cachedDate != requestedDate) {
-                                            heightToDateCache.remove(range.first)
+                                            heightToDateCache.remove(resolvedHeight)
                                         }
                                     }
-                                    height = range.first.toString()
-                                    selectedDateEndHeight = range.second
+                                    height = resolvedHeight.toString()
                                 } else if (date == requestedDate) {
                                     error = "无法查询该日期的区块高度，请检查节点连接或日期"
                                 }
