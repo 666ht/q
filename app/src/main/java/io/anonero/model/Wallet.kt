@@ -273,6 +273,8 @@ class Wallet {
 
     external fun startRefresh()
     external fun pauseRefresh()
+    // Sends a non-blocking, monotonically ordered cancellation request.
+    external fun cancelCurrentOperation(operationId: Long)
     external fun refresh(): Boolean
     external fun refreshAsync()
     private external fun rescanBlockchainAsyncJ(): Boolean

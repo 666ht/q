@@ -691,20 +691,17 @@ class WalletState {
         val wallet = getWallet
         if (wallet?.isInitialized != true) return
 
-        // A manual refresh is an explicit newest-user-operation request. First
-        // signal cancellation immediately; then wait for the native worker and
-        // other user actions to leave their critical section before taking over.
+        // Signal cancellation synchronously without waiting for a native lock.
+        // The native operation ID rejects late cancellation requests from stale jobs.
         val operationId = userOperationGeneration.incrementAndGet()
-        userOperationScope.launch {
-            if (operationId != userOperationGeneration.get()) return@launch
-            runCatching { wallet.pauseRefresh() }
-                .onFailure { Timber.tag(TAG).w(it, "Could not signal cancellation before manual refresh") }
-            if (operationId != userOperationGeneration.get()) return@launch
+        runCatching { wallet.cancelCurrentOperation(operationId) }
+            .onFailure { Timber.tag(TAG).w(it, "Could not signal cancellation before manual refresh") }
 
+        userOperationScope.launch {
             userOperationMutex.lock()
             try {
                 if (operationId != userOperationGeneration.get()) return@launch
-                runCatching { wallet.pauseRefresh() }
+                withContext(Dispatchers.IO) { wallet.pauseRefresh() }
                 if (operationId != userOperationGeneration.get()) return@launch
 
                 cancelScanUiStateForLatestOperation()
@@ -735,25 +732,22 @@ class WalletState {
         val wallet = getWallet
             ?: return Result.failure(IllegalStateException("Wallet not initialized"))
         val operationId = userOperationGeneration.incrementAndGet()
-        val stopJob = userOperationScope.launch {
-            if (operationId != userOperationGeneration.get()) return@launch
-            runCatching { wallet.pauseRefresh() }
-                .onFailure { Timber.tag(TAG).w(it, "Could not signal cancellation before block-date query") }
-        }
 
         return try {
-            stopJob.join()
+            // Non-blocking native signal immediately cancels an active refresh or
+            // date/height lookup. Waiting for the old operation happens below.
+            wallet.cancelCurrentOperation(operationId)
             if (operationId != userOperationGeneration.get()) {
                 return Result.failure(IllegalStateException("查询已被更新操作取代"))
             }
+
             userOperationMutex.lock()
             try {
                 if (operationId != userOperationGeneration.get()) {
                     return Result.failure(IllegalStateException("查询已被更新操作取代"))
                 }
 
-                // Repeat the barrier after obtaining the coordinator: an older operation
-                // may have queued work after the first stop signal was sent.
+                // Wait until native refresh callbacks and their wallet mutations exit.
                 withContext(Dispatchers.IO) { wallet.pauseRefresh() }
                 if (operationId != userOperationGeneration.get()) {
                     return Result.failure(IllegalStateException("查询已被更新操作取代"))
@@ -824,33 +818,30 @@ class WalletState {
         if (height < 0L) {
             return Result.failure(IllegalArgumentException("Invalid restore height"))
         }
-        val operationId = userOperationGeneration.incrementAndGet()
-        val stopJob = userOperationScope.launch {
-            if (operationId != userOperationGeneration.get()) return@launch
-            runCatching { wallet.pauseRefresh() }
-                .onFailure { Timber.tag(TAG).w(it, "Could not signal cancellation before reset") }
-        }
 
+        val operationId = userOperationGeneration.incrementAndGet()
         return try {
-            stopJob.join()
+            // Request cancellation immediately, without blocking on the native scan.
+            // The native layer discards this request if its ID is stale.
+            wallet.cancelCurrentOperation(operationId)
             if (operationId != userOperationGeneration.get()) {
                 return Result.failure(IllegalStateException("重置已被更新操作取代"))
             }
+
             userOperationMutex.lock()
             try {
                 if (operationId != userOperationGeneration.get()) {
                     return Result.failure(IllegalStateException("重置已被更新操作取代"))
                 }
-                // Stop again after taking ownership, covering work an older task
-                // might have queued just before it noticed the newer generation.
-                wallet.pauseRefresh()
+                withContext(Dispatchers.IO) { wallet.pauseRefresh() }
                 if (operationId != userOperationGeneration.get()) {
                     return Result.failure(IllegalStateException("重置已被更新操作取代"))
                 }
+
                 val result = resetSyncFromHeightInternal(height, dayEndHeight, operationId)
                 if (result.isFailure && operationId == userOperationGeneration.get()) {
-                    // Failures before the scan begins must also clear stale scan UI
-                    // state and release the paused refresh loop.
+                    // A failure before scan start must clear stale state and resume
+                    // refresh; a superseded reset must not touch the newer operation.
                     cancelScanUiStateForLatestOperation()
                     if (operationId == userOperationGeneration.get() &&
                         wallet.fullStatus.connectionStatus == Wallet.ConnectionStatus.ConnectionStatus_Connected
@@ -866,6 +857,15 @@ class WalletState {
                 userOperationMutex.unlock()
             }
         } catch (e: Exception) {
+            if (operationId == userOperationGeneration.get() &&
+                wallet.fullStatus.connectionStatus == Wallet.ConnectionStatus.ConnectionStatus_Connected
+            ) {
+                runCatching {
+                    cancelScanUiStateForLatestOperation()
+                    setLoading(true)
+                    wallet.startRefresh()
+                }.onFailure { Timber.tag(TAG).w(it, "Could not resume refresh after reset exception") }
+            }
             Result.failure(e)
         }
     }

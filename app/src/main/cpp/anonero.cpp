@@ -1244,6 +1244,20 @@ Java_io_anonero_model_Wallet_pauseRefresh(JNIEnv *env, jobject instance) {
     wallet->pauseRefresh();
 }
 
+JNIEXPORT void JNICALL
+Java_io_anonero_model_Wallet_cancelCurrentOperation(JNIEnv *env, jobject instance, jlong operationId) {
+    Monero::Wallet *wallet = getHandle<Monero::Wallet>(env, instance);
+    if (wallet == nullptr || operationId <= 0)
+        return;
+    try {
+        wallet->cancelCurrentOperation(static_cast<uint64_t>(operationId));
+    } catch (const std::exception &e) {
+        LOGE("cancelCurrentOperation failed: %s", e.what());
+    } catch (...) {
+        LOGE("cancelCurrentOperation failed: unknown native exception");
+    }
+}
+
 JNIEXPORT jboolean JNICALL
 Java_io_anonero_model_Wallet_startBackgroundSync(JNIEnv *env, jobject instance) {
     LOGD("startBackgroundSync(): start");
