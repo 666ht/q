@@ -319,7 +319,6 @@ fun ResetSyncPage(
                                             .putLong(heightCacheKey(requestedDate), resolvedHeight)
                                             .apply()
                                         height = resolvedHeight.toString()
-                                        queryComplete = true
                                         error = null
                                     }
                                 } catch (e: Exception) {
@@ -384,7 +383,6 @@ fun ResetSyncPage(
                 onValueChange = {
                     error = null
                     date = it
-                    queryComplete = false
                     queryByHeight = false
                     // Changing date clears the height; the button stays Query until both are present.
                     height = ""
