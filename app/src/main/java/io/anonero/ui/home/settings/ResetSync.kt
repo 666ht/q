@@ -257,12 +257,6 @@ fun ResetSyncPage(
                                         val resolvedDate = if (cachedDate != null) {
                                             cachedDate
                                         } else {
-                                            // Re-check immediately before JNI in case a
-                                            // refresh started after the button was pressed.
-                                            if (!walletState.canQueryBlockDate()) {
-                                                error = "钱包刷新或同步中，未缓存的查询请在当前操作结束后重试"
-                                                return@launch
-                                            }
                                             withContext(Dispatchers.IO) {
                                                 val timestamp = walletState.executeLatestWalletQuery {
                                                     it.getBlockTimestamp(queryHeight)
@@ -302,12 +296,6 @@ fun ResetSyncPage(
                                         val resolvedHeight = if (cachedHeight != null) {
                                             cachedHeight
                                         } else {
-                                            // Re-check immediately before JNI in case a
-                                            // refresh started after the button was pressed.
-                                            if (!walletState.canQueryBlockDate()) {
-                                                error = "钱包刷新或同步中，未缓存的查询请在当前操作结束后重试"
-                                                return@launch
-                                            }
                                             walletState.executeLatestWalletQuery { queryWallet ->
                                                 val calendar = java.util.Calendar.getInstance().apply {
                                                     time = parsedDate
