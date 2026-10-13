@@ -272,6 +272,12 @@ class WalletState {
         restoreProgressInitialWalletHeight = null
         restoreProgressCursorObserved = false
         restoreProgressInProgress = false
+        // Keep the completion guard through finalization, then clear it for any
+        // later ordinary refresh. Outside finalization there is no active restore
+        // callback chain left to protect.
+        if (!restoreProgressFinalizing) {
+            restoreProgressCompleted = false
+        }
         // Cancel any queued/running incremental scan refresh so it cannot race
         // the final refresh or publish a transient/partial history.
         scanDataRefreshJob?.cancel()
