@@ -3,6 +3,13 @@ package io.anonero.ui.home.settings
 import AnonNeroTheme
 import AnonOutlineButton
 import android.content.Context
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -17,7 +24,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -31,10 +37,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.layout.size
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import io.anonero.AnonConfig
 import io.anonero.model.WalletManager
@@ -46,6 +57,48 @@ import java.util.Locale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+
+/**
+ * Constant-size spinner for the reset/query button.
+ * Only its angle changes: the center, radius, stroke and arc length remain fixed,
+ * avoiding the growing/shrinking arc of the default indeterminate indicator.
+ */
+@Composable
+private fun FixedSpinIndicator(
+    modifier: Modifier = Modifier,
+    strokeWidth: Dp = 2.dp
+) {
+    val transition = rememberInfiniteTransition(label = "reset_query_spinner")
+    val rotation by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 900, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "reset_query_spinner_rotation"
+    )
+    val color = MaterialTheme.colorScheme.primary
+
+    Canvas(modifier = modifier) {
+        val stroke = strokeWidth.toPx()
+        val diameter = (size.minDimension - stroke).coerceAtLeast(0f)
+        val arcSize = Size(diameter, diameter)
+        val topLeft = Offset(
+            x = (size.width - diameter) / 2f,
+            y = (size.height - diameter) / 2f
+        )
+        drawArc(
+            color = color,
+            startAngle = rotation - 90f,
+            sweepAngle = 270f,
+            useCenter = false,
+            topLeft = topLeft,
+            size = arcSize,
+            style = Stroke(width = stroke, cap = StrokeCap.Round)
+        )
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -372,7 +425,7 @@ fun ResetSyncPage(
                             contentAlignment = androidx.compose.ui.Alignment.Center
                         ) {
                             if (querying || resetting) {
-                                CircularProgressIndicator(
+                                FixedSpinIndicator(
                                     modifier = Modifier.size(28.dp),
                                     strokeWidth = 2.dp
                                 )
