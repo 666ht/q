@@ -31,8 +31,8 @@ jobs:
       - name: Pin XMR refresh-cancellation fix
         working-directory: external-libs/monero
         run: |
-          git fetch --depth=1 origin c5f0cd103fecf2e40578f60890651f7cffe43575
-          git checkout c5f0cd103fecf2e40578f60890651f7cffe43575
+          git fetch --depth=1 origin cceb5e3d8207e937480de0ada755b6f42ab6235a
+          git checkout cceb5e3d8207e937480de0ada755b6f42ab6235a
 
       - name: Read XMR revision
         id: xmr
