@@ -16,12 +16,12 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -38,8 +38,6 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -60,66 +58,30 @@ fun ResetSyncPage(
         return dateFormat.format(Date(timestamp * 1000L))
     }
 
+    fun parseDate(value: String): Date? {
+        if (value.length != 10) return null
+        return try {
+            dateFormat.parse(value)?.takeIf { dateFormat.format(it) == value }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
     var height by remember {
         mutableStateOf(wallet?.getRestoreHeight()?.toString() ?: "")
     }
     var date by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
+    var querying by remember { mutableStateOf(false) }
     var resetting by remember { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
-    var heightDateJob by remember { mutableStateOf<Job?>(null) }
     val heightToDateCache = remember(wallet) { mutableMapOf<Long, String>() }
     val dateToHeightCache = remember(wallet) { mutableMapOf<String, Long>() }
 
-    LaunchedEffect(wallet) {
-        val activeWallet = wallet ?: return@LaunchedEffect
-        val restoreHeight = activeWallet.getRestoreHeight() ?: return@LaunchedEffect
-        val restoreHeightText = restoreHeight.toString()
+    val selectedHeight = height.toLongOrNull()
+    val selectedDate = parseDate(date)
+    val canReset = selectedHeight != null && selectedHeight >= 0L && selectedDate != null
 
-        // The wallet can become available after this screen is first composed.
-        // Fill the height only when it is still empty; never overwrite user input.
-        if (height.isBlank()) {
-            height = restoreHeightText
-        }
-        if (height != restoreHeightText) return@LaunchedEffect
-
-        val cachedDate = heightToDateCache[restoreHeight]
-        if (cachedDate != null) {
-            date = cachedDate
-            error = null
-            return@LaunchedEffect
-        }
-
-        // A single failed RPC must not leave the date field blank forever.
-        // Retry briefly while this screen remains open and the selected height is unchanged.
-        for (attempt in 0 until 8) {
-            if (height != restoreHeightText) return@LaunchedEffect
-
-            val timestamp = withContext(Dispatchers.IO) {
-                try {
-                    activeWallet.getBlockTimestamp(restoreHeight)
-                } catch (_: Exception) {
-                    0L
-                }
-            }
-
-            if (timestamp > 0L) {
-                if (height == restoreHeightText) {
-                    val resolvedDate = dateForTimestamp(timestamp)
-                    heightToDateCache[restoreHeight] = resolvedDate
-                    date = resolvedDate
-                    error = null
-                }
-                return@LaunchedEffect
-            }
-
-            if (attempt < 7) delay(1000L)
-        }
-
-        if (height == restoreHeightText) {
-            error = "无法获取高度 $restoreHeight 对应的日期，请检查节点连接后重试"
-        }
-    }
     Scaffold(
         topBar = {
             TopAppBar(
@@ -144,35 +106,132 @@ fun ResetSyncPage(
                 ) {
                     AnonOutlineButton(
                         onClick = {
-                            if (resetting) return@AnonOutlineButton
-                            resetting = true
-                            coroutineScope.launch {
-                                // Let an in-flight date/height conversion finish.
-                                // Do not cancel it and accidentally reuse the prior height.
-                                heightDateJob?.join()
+                            if (querying || resetting) return@AnonOutlineButton
 
-                                val restoreHeight = height.toLongOrNull()
-                                if (restoreHeight == null) {
+                            val heightValue = height.toLongOrNull()
+                            val dateValue = parseDate(date)
+                            val readyToReset = heightValue != null &&
+                                heightValue >= 0L &&
+                                dateValue != null
+
+                            if (readyToReset) {
+                                resetting = true
+                                error = null
+                                coroutineScope.launch {
+                                    val result = withContext(Dispatchers.IO) {
+                                        // The selected height is the scan start; WalletState uses the current
+                                        // daemon height as the end of the rescan.
+                                        walletState.resetSyncFromHeight(heightValue!!)
+                                    }
                                     resetting = false
-                                    error = "请输入有效高度或日期"
-                                    return@launch
+                                    if (result.isSuccess) {
+                                        onBackPress()
+                                    } else {
+                                        error = result.exceptionOrNull()?.message ?: "重置失败"
+                                    }
                                 }
-                                val result = withContext(Dispatchers.IO) {
-                                    // A selected date determines the scan start, not a one-day scan window.
-                                    // Let WalletState use the daemon's current height as the end.
-                                    walletState.resetSyncFromHeight(restoreHeight)
-                                }
-                                resetting = false
-                                if (result.isSuccess) {
-                                    onBackPress()
-                                } else {
-                                    error = result.exceptionOrNull()?.message ?: "重置失败"
+                                return@AnonOutlineButton
+                            }
+
+                            val hasHeightInput = height.isNotBlank()
+                            val hasDateInput = date.isNotBlank()
+                            if (!hasHeightInput && !hasDateInput) {
+                                error = "请输入高度或日期后查询"
+                                return@AnonOutlineButton
+                            }
+                            if (hasHeightInput && hasDateInput) {
+                                error = "请输入有效高度和日期"
+                                return@AnonOutlineButton
+                            }
+
+                            val activeWallet = wallet
+                            if (activeWallet == null) {
+                                error = "钱包尚未就绪，无法查询"
+                                return@AnonOutlineButton
+                            }
+
+                            val requestedHeight = height
+                            val requestedDate = date
+                            querying = true
+                            error = null
+                            coroutineScope.launch {
+                                try {
+                                    if (hasHeightInput) {
+                                        val queryHeight = requestedHeight.toLongOrNull()
+                                        if (queryHeight == null || queryHeight < 0L) {
+                                            error = "请输入有效区块高度"
+                                            return@launch
+                                        }
+
+                                        val resolvedDate = heightToDateCache[queryHeight]
+                                            ?: withContext(Dispatchers.IO) {
+                                                val timestamp = runCatching {
+                                                    activeWallet.getBlockTimestamp(queryHeight)
+                                                }.getOrDefault(0L)
+                                                if (timestamp > 0L) dateForTimestamp(timestamp) else null
+                                            }
+
+                                        if (height != requestedHeight || date.isNotBlank()) return@launch
+                                        if (resolvedDate == null) {
+                                            error = "无法查询该高度的区块时间，请检查节点连接"
+                                            return@launch
+                                        }
+
+                                        heightToDateCache[queryHeight] = resolvedDate
+                                        date = resolvedDate
+                                        error = null
+                                    } else {
+                                        val parsedDate = parseDate(requestedDate)
+                                        if (parsedDate == null) {
+                                            error = "请输入有效日期，格式为 yyyy-MM-dd"
+                                            return@launch
+                                        }
+
+                                        val resolvedHeight = dateToHeightCache[requestedDate]
+                                            ?: withContext(Dispatchers.IO) {
+                                                runCatching {
+                                                    val calendar = java.util.Calendar.getInstance().apply {
+                                                        time = parsedDate
+                                                        set(java.util.Calendar.HOUR_OF_DAY, 0)
+                                                        set(java.util.Calendar.MINUTE, 0)
+                                                        set(java.util.Calendar.SECOND, 0)
+                                                        set(java.util.Calendar.MILLISECOND, 0)
+                                                    }
+                                                    activeWallet.getBlockChainHeightByDate(
+                                                        calendar.get(java.util.Calendar.YEAR),
+                                                        calendar.get(java.util.Calendar.MONTH) + 1,
+                                                        calendar.get(java.util.Calendar.DAY_OF_MONTH)
+                                                    )
+                                                }.getOrNull()
+                                            }
+
+                                        if (date != requestedDate || height.isNotBlank()) return@launch
+                                        if (resolvedHeight == null || resolvedHeight < 0L) {
+                                            error = "无法查询该日期的区块高度，请检查节点连接或日期"
+                                            return@launch
+                                        }
+
+                                        dateToHeightCache[requestedDate] = resolvedHeight
+                                        height = resolvedHeight.toString()
+                                        error = null
+                                    }
+                                } catch (e: Exception) {
+                                    error = e.message ?: "查询失败，请检查节点连接后重试"
+                                } finally {
+                                    querying = false
                                 }
                             }
                         },
                         modifier = Modifier.fillMaxWidth(.9f)
                     ) {
-                        Text("重置")
+                        if (querying || resetting) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.height(20.dp),
+                                strokeWidth = 2.dp
+                            )
+                        } else {
+                            Text(if (canReset) "重置" else "查询")
+                        }
                     }
                 }
             }
@@ -191,36 +250,13 @@ fun ResetSyncPage(
                 value = height,
                 onValueChange = {
                     error = null
-                    heightDateJob?.cancel()
                     height = it.filter(Char::isDigit)
-                    height.toLongOrNull()?.let { h ->
-                        wallet?.let { activeWallet ->
-                            heightDateJob = coroutineScope.launch {
-                                delay(60L)
-                                val cachedDate = heightToDateCache[h]
-                                if (cachedDate != null) {
-                                    date = cachedDate
-                                    return@launch
-                                }
-                                val timestamp = withContext(Dispatchers.IO) {
-                                    runCatching {
-                                        activeWallet.getBlockTimestamp(h)
-                                    }.getOrDefault(0L)
-                                }
-                                if (timestamp > 0L && height == h.toString()) {
-                                    val resolvedDate = dateForTimestamp(timestamp)
-                                    heightToDateCache[h] = resolvedDate
-                                    date = resolvedDate
-                                } else if (height == h.toString()) {
-                                    error = "无法查询该高度的区块时间，请检查节点连接"
-                                }
-                            }
-                        }
-                    }
+                    // A changed height invalidates the old date until the user runs Query.
+                    date = ""
                 },
                 shape = MaterialTheme.shapes.medium,
                 modifier = Modifier.fillMaxWidth(),
-                enabled = !resetting,
+                enabled = !resetting && !querying,
                 label = { Text("高度恢复") },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
@@ -232,59 +268,13 @@ fun ResetSyncPage(
                 value = date,
                 onValueChange = {
                     error = null
-                    heightDateJob?.cancel()
                     date = it
-                    if (it.length == 10) {
-                        wallet?.let { activeWallet ->
-                            val requestedDate = it
-                            heightDateJob = coroutineScope.launch {
-                                delay(60L)
-                                val cachedHeight = dateToHeightCache[requestedDate]
-                                if (cachedHeight != null) {
-                                    height = cachedHeight.toString()
-                                    return@launch
-                                }
-                                val resolvedHeight = withContext(Dispatchers.IO) {
-                                    runCatching {
-                                        val formatter = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply {
-                                            isLenient = false
-                                        }
-                                        val selected = formatter.parse(requestedDate)
-                                            ?: throw IllegalArgumentException("invalid date")
-                                        val calendar = java.util.Calendar.getInstance().apply {
-                                            time = selected
-                                            set(java.util.Calendar.HOUR_OF_DAY, 0)
-                                            set(java.util.Calendar.MINUTE, 0)
-                                            set(java.util.Calendar.SECOND, 0)
-                                            set(java.util.Calendar.MILLISECOND, 0)
-                                        }
-
-                                        activeWallet.getBlockChainHeightByDate(
-                                            calendar.get(java.util.Calendar.YEAR),
-                                            calendar.get(java.util.Calendar.MONTH) + 1,
-                                            calendar.get(java.util.Calendar.DAY_OF_MONTH)
-                                        )
-                                    }.getOrNull()
-                                }
-
-                                if (resolvedHeight != null && date == requestedDate && resolvedHeight >= 0L) {
-                                    dateToHeightCache[requestedDate] = resolvedHeight
-                                    heightToDateCache[resolvedHeight]?.let { cachedDate ->
-                                        if (cachedDate != requestedDate) {
-                                            heightToDateCache.remove(resolvedHeight)
-                                        }
-                                    }
-                                    height = resolvedHeight.toString()
-                                } else if (date == requestedDate) {
-                                    error = "无法查询该日期的区块高度，请检查节点连接或日期"
-                                }
-                            }
-                        }
-                    }
+                    // A changed date invalidates the old height until the user runs Query.
+                    height = ""
                 },
                 shape = MaterialTheme.shapes.medium,
                 modifier = Modifier.fillMaxWidth(),
-                enabled = !resetting,
+                enabled = !resetting && !querying,
                 label = { Text("日期恢复") },
                 singleLine = true
             )
