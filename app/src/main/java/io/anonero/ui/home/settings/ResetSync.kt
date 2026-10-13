@@ -294,7 +294,7 @@ fun ResetSyncPage(
                         ) {
                             if (querying || resetting) {
                                 CircularProgressIndicator(
-                                    modifier = Modifier.size(24.dp),
+                                    modifier = Modifier.size(28.dp),
                                     strokeWidth = 2.dp
                                 )
                             } else {
