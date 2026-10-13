@@ -31,8 +31,8 @@ jobs:
       - name: Pin XMR pause-refresh barrier fix
         working-directory: external-libs/monero
         run: |
-          git fetch --depth=1 origin 4d1aea20d98d8d2139a3bac3276268bd5c16590e
-          git checkout 4d1aea20d98d8d2139a3bac3276268bd5c16590e
+          git fetch --depth=1 origin d210f883f6abc8a48f253b6a39b36bf8ae6e1da8
+          git checkout d210f883f6abc8a48f253b6a39b36bf8ae6e1da8
 
       - name: Read XMR revision
         id: xmr
