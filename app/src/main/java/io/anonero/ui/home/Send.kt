@@ -97,6 +97,72 @@ import java.io.File
 
 private const val TAG = "Send"
 
+/**
+ * Convert native Monero transaction-construction errors to Chinese before
+ * they are shown in the send screen. Keep amounts and daemon details intact.
+ */
+private fun localizeTransactionError(message: String?): String? {
+    if (message.isNullOrBlank()) return message
+    val error = message.trim()
+    val overallBalance = Regex(
+        """not enough money to transfer, overall balance only\\s+([^,]+),\\s*sent amount\\s+(.+)""",
+        RegexOption.IGNORE_CASE
+    ).find(error)
+    if (overallBalance != null) {
+        return "钱包总余额不足：总余额 ${overallBalance.groupValues[1].trim()} XMR，转账金额 ${overallBalance.groupValues[2].trim()} XMR"
+    }
+    val availableBalance = Regex(
+        """not enough money to transfer, available only\\s+([^,]+),\\s*(?:sent amount|transaction amount)\\s+(.+)""",
+        RegexOption.IGNORE_CASE
+    ).find(error)
+    if (availableBalance != null) {
+        return "可用余额不足：可用余额 ${availableBalance.groupValues[1].trim()} XMR，转账金额及手续费信息：${availableBalance.groupValues[2].trim()}"
+    }
+
+    val lower = error.lowercase()
+    return when {
+        lower.contains("internal error: no unlocked balance in the specified account") ->
+            "内部错误：指定账户中没有可用的未锁定余额"
+        lower.contains("no unlocked balance in the specified account") ->
+            "指定账户中没有可用的未锁定余额"
+        lower.contains("insufficient wallet balance") ->
+            "钱包余额不足"
+        lower.contains("not enough outputs for specified ring size") ->
+            "可用输出不足，无法满足环签名要求。请检查可用输出，必要时先转出无法混合的输出。"
+        lower.contains("failed to find a suitable way to split transactions") ->
+            "无法找到合适的交易拆分方式"
+        lower.contains("transaction was not constructed") ->
+            "交易构建失败"
+        lower.contains("invalid destination address") ->
+            "收款地址无效"
+        lower.contains("destination amount is zero") ->
+            "收款金额不能为零"
+        lower.contains("transaction has no destination") ->
+            "交易没有收款目标"
+        lower.contains("sending all requires one destination address") ->
+            "转出全部余额时只能指定一个收款地址"
+        lower.contains("destinations and amounts are unequal") ->
+            "收款地址数量与金额数量不一致"
+        lower.contains("daemon is busy") ->
+            "节点繁忙，请稍后重试"
+        lower.contains("no connection to daemon") ->
+            "无法连接节点，请检查节点连接状态"
+        lower.startsWith("rpc error:") ->
+            "节点 RPC 错误：${error.substringAfter(':').trim()}"
+        lower.startsWith("failed to get outputs to mix:") ->
+            "获取用于混合的输出失败：${error.substringAfter(':').trim()}"
+        lower.startsWith("unknown transfer error:") ->
+            "未知转账错误：${error.substringAfter(':').trim()}"
+        lower.startsWith("internal error:") ->
+            "内部错误：${error.substringAfter(':').trim()}"
+        lower.startsWith("unexpected error:") ->
+            "意外错误：${error.substringAfter(':').trim()}"
+        lower == "unknown error" ->
+            "未知错误"
+        else -> error
+    }
+}
+
 
 enum class SpendType {
     NORMAL,
@@ -162,7 +228,7 @@ class SendViewModel : ViewModel() {
                     pendingTx
                 }
             } catch (e: Exception) {
-                _txComposeError.postValue(e.message)
+                _txComposeError.postValue(localizeTransactionError(e.message))
                 Timber.tag(TAG).e(e)
                 null
             }
