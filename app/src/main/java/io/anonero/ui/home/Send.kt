@@ -109,26 +109,26 @@ private fun localizeTransactionError(message: String?): String? {
         RegexOption.IGNORE_CASE
     ).find(error)
     if (overallBalance != null) {
-        return "转账资金不足，总余额只有 ${overallBalance.groupValues[1].trim()}，发送金额 ${overallBalance.groupValues[2].trim()}"
+        return "钱包总余额不足：总余额 ${overallBalance.groupValues[1].trim()}，转账金额 ${overallBalance.groupValues[2].trim()}"
     }
     val availableBalance = Regex(
         """not enough money to transfer, available only\s+([^,]+),\s*(?:sent amount|transaction amount)\s+(.+)""",
         RegexOption.IGNORE_CASE
     ).find(error)
     if (availableBalance != null) {
-        return "转账资金不足，可用余额只有 ${availableBalance.groupValues[1].trim()}，${if (error.contains("transaction amount", ignoreCase = true)) "交易金额" else "发送金额"} ${availableBalance.groupValues[2].trim()}"
+        return "可用余额不足：可用余额 ${availableBalance.groupValues[1].trim()}，${if (error.contains("transaction amount", ignoreCase = true)) "交易金额" else "发送金额"} ${availableBalance.groupValues[2].trim()}"
     }
 
     val lower = error.lowercase()
     return when {
         lower.contains("internal error: no unlocked balance in the specified account") ->
-            "内部错误：指定账户中没有未解锁的余额"
+            "内部错误：指定账户中没有可用的未锁定余额"
         lower.contains("no unlocked balance in the specified account") ->
             "指定账户中没有可用的未锁定余额"
         lower.contains("insufficient wallet balance") ->
             "钱包余额不足"
         lower.contains("not enough outputs for specified ring size") ->
-            "可用输出不足，无法满足环签名要求。请检查可用输出，必要时先转出无法混合的输出。"
+            "可用输出不足，无法满足环签名要求"
         lower.contains("failed to find a suitable way to split transactions") ->
             "无法找到合适的交易拆分方式"
         lower.contains("transaction was not constructed") ->
