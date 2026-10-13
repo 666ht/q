@@ -65,14 +65,16 @@ fun WalletProgressIndicator(modifier: Modifier = Modifier, refreshIndicatorProgr
     val showIndefiniteLoading by walletState.isLoading.asLiveData().observeAsState(false)
     val syncProgress by walletState.syncProgress.asLiveData().observeAsState(null)
     val connectionStatus by walletState.connectionStatus.asLiveData().observeAsState(null)
+    val suppressConnectionWaitIndicator by walletState.suppressConnectionWaitIndicator.asLiveData().observeAsState(false)
     val isConnected = connectionStatus == Wallet.ConnectionStatus.ConnectionStatus_Connected
     val isNetworkConnected by networkConnected()
+    val showConnectionWaitIndicator = (!isConnected || !isNetworkConnected) && !suppressConnectionWaitIndicator
     // A custom date-scoped rescan may legitimately have left == 0 while the
     // native rescan is still running. The presence of syncProgress is the
     // authoritative UI signal; completion clears it explicitly.
     val isSyncing = syncProgress != null
     AnimatedVisibility(
-        (showIndefiniteLoading || syncProgress != null || !isConnected || !isNetworkConnected || refreshIndicatorProgress != 0.0f),
+        (showIndefiniteLoading || syncProgress != null || showConnectionWaitIndicator || refreshIndicatorProgress != 0.0f),
         modifier = modifier
             .animateContentSize()
     ) {
