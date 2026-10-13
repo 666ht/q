@@ -321,6 +321,10 @@ class MoneroHandlerThread(
             walletState.finishSync()
 
             walletState.restoreProgressFinalizing = false
+            // The restore terminal guard protects this final refresh only.
+            // Leaving it set would make later ordinary refreshed/newBlock callbacks
+            // return early and keep the generic refresh indicator active.
+            walletState.restoreProgressCompleted = false
             runCatching { onRestoreCompleted() }
                 .onFailure { Timber.tag(name).e(it, "Failed to clear completed restore request") }
         } catch (e: Exception) {
@@ -328,6 +332,7 @@ class MoneroHandlerThread(
             walletState.finishRestoreProgress()
             walletState.finishSync()
             walletState.restoreProgressFinalizing = false
+            walletState.restoreProgressCompleted = false
         }
     }
 
