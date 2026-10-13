@@ -43,6 +43,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.livedata.observeAsState
@@ -191,39 +192,63 @@ class NodeSettingsViewModel(
 
     suspend fun connect(node: Node) {
         withContext(Dispatchers.IO) {
-            val editor = prefs.edit()
+            uriValidationError.postValue(null)
             try {
-                WalletManager.instance?.wallet?.pauseRefresh()
-                editor.putString(
-                    NodeFields.RPC_HOST.value,
-                    node.host
-                )
-                editor.putInt(
-                    NodeFields.RPC_PORT.value,
-                    node.rpcPort
-                )
-                editor.putString(
-                    NodeFields.RPC_USERNAME.value,
-                    node.username
-                )
-                editor.putString(
-                    NodeFields.RPC_PASSWORD.value,
-                    node.password
-                )
+                val walletManager = WalletManager.instance
+                    ?: throw IllegalStateException("钱包管理器未初始化")
+                val wallet = walletManager.wallet
+                    ?: throw IllegalStateException("钱包未打开")
 
-                editor.apply()
-                torService.start()
+                wallet.pauseRefresh()
+                prefs.edit {
+                    putString(NodeFields.RPC_HOST.value, node.host)
+                    putInt(NodeFields.RPC_PORT.value, node.rpcPort)
+                    putString(NodeFields.RPC_USERNAME.value, node.username)
+                    putString(NodeFields.RPC_PASSWORD.value, node.password)
+                }
+
+                // Apply the selected RPC endpoint before reinitializing wallet2.
                 walletHandler.updateDaemon(node)
-                walletState.setLoading(false)
-                walletState.update()
-                WalletManager.instance?.wallet?.init(0)
-                WalletManager.instance?.wallet?.setTrustedDaemon(
-                    true
+                val initialized = wallet.init(0L)
+                if (!initialized) {
+                    val nativeError = wallet.status.errorString
+                    throw IllegalStateException(
+                        nativeError.takeIf { it.isNotBlank() }
+                            ?: "节点初始化失败，请检查地址、端口和网络"
+                    )
+                }
+
+                wallet.setTrustedDaemon(true)
+                wallet.startRefresh()
+
+                // init() may succeed before the asynchronous RPC handshake finishes.
+                // Wait for the actual wallet connection status instead of reporting
+                // the connect action as successful immediately.
+                val deadline = System.currentTimeMillis() + 20_000L
+                while (System.currentTimeMillis() < deadline) {
+                    when (wallet.fullStatus.connectionStatus) {
+                        io.anonero.model.Wallet.ConnectionStatus.ConnectionStatus_Connected -> {
+                            walletState.setLoading(false)
+                            walletState.update()
+                            return@withContext
+                        }
+                        io.anonero.model.Wallet.ConnectionStatus.ConnectionStatus_WrongVersion -> {
+                            throw IllegalStateException("节点版本不兼容，请更换节点")
+                        }
+                        else -> kotlinx.coroutines.delay(300L)
+                    }
+                }
+
+                val nativeError = wallet.status.errorString
+                throw IllegalStateException(
+                    "连接节点超时（${node.host}:${node.rpcPort}）" +
+                        nativeError.takeIf { it.isNotBlank() }?.let { "：$it" }.orEmpty() +
+                        "。请检查节点地址、RPC 端口及节点是否在线"
                 )
-                WalletManager.instance?.wallet?.startRefresh()
             } catch (e: Exception) {
-                Timber.tag(TAG).e(e)
-                uriValidationError.postValue(e.message)
+                Timber.tag(TAG).e(e, "Node connection failed: %s:%d", node.host, node.rpcPort)
+                walletState.setLoading(false)
+                uriValidationError.postValue(e.message ?: "节点连接失败")
             }
         }
     }
@@ -290,9 +315,16 @@ fun NodeSettings(onBackPress: () -> Unit = {}, navigateTo: (Any) -> Unit = {}) {
     var showMenu by remember { mutableStateOf(false) }
     val availableNodes by nodeSettingsVM.nodes.collectAsState(arrayListOf())
     val activeNode by nodeSettingsVM.activeNode.collectAsState(null)
+    val connectionError by nodeSettingsVM.connectionError.observeAsState(null)
     val scope = rememberCoroutineScope()
     val toastState = rememberToasterState()
     val errorPrefix = stringResource(R.string.error_prefix)
+
+    LaunchedEffect(connectionError) {
+        connectionError?.takeIf { it.isNotBlank() }?.let { message ->
+            toastState.show("$errorPrefix $message", type = ToastType.Error)
+        }
+    }
     val resyncInitiatedMessage = stringResource(R.string.resync_initiated_this_may_take_a_while)
 
     if (showNodeDetails)
