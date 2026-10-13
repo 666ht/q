@@ -107,6 +107,7 @@ fun ResetSyncPage(
     var error by remember { mutableStateOf<String?>(null) }
     var querying by remember { mutableStateOf(false) }
     var resetting by remember { mutableStateOf(false) }
+    var actionGeneration by remember { mutableStateOf(0L) }
     val coroutineScope = rememberCoroutineScope()
     val heightToDateCache = remember(wallet) { mutableMapOf<Long, String>() }
     val dateToHeightCache = remember(wallet) { mutableMapOf<String, Long>() }
@@ -176,8 +177,6 @@ fun ResetSyncPage(
                 ) {
                     AnonOutlineButton(
                         onClick = {
-                            if (querying || resetting) return@AnonOutlineButton
-
                             val heightValue = height.toLongOrNull()
                             val dateValue = parseDate(date)
                             val readyToReset = heightValue != null &&
@@ -185,6 +184,9 @@ fun ResetSyncPage(
                                 dateValue != null
 
                             if (readyToReset) {
+                                val requestId = actionGeneration + 1L
+                                actionGeneration = requestId
+                                querying = false
                                 resetting = true
                                 error = null
                                 coroutineScope.launch {
@@ -193,6 +195,7 @@ fun ResetSyncPage(
                                         // daemon height as the end of the rescan.
                                         walletState.resetSyncFromHeight(heightValue!!)
                                     }
+                                    if (requestId != actionGeneration) return@launch
                                     resetting = false
                                     if (result.isSuccess) {
                                         onBackPress()
@@ -235,11 +238,9 @@ fun ResetSyncPage(
                                 dateToHeightCache.containsKey(requestedDate) ||
                                     preferences.contains(heightCacheKey(requestedDate))
                             }
-                            if (!cacheHit && !walletState.canQueryBlockDate()) {
-                                error = "钱包刷新或同步中，未缓存的查询请在当前操作结束后重试"
-                                return@AnonOutlineButton
-                            }
-
+                            val requestId = actionGeneration + 1L
+                            actionGeneration = requestId
+                            resetting = false
                             querying = true
                             error = null
                             coroutineScope.launch {
@@ -263,9 +264,13 @@ fun ResetSyncPage(
                                                 return@launch
                                             }
                                             withContext(Dispatchers.IO) {
-                                                val timestamp = runCatching {
-                                                    activeWallet.getBlockTimestamp(queryHeight)
-                                                }.getOrDefault(0L)
+                                                val timestamp = walletState.executeLatestWalletQuery {
+                                                    it.getBlockTimestamp(queryHeight)
+                                                }.getOrElse {
+                                                    if (requestId != actionGeneration) return@launch
+                                                    error = it.message ?: "查询失败，请检查节点连接后重试"
+                                                    return@launch
+                                                }
                                                 if (timestamp > 0L) dateForTimestamp(timestamp) else null
                                             }
                                         }
@@ -303,21 +308,23 @@ fun ResetSyncPage(
                                                 error = "钱包刷新或同步中，未缓存的查询请在当前操作结束后重试"
                                                 return@launch
                                             }
-                                            withContext(Dispatchers.IO) {
-                                                runCatching {
-                                                    val calendar = java.util.Calendar.getInstance().apply {
-                                                        time = parsedDate
-                                                        set(java.util.Calendar.HOUR_OF_DAY, 0)
-                                                        set(java.util.Calendar.MINUTE, 0)
-                                                        set(java.util.Calendar.SECOND, 0)
-                                                        set(java.util.Calendar.MILLISECOND, 0)
-                                                    }
-                                                    activeWallet.getBlockChainHeightByDate(
-                                                        calendar.get(java.util.Calendar.YEAR),
-                                                        calendar.get(java.util.Calendar.MONTH) + 1,
-                                                        calendar.get(java.util.Calendar.DAY_OF_MONTH)
-                                                    )
-                                                }.getOrNull()
+                                            walletState.executeLatestWalletQuery { queryWallet ->
+                                                val calendar = java.util.Calendar.getInstance().apply {
+                                                    time = parsedDate
+                                                    set(java.util.Calendar.HOUR_OF_DAY, 0)
+                                                    set(java.util.Calendar.MINUTE, 0)
+                                                    set(java.util.Calendar.SECOND, 0)
+                                                    set(java.util.Calendar.MILLISECOND, 0)
+                                                }
+                                                queryWallet.getBlockChainHeightByDate(
+                                                    calendar.get(java.util.Calendar.YEAR),
+                                                    calendar.get(java.util.Calendar.MONTH) + 1,
+                                                    calendar.get(java.util.Calendar.DAY_OF_MONTH)
+                                                )
+                                            }.getOrElse {
+                                                if (requestId != actionGeneration) return@launch
+                                                error = it.message ?: "查询失败，请检查节点连接后重试"
+                                                return@launch
                                             }
                                         }
 
@@ -335,9 +342,11 @@ fun ResetSyncPage(
                                         error = null
                                     }
                                 } catch (e: Exception) {
-                                    error = e.message ?: "查询失败，请检查节点连接后重试"
+                                    if (requestId == actionGeneration) {
+                                        error = e.message ?: "查询失败，请检查节点连接后重试"
+                                    }
                                 } finally {
-                                    querying = false
+                                    if (requestId == actionGeneration) querying = false
                                 }
                             }
                         },
