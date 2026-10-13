@@ -587,6 +587,7 @@ fun TransactionScreen(
                                     )
                                 },
                                 onClick = {
+                                    showMenu = false
                                     navigateTo(CoinsScreenRoute)
                                 }
                             )
