@@ -873,11 +873,17 @@ class WalletState {
             preparationStarted = true
             customRescanInProgress = false
             customRescanJob?.cancelAndJoin()
+            if (operationId != userOperationGeneration.get()) {
+                return Result.failure(IllegalStateException("重置已被更新操作取代"))
+            }
             customRescanJob = null
 
             // If the old scan had already entered its final refresh, wait for that
             // synchronous native work to leave before starting another rescan.
             customRescanFinishJob?.cancelAndJoin()
+            if (operationId != userOperationGeneration.get()) {
+                return Result.failure(IllegalStateException("重置已被更新操作取代"))
+            }
             customRescanFinishJob = null
 
             customRescanScanStarted.set(false)
@@ -893,6 +899,9 @@ class WalletState {
             val pendingRestoreRefresh = scanDataRefreshJob
             restoreProgressInProgress = false
             pendingRestoreRefresh?.cancelAndJoin()
+            if (operationId != userOperationGeneration.get()) {
+                return Result.failure(IllegalStateException("重置已被更新操作取代"))
+            }
             finishRestoreProgress()
             restoreProgressCompleted = false
             restoreProgressFinalizing = false
