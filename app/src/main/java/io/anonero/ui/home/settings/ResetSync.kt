@@ -22,6 +22,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -82,6 +83,39 @@ fun ResetSyncPage(
     val selectedHeight = height.toLongOrNull()
     val selectedDate = parseDate(date)
     val canReset = selectedHeight != null && selectedHeight >= 0L && selectedDate != null
+
+    // On entry, resolve the saved restore height to its date so the two fields start in sync.
+    // This is an initialization lookup only; manual edits still require the Query button.
+    LaunchedEffect(wallet) {
+        val initialHeight = height.toLongOrNull()
+        val activeWallet = wallet
+        if (activeWallet != null && initialHeight != null && initialHeight >= 0L && date.isBlank()) {
+            querying = true
+            error = null
+            try {
+                delay(80L)
+                val resolvedDate = heightToDateCache[initialHeight]
+                    ?: withContext(Dispatchers.IO) {
+                        val timestamp = runCatching {
+                            activeWallet.getBlockTimestamp(initialHeight)
+                        }.getOrDefault(0L)
+                        if (timestamp > 0L) dateForTimestamp(timestamp) else null
+                    }
+                if (height.toLongOrNull() == initialHeight && date.isBlank()) {
+                    if (resolvedDate != null) {
+                        heightToDateCache[initialHeight] = resolvedDate
+                        date = resolvedDate
+                    } else {
+                        error = "无法查询该高度的区块时间，请检查节点连接"
+                    }
+                }
+            } catch (e: Exception) {
+                error = e.message ?: "查询失败，请检查节点连接后重试"
+            } finally {
+                querying = false
+            }
+        }
+    }
 
     Scaffold(
         topBar = {
