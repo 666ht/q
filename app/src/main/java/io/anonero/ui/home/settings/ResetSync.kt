@@ -165,9 +165,38 @@ fun ResetSyncPage(
     val heightToDateCache = remember(wallet) { mutableMapOf<Long, String>() }
     val dateToHeightCache = remember(wallet) { mutableMapOf<String, Long>() }
 
+    fun cachedDateForHeight(heightValue: Long): String? {
+        val cached = heightToDateCache[heightValue]
+            ?: preferences.getString(dateCacheKey(heightValue), null)
+        return cached?.takeIf { parseDate(it) != null }
+    }
+
+    fun cachedHeightForDate(dateValue: String): Long? {
+        val cached = dateToHeightCache[dateValue]
+            ?: preferences.getLong(heightCacheKey(dateValue), Long.MIN_VALUE)
+                .takeIf { it != Long.MIN_VALUE }
+        return cached?.takeIf { it >= 0L }
+    }
+
+    // Store a resolved height/date relationship in both directions together,
+    // so either lookup can display the counterpart without another wallet query.
+    fun cacheHeightDatePair(heightValue: Long, dateValue: String) {
+        if (heightValue < 0L || parseDate(dateValue) == null) return
+        heightToDateCache[heightValue] = dateValue
+        dateToHeightCache[dateValue] = heightValue
+        preferences.edit()
+            .putString(dateCacheKey(heightValue), dateValue)
+            .putLong(heightCacheKey(dateValue), heightValue)
+            .apply()
+    }
+
     val selectedHeight = height.toLongOrNull()
     val selectedDate = parseDate(date)
-    val canReset = selectedHeight != null && selectedHeight >= 0L && selectedDate != null
+    val canReset = selectedHeight != null &&
+        selectedHeight >= 0L &&
+        selectedDate != null &&
+        (cachedDateForHeight(selectedHeight) == date ||
+            cachedHeightForDate(date) == selectedHeight)
     var queryByHeight by remember(wallet) { mutableStateOf(true) }
 
     // Resolve the saved height's date in the background. Initialization must not
@@ -190,10 +219,7 @@ fun ResetSyncPage(
                     }
                 if (height.toLongOrNull() == initialHeight && date.isBlank()) {
                     if (resolvedDate != null) {
-                        heightToDateCache[initialHeight] = resolvedDate
-                        preferences.edit()
-                            .putString(dateCacheKey(initialHeight), resolvedDate)
-                            .apply()
+                        cacheHeightDatePair(initialHeight, resolvedDate)
                         date = resolvedDate
                     } else {
                         error = "无法查询该高度的区块时间，请检查节点连接"
@@ -291,7 +317,7 @@ fun ResetSyncPage(
                                     val cachedDate = heightToDateCache[queryHeight]
                                         ?: preferences.getString(dateCacheKey(queryHeight), null)
                                     if (!cachedDate.isNullOrBlank() && parseDate(cachedDate) != null) {
-                                        heightToDateCache[queryHeight] = cachedDate
+                                        cacheHeightDatePair(queryHeight, cachedDate)
                                         date = cachedDate
                                         error = null
                                         queryByHeight = true
@@ -307,7 +333,7 @@ fun ResetSyncPage(
                                             Long.MIN_VALUE
                                         ).takeIf { it != Long.MIN_VALUE }
                                     if (cachedHeight != null && cachedHeight >= 0L) {
-                                        dateToHeightCache[requestedDate] = cachedHeight
+                                        cacheHeightDatePair(cachedHeight, requestedDate)
                                         height = cachedHeight.toString()
                                         error = null
                                         queryByHeight = false
@@ -352,10 +378,7 @@ fun ResetSyncPage(
                                             return@launch
                                         }
 
-                                        heightToDateCache[queryHeight] = resolvedDate
-                                        preferences.edit()
-                                            .putString(dateCacheKey(queryHeight), resolvedDate)
-                                            .apply()
+                                        cacheHeightDatePair(queryHeight, resolvedDate)
                                         date = resolvedDate
                                         error = null
                                     } else {
@@ -402,10 +425,7 @@ fun ResetSyncPage(
                                             return@launch
                                         }
 
-                                        dateToHeightCache[requestedDate] = resolvedHeight
-                                        preferences.edit()
-                                            .putLong(heightCacheKey(requestedDate), resolvedHeight)
-                                            .apply()
+                                        cacheHeightDatePair(resolvedHeight, requestedDate)
                                         height = resolvedHeight.toString()
                                         error = null
                                     }
@@ -453,7 +473,15 @@ fun ResetSyncPage(
                     error = null
                     height = it.filter(Char::isDigit)
                     queryByHeight = true
-                    // Height and date are independent fields; editing either never clears the other.
+                    val enteredHeight = height.toLongOrNull()
+                    if (enteredHeight != null && enteredHeight >= 0L) {
+                        cachedDateForHeight(enteredHeight)?.let { cachedDate ->
+                            cacheHeightDatePair(enteredHeight, cachedDate)
+                            date = cachedDate
+                            error = null
+                        }
+                    }
+                    // Clearing height leaves date untouched; a cached height shows its date immediately.
                 },
                 shape = MaterialTheme.shapes.medium,
                 modifier = Modifier.fillMaxWidth(),
@@ -471,7 +499,15 @@ fun ResetSyncPage(
                     error = null
                     date = it
                     queryByHeight = false
-                    // Date and height are independent fields; editing either never clears the other.
+                    val enteredDate = parseDate(date)
+                    if (enteredDate != null) {
+                        cachedHeightForDate(date)?.let { cachedHeight ->
+                            cacheHeightDatePair(cachedHeight, date)
+                            height = cachedHeight.toString()
+                            error = null
+                        }
+                    }
+                    // Clearing date leaves height untouched; a cached date shows its height immediately.
                 },
                 shape = MaterialTheme.shapes.medium,
                 modifier = Modifier.fillMaxWidth(),
