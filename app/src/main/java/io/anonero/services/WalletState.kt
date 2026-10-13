@@ -73,6 +73,9 @@ class WalletState {
     // A native block callback wakes the progress reader immediately; the timeout is a fallback.
     private val customRescanProgressSignals = Channel<Unit>(capacity = Channel.CONFLATED)
     private var customRescanJob: Job? = null
+    // Track finalization so a new user-requested reset can wait for the prior
+    // custom rescan to release the native wallet before taking over.
+    private var customRescanFinishJob: Job? = null
     private val customRescanFinishStarted = AtomicBoolean(false)
     private val customRescanRequesting = AtomicBoolean(false)
     // A manual refresh pressed during sync is replayed at the next safe native
@@ -689,13 +692,6 @@ class WalletState {
             customRescanRequesting.set(false)
             return Result.failure(IllegalStateException("Wallet not initialized"))
         }
-        if (customRescanInProgress || customRescanFinalizing || restoreProgressFinalizing) {
-            customRescanRequesting.set(false)
-            return Result.failure(
-                IllegalStateException("A rescan is already running or finishing")
-            )
-        }
-
         var preparationStarted = false
         var refreshPaused = false
         try {
@@ -716,17 +712,25 @@ class WalletState {
             //
             // Set the preparation gate before pausing/waiting for native wallet locks:
             // callbacks from the old sync must not be mistaken for this new scan.
+            // A new explicit reset supersedes an older scan. Set the gate first
+            // so callbacks from the old operation cannot publish progress or finish it.
             customRescanPreparing = true
             preparationStarted = true
-            customRescanJob?.cancel()
+            customRescanInProgress = false
+            customRescanJob?.cancelAndJoin()
             customRescanJob = null
+
+            // If the old scan had already entered its final refresh, wait for that
+            // synchronous native work to leave before starting another rescan.
+            customRescanFinishJob?.cancelAndJoin()
+            customRescanFinishJob = null
+
             customRescanScanStarted.set(false)
             customRescanFinishStarted.set(false)
             customRescanFinished = false
             customRescanFinalizing = false
             customRescanStartHeight = null
             customRescanDayEndHeight = null
-            customRescanInProgress = false
 
             // A manual reset supersedes mnemonic-restore progress but does not
             // change the wallet's stored restore height. Wait for any in-flight
@@ -869,7 +873,7 @@ class WalletState {
 
         // Stop the native refresh from the IO coroutine, never on a JNI callback
         // thread. Native callbacks are invoked while the listener mutex is held.
-        customRescanScope.launch {
+        customRescanFinishJob = customRescanScope.launch {
             runCatching { wallet.pauseRefresh() }
                 .onFailure { Timber.tag(TAG).e(it, "Failed to stop custom rescan at %d", endHeight) }
             completeCustomRescan(wallet, endHeight)
