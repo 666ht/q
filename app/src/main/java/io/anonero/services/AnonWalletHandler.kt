@@ -80,7 +80,8 @@ class AnonWalletHandler(
         } else {
             0L
         }
-        if (savedRestoreHeight > 0L && !wallet.nativeSynchronized) {
+        val restoreScanPending = savedRestoreHeight > 0L && !wallet.nativeSynchronized
+        if (restoreScanPending) {
             walletState.beginRestoreProgress(savedRestoreHeight)
             // Arm the same preparation gate used by the in-wallet reset before the
             // listener is attached, so startup callbacks cannot publish the daemon's
@@ -101,9 +102,15 @@ class AnonWalletHandler(
         }
 
         wallet.setListener(handler)
-        wallet.refreshHistory()
+        // A selected-height mnemonic restore must enter the shared reset scan directly.
+        // Its finalization refreshes history and outputs; do not refresh history before scanning.
+        if (!restoreScanPending) {
+            wallet.refreshHistory()
+        }
         handler?.start()
-        walletState.setLoading(true)
+        if (!restoreScanPending) {
+            walletState.setLoading(true)
+        }
         walletState.update()
         try {
             val host = prefs.getString(NodeFields.RPC_HOST.value, "")
@@ -141,7 +148,7 @@ class AnonWalletHandler(
             }
 
             walletState.update()
-            if (wallet.isSynchronized) {
+            if (!restoreScanPending && wallet.isSynchronized) {
                 wallet.refreshHistory()
             }
 
@@ -154,7 +161,9 @@ class AnonWalletHandler(
                 wallet.store()
             }
             if (wallet.isInitialized) {
-                wallet.refreshHistory()
+                if (!restoreScanPending || wallet.nativeSynchronized) {
+                    wallet.refreshHistory()
+                }
                 wallet.setTrustedDaemon(true)
                 val effectiveRestoreHeight = if (needsRestoreRescan) {
                     savedRestoreHeight.takeIf { it > 0L }
