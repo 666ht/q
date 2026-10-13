@@ -68,6 +68,9 @@ class WalletState {
     private var _blockUpdates = AtomicBoolean(false)
     val hideAmountsFlow = MutableStateFlow(false)
     private val _isLoading = MutableStateFlow(false)
+    // Hide the connection-wait spinner while a selected-height scan is being prepared.
+    // The real remaining-block counter becomes visible as soon as the native cursor is valid.
+    private val _suppressConnectionWaitIndicator = MutableStateFlow(false)
     private var _isSyncing = AtomicBoolean(false)
     private val _isWiping = AtomicBoolean(false)
     private val _backgroundSync = MutableStateFlow(false)
@@ -132,9 +135,17 @@ class WalletState {
     // or publish progress for the new scan before the native reset is accepted.
     @Volatile
     var customRescanPreparing: Boolean = false
+        set(value) {
+            field = value
+            updateScanPreparationIndicator()
+        }
 
     @Volatile
     var customRescanInProgress: Boolean = false
+        set(value) {
+            field = value
+            updateScanPreparationIndicator()
+        }
 
     @Volatile
     var customRescanFinished: Boolean = false
@@ -344,6 +355,13 @@ class WalletState {
     val balanceInfo: Flow<Long?> = _balanceInfo
     val unLockedBalance: Flow<Long?> = _unLockedBalance
     val isLoading: Flow<Boolean> = _isLoading
+    val suppressConnectionWaitIndicator: Flow<Boolean> = _suppressConnectionWaitIndicator
+
+    private fun updateScanPreparationIndicator() {
+        _suppressConnectionWaitIndicator.value =
+            (customRescanRequesting.get() || customRescanPreparing || customRescanInProgress) &&
+                _syncProgress.value == null
+    }
     val isSyncing get():Boolean = _isSyncing.get()
     val backgroundSync get():Boolean = _backgroundSync.value
     val backgroundSyncFlow: Flow<Boolean> = _backgroundSync
@@ -669,6 +687,7 @@ class WalletState {
             if (keepProgressVisible) syncProgress else null
         }
         _isSyncing.set(keepProgressVisible)
+        updateScanPreparationIndicator()
         // A real cursor update replaces the indeterminate waiting state.
         _isLoading.value = false
         if (done && !scanFinalizing) {
@@ -976,6 +995,7 @@ class WalletState {
         val wallet = getWallet
             ?: return Result.failure(IllegalStateException("Wallet not initialized"))
         customRescanRequesting.set(true)
+        updateScanPreparationIndicator()
         var preparationStarted = false
         var refreshPaused = false
         try {
@@ -1108,6 +1128,7 @@ class WalletState {
             if (operationId == userOperationGeneration.get()) {
                 customRescanPreparing = false
                 customRescanRequesting.set(false)
+                updateScanPreparationIndicator()
             }
         }
     }
