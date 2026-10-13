@@ -4,6 +4,7 @@ import io.anonero.model.PendingTransaction
 import io.anonero.model.Wallet
 import io.anonero.model.WalletListener
 import io.anonero.model.WalletManager
+import io.anonero.services.calculateSyncProgress
 import timber.log.Timber
 
 /**
@@ -177,15 +178,9 @@ class MoneroHandlerThread(
                 return
             }
         }
-        val progress = if (effectiveTarget <= progressStart) {
-            1f
-        } else {
-            ((currentHeight - progressStart).toDouble() /
-                (effectiveTarget - progressStart).toDouble())
-                .coerceIn(0.0, 1.0)
-                .toFloat()
-        }
-        walletState.syncUpdate(SyncProgress(progress, left))
+        val progress = calculateSyncProgress(progressStart, currentHeight, effectiveTarget)
+        // Keep remaining-blocks and percentage derived from the same calculation.
+        walletState.syncUpdate(progress.copy(left = left))
     }
 
     override fun updated() {
