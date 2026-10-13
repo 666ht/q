@@ -52,6 +52,7 @@ class MoneroHandlerThread(
         // Custom-height scans have their own hard end and progress cursor. Do not
         // let the daemon's full target or native synchronized flag finish them.
         if (walletState.customRescanInProgress) {
+            walletState.requestScanDataRefresh()
             walletState.onCustomRescanBlock(height)
             return
         }
@@ -75,7 +76,7 @@ class MoneroHandlerThread(
         if (walletState.restoreProgressInProgress) {
             // Show discovered balance/transactions while the restore scan is
             // still running, without changing the sync/progress lifecycle.
-            walletState.requestRestoreDataRefresh()
+            walletState.requestScanDataRefresh()
             updateSyncProgress(height)
             return
         }
@@ -157,29 +158,24 @@ class MoneroHandlerThread(
             else -> 0L
         }
 
-        val left = (effectiveTarget - currentHeight).coerceAtLeast(0L)
+        val progress = calculateSyncProgress(progressStart, currentHeight, effectiveTarget)
+        val left = progress.left
         if (restoreActive) {
             if (walletState.restoreProgressCompleted) return
             Timber.tag(name).d(
                 "restore progress start=%d wallet=%d daemon=%d target=%d left=%d",
                 restoreStart, syncHeight, daemonHeight, effectiveTarget, left
             )
-            // Once the real wallet scan cursor reaches the live daemon tip,
-            // close restore synchronization immediately. Do not start another
-            // refresh/sync cycle after the progress reaches 100%.
+            // Remaining blocks and percentage share exactly the same calculation.
+            // A zero remainder starts the final refresh, but its terminal state stays
+            // visible until finalizeRestoreSynchronization publishes the final data.
             if (left == 0L) {
-                // Remaining blocks are the restore completion authority.
-                // Publish the final zero-remaining state, then close sync and
-                // refresh wallet data immediately. Any later native callbacks
-                // are ignored until a new restore starts.
-                walletState.syncUpdate(SyncProgress(1f, 0L))
+                walletState.syncUpdate(progress)
                 walletState.restoreProgressCompleted = true
                 completeSynchronization()
                 return
             }
         }
-        val progress = calculateSyncProgress(progressStart, currentHeight, effectiveTarget)
-        // Keep remaining-blocks and percentage derived from the same calculation.
         walletState.syncUpdate(progress)
     }
 
@@ -324,26 +320,24 @@ class MoneroHandlerThread(
         try {
             wallet.setSynchronized()
 
-            // Remaining blocks already reached zero. Hide synchronization first,
-            // then refresh history/coins without exposing intermediate empty data.
+            // Match custom-rescan completion: keep 100% and zero remaining visible
+            // while refreshing the final history and outputs, then hide progress.
             walletState.syncUpdate(SyncProgress(1f, 0L))
             walletState.finishRestoreProgress()
-            walletState.finishSync()
-
-            // Replace the old three-second completion animation with the
-            // existing normal wallet refresh immediately after synchronization.
-            refresh(true)
+            wallet.refreshHistory()
+            wallet.refreshCoins(force = true)
             wallet.store()
             walletState.update()
+            walletState.finishSync()
 
             walletState.restoreProgressFinalizing = false
             runCatching { onRestoreCompleted() }
                 .onFailure { Timber.tag(name).e(it, "Failed to clear completed restore request") }
         } catch (e: Exception) {
             Timber.tag(name).e(e, "Failed to finalize restored wallet data")
-            walletState.restoreProgressFinalizing = false
             walletState.finishRestoreProgress()
             walletState.finishSync()
+            walletState.restoreProgressFinalizing = false
         }
     }
 
