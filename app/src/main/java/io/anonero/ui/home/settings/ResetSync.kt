@@ -228,6 +228,41 @@ fun ResetSyncPage(
                                 else -> false
                             }
 
+                            // A cache hit is a display-only lookup. Resolve it synchronously
+                            // before showing the spinner or entering executeLatestWalletQuery(),
+                            // which intentionally pauses refresh and clears active scan UI state.
+                            // This lets cached queries return instantly without interrupting a scan.
+                            if (queryHeightMode) {
+                                val queryHeight = requestedHeight.toLongOrNull()
+                                if (queryHeight != null && queryHeight >= 0L) {
+                                    val cachedDate = heightToDateCache[queryHeight]
+                                        ?: preferences.getString(dateCacheKey(queryHeight), null)
+                                    if (!cachedDate.isNullOrBlank() && parseDate(cachedDate) != null) {
+                                        heightToDateCache[queryHeight] = cachedDate
+                                        date = cachedDate
+                                        error = null
+                                        queryByHeight = true
+                                        return@AnonOutlineButton
+                                    }
+                                }
+                            } else {
+                                val parsedDate = parseDate(requestedDate)
+                                if (parsedDate != null) {
+                                    val cachedHeight = dateToHeightCache[requestedDate]
+                                        ?: preferences.getLong(
+                                            heightCacheKey(requestedDate),
+                                            Long.MIN_VALUE
+                                        ).takeIf { it != Long.MIN_VALUE }
+                                    if (cachedHeight != null && cachedHeight >= 0L) {
+                                        dateToHeightCache[requestedDate] = cachedHeight
+                                        height = cachedHeight.toString()
+                                        error = null
+                                        queryByHeight = false
+                                        return@AnonOutlineButton
+                                    }
+                                }
+                            }
+
                             val requestId = actionGeneration + 1L
                             actionGeneration = requestId
                             resetting = false
