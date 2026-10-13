@@ -253,7 +253,8 @@ class AnonWalletHandler(
                 )
             )
             Timber.tag(TAG).e(e, "Failed to configure daemon")
-            throw e
+            // Match the known-working #1070 behavior: keep the wallet refresh
+            // startup path alive, while retaining the real exception in logs.
         }
     }
 
