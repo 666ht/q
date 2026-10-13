@@ -20,6 +20,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.launch
@@ -91,6 +92,11 @@ class WalletState {
     // Switching the native wallet while a foreground scan is active can race its refresh worker.
     private val nativeBackgroundSyncActive = AtomicBoolean(false)
     private val customRescanScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    // Serialize user-requested refresh/reset/query operations. The generation changes
+    // as soon as a new action is requested, so older queued work can never take over later.
+    private val userOperationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val userOperationMutex = Mutex()
+    private val userOperationGeneration = AtomicLong(0L)
     // A native block callback wakes the progress reader immediately; the timeout is a fallback.
     private val customRescanProgressSignals = Channel<Unit>(capacity = Channel.CONFLATED)
     private var customRescanJob: Job? = null
@@ -682,53 +688,149 @@ class WalletState {
 
     fun refresh() {
         val wallet = getWallet
-        if (wallet?.isInitialized != true) {
-            return
+        if (wallet?.isInitialized != true) return
+
+        // A manual refresh is an explicit newest-user-operation request. First
+        // signal cancellation immediately; then wait for the native worker and
+        // other user actions to leave their critical section before taking over.
+        val operationId = userOperationGeneration.incrementAndGet()
+        userOperationScope.launch {
+            runCatching { wallet.pauseRefresh() }
+                .onFailure { Timber.tag(TAG).w(it, "Could not signal cancellation before manual refresh") }
+
+            userOperationMutex.withLock {
+                runCatching { wallet.pauseRefresh() }
+                if (operationId != userOperationGeneration.get()) return@withLock
+
+                cancelScanUiStateForLatestOperation()
+                deferredManualRefresh.set(false)
+                customRescanFinished = false
+                restoreProgressCompleted = false
+
+                if (wallet.fullStatus.connectionStatus == Wallet.ConnectionStatus.ConnectionStatus_Connected) {
+                    setLoading(true)
+                    wallet.startRefresh()
+                }
+                if (operationId == userOperationGeneration.get()) {
+                    runCatching { wallet.refreshHistory() }
+                        .onFailure { Timber.tag(TAG).e(it, "Manual refresh history update failed") }
+                }
+            }
+        }
+    }
+
+    /**
+     * Run a cache-miss date/height query as the latest explicit wallet operation.
+     * pauseRefresh() invalidates any in-flight native block-date binary search; the
+     * generation check prevents an older query from publishing after a newer action.
+     */
+    suspend fun <T> executeLatestWalletQuery(query: (Wallet) -> T): Result<T> {
+        val wallet = getWallet
+            ?: return Result.failure(IllegalStateException("Wallet not initialized"))
+        val operationId = userOperationGeneration.incrementAndGet()
+        val stopJob = userOperationScope.launch {
+            runCatching { wallet.pauseRefresh() }
+                .onFailure { Timber.tag(TAG).w(it, "Could not signal cancellation before block-date query") }
         }
 
-        // A native scan owns the wallet's mutable blockchain and transaction
-        // state until its next callback/finalization. Starting another JNI
-        // history read here can race the scan, freeze reset, or crash. The active
-        // scan already publishes incremental data and performs a final history
-        // refresh, so coalesce manual refreshes into that existing operation.
-        val scanOwnsWallet = customRescanPreparing ||
-            customRescanInProgress ||
-            customRescanFinalizing ||
-            restoreProgressInProgress ||
-            restoreProgressFinalizing ||
-            isSyncing ||
-            _isLoading.value
-        if (scanOwnsWallet) {
-            deferredManualRefresh.set(true)
-            Timber.tag(TAG).i("Manual refresh deferred until the active wallet scan reaches a safe callback")
-            return
-        }
+        return try {
+            stopJob.join()
+            userOperationMutex.withLock {
+                if (operationId != userOperationGeneration.get()) {
+                    return@withLock Result.failure(IllegalStateException("查询已被更新操作取代"))
+                }
 
+                // Repeat the barrier after obtaining the coordinator: an older operation
+                // may have queued work after the first stop signal was sent.
+                wallet.pauseRefresh()
+                if (operationId != userOperationGeneration.get()) {
+                    return@withLock Result.failure(IllegalStateException("查询已被更新操作取代"))
+                }
+
+                cancelScanUiStateForLatestOperation()
+                val value = withContext(Dispatchers.IO) { query(wallet) }
+                if (operationId != userOperationGeneration.get()) {
+                    return@withLock Result.failure(IllegalStateException("查询已被更新操作取代"))
+                }
+
+                if (wallet.fullStatus.connectionStatus == Wallet.ConnectionStatus.ConnectionStatus_Connected) {
+                    setLoading(true)
+                    wallet.startRefresh()
+                }
+                Result.success(value)
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    private suspend fun cancelScanUiStateForLatestOperation() {
+        customRescanPreparing = true
+        customRescanJob?.cancelAndJoin()
+        customRescanJob = null
+        customRescanFinishJob?.cancelAndJoin()
+        customRescanFinishJob = null
+        scanDataRefreshJob?.cancelAndJoin()
+        scanDataRefreshJob = null
+        scanDataRefreshRunning.set(false)
+        customRescanScanStarted.set(false)
+        customRescanFinishStarted.set(false)
+        customRescanInProgress = false
+        customRescanFinalizing = false
         customRescanFinished = false
-
-        // A user-triggered refresh starts the normal background refresh loop,
-        // exactly like the upstream wallet implementation. Clear only the
-        // completed-restore gate so its next refreshed() callback is handled as
-        // a normal refresh completion.
+        customRescanStartHeight = null
+        customRescanDayEndHeight = null
+        restoreProgressStartHeight = null
+        restoreProgressRescanStarted = false
+        restoreProgressInProgress = false
         restoreProgressCompleted = false
-
-        if (wallet.fullStatus.connectionStatus == Wallet.ConnectionStatus.ConnectionStatus_Connected) {
-            setLoading(true)
-            wallet.startRefresh()
-        }
-        wallet.refreshHistory()
+        restoreProgressFinalizing = false
+        _syncProgress.value = null
+        _isSyncing.set(false)
+        setLoading(false)
+        customRescanPreparing = false
     }
 
     suspend fun resetSyncFromHeight(height: Long, dayEndHeight: Long? = null): Result<Boolean> {
-        if (!customRescanRequesting.compareAndSet(false, true)) {
-            return Result.failure(IllegalStateException("A reset is already being prepared"))
+        val wallet = getWallet
+            ?: return Result.failure(IllegalStateException("Wallet not initialized"))
+        val operationId = userOperationGeneration.incrementAndGet()
+        val stopJob = userOperationScope.launch {
+            runCatching { wallet.pauseRefresh() }
+                .onFailure { Timber.tag(TAG).w(it, "Could not signal cancellation before reset") }
+        }
+
+        return try {
+            stopJob.join()
+            userOperationMutex.withLock {
+                if (operationId != userOperationGeneration.get()) {
+                    return@withLock Result.failure(IllegalStateException("重置已被更新操作取代"))
+                }
+                // Stop again after taking ownership, covering work an older task
+                // might have queued just before it noticed the newer generation.
+                wallet.pauseRefresh()
+                if (operationId != userOperationGeneration.get()) {
+                    return@withLock Result.failure(IllegalStateException("重置已被更新操作取代"))
+                }
+                resetSyncFromHeightInternal(height, dayEndHeight, operationId)
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    private suspend fun resetSyncFromHeightInternal(
+        height: Long,
+        dayEndHeight: Long?,
+        operationId: Long
+    ): Result<Boolean> {
+        if (operationId != userOperationGeneration.get()) {
+            return Result.failure(IllegalStateException("重置已被更新操作取代"))
         }
 
         val wallet = getWallet
-        if (wallet == null) {
-            customRescanRequesting.set(false)
-            return Result.failure(IllegalStateException("Wallet not initialized"))
-        }
+            ?: return Result.failure(IllegalStateException("Wallet not initialized"))
+        customRescanRequesting.set(true)
         var preparationStarted = false
         var refreshPaused = false
         try {
@@ -784,12 +886,26 @@ class WalletState {
 
             wallet.pauseRefresh()
             refreshPaused = true
+            if (operationId != userOperationGeneration.get()) {
+                return Result.failure(IllegalStateException("重置已被更新操作取代"))
+            }
 
             // The native implementation serializes the clear/rescan request behind
             // any currently executing refresh. This method therefore runs on IO,
             // never on the UI thread (see ResetSyncPage).
             if (!wallet.rescanBlockchainAsyncFromHeight(height)) {
                 throw IllegalStateException("Blockchain rescan was not started")
+            }
+            if (operationId != userOperationGeneration.get()) {
+                runCatching { wallet.pauseRefresh() }
+                return Result.failure(IllegalStateException("重置已被更新操作取代"))
+            }
+            // pauseRefresh() disables the native refresh loop. Start it only after
+            // the custom-height request is queued and still owns the newest generation.
+            wallet.startRefresh()
+            if (operationId != userOperationGeneration.get()) {
+                runCatching { wallet.pauseRefresh() }
+                return Result.failure(IllegalStateException("重置已被更新操作取代"))
             }
 
             // The native request has been accepted and the old scan cursor cleared.
@@ -805,7 +921,7 @@ class WalletState {
             )
             return Result.success(true)
         } catch (e: Exception) {
-            if (preparationStarted) {
+            if (preparationStarted && operationId == userOperationGeneration.get()) {
                 // Keep callback suppression enabled while state is reset and the
                 // existing refresh loop is resumed after a failed request.
                 customRescanPreparing = true
@@ -828,8 +944,10 @@ class WalletState {
             Timber.tag(TAG).e(e, "Failed to reset wallet scan from custom height: %d", height)
             return Result.failure(e)
         } finally {
-            customRescanPreparing = false
-            customRescanRequesting.set(false)
+            if (operationId == userOperationGeneration.get()) {
+                customRescanPreparing = false
+                customRescanRequesting.set(false)
+            }
         }
     }
 
