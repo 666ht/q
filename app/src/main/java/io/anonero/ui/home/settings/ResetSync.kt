@@ -72,21 +72,52 @@ fun ResetSyncPage(
     val dateToHeightCache = remember(wallet) { mutableMapOf<String, Long>() }
 
     LaunchedEffect(wallet) {
-        val restoreHeight = wallet?.getRestoreHeight()
-        if (restoreHeight != null) {
-            val cachedDate = heightToDateCache[restoreHeight]
-            if (cachedDate != null) {
-                date = cachedDate
-            } else {
-                val timestamp = withContext(Dispatchers.IO) {
-                    runCatching { wallet.getBlockTimestamp(restoreHeight) }.getOrDefault(0L)
+        val activeWallet = wallet ?: return@LaunchedEffect
+        val restoreHeight = activeWallet.getRestoreHeight() ?: return@LaunchedEffect
+        val restoreHeightText = restoreHeight.toString()
+
+        // The wallet can become available after this screen is first composed.
+        // Fill the height only when it is still empty; never overwrite user input.
+        if (height.isBlank()) {
+            height = restoreHeightText
+        }
+        if (height != restoreHeightText) return@LaunchedEffect
+
+        val cachedDate = heightToDateCache[restoreHeight]
+        if (cachedDate != null) {
+            date = cachedDate
+            error = null
+            return@LaunchedEffect
+        }
+
+        // A single failed RPC must not leave the date field blank forever.
+        // Retry briefly while this screen remains open and the selected height is unchanged.
+        for (attempt in 0 until 8) {
+            if (height != restoreHeightText) return@LaunchedEffect
+
+            val timestamp = withContext(Dispatchers.IO) {
+                try {
+                    activeWallet.getBlockTimestamp(restoreHeight)
+                } catch (_: Exception) {
+                    0L
                 }
-                if (timestamp > 0L && height == restoreHeight.toString()) {
+            }
+
+            if (timestamp > 0L) {
+                if (height == restoreHeightText) {
                     val resolvedDate = dateForTimestamp(timestamp)
                     heightToDateCache[restoreHeight] = resolvedDate
                     date = resolvedDate
+                    error = null
                 }
+                return@LaunchedEffect
             }
+
+            if (attempt < 7) delay(1000L)
+        }
+
+        if (height == restoreHeightText) {
+            error = "无法获取高度 $restoreHeight 对应的日期，请检查节点连接后重试"
         }
     }
     Scaffold(
