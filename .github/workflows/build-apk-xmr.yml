@@ -28,10 +28,10 @@ jobs:
           submodules: recursive
           fetch-depth: 1
 
-      - name: Pin XMR restore-height fix
+      - name: Pin XMR pause-refresh barrier fix
         working-directory: external-libs/monero
         run: |
-          git fetch --depth=1 origin 39c6177076faebbefbc1aca430240e0a4a48dcf7
+          git fetch --depth=1 origin 4d1aea20d98d8d2139a3bac3276268bd5c16590e
           git checkout 39c6177076faebbefbc1aca430240e0a4a48dcf7
 
       - name: Read XMR revision
