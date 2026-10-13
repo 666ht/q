@@ -31,8 +31,8 @@ jobs:
       - name: Pin XMR refresh-cancellation fix
         working-directory: external-libs/monero
         run: |
-          git fetch --depth=1 origin cceb5e3d8207e937480de0ada755b6f42ab6235a
-          git checkout cceb5e3d8207e937480de0ada755b6f42ab6235a
+          git fetch --depth=1 origin 1a94c98384e6d8deb2334d608249fa286ecb4326
+          git checkout 1a94c98384e6d8deb2334d608249fa286ecb4326
 
       - name: Read XMR revision
         id: xmr
@@ -46,7 +46,7 @@ jobs:
             external-libs/arm64-v8a
             external-libs/armeabi-v7a
             external-libs/include
-          key: anonero-native-refresh-cancel-v3-${{ runner.os }}-${{ steps.xmr.outputs.sha }}-${{ hashFiles('external-libs/build.sh', 'external-libs/Containerfile', 'external-libs/Makefile') }}
+          key: anonero-native-refresh-cancel-v4-${{ runner.os }}-${{ steps.xmr.outputs.sha }}-${{ hashFiles('external-libs/build.sh', 'external-libs/Containerfile', 'external-libs/Makefile') }}
 
       - name: Build native libraries on cache miss
         if: steps.native-cache.outputs.cache-hit != 'true'
