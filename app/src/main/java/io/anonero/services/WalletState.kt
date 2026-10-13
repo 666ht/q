@@ -727,6 +727,12 @@ class WalletState {
     suspend fun <T> executeLatestWalletQuery(query: (Wallet) -> T): Result<T> {
         val wallet = getWallet
             ?: return Result.failure(IllegalStateException("Wallet not initialized"))
+        if (wallet.fullStatus.connectionStatus != Wallet.ConnectionStatus.ConnectionStatus_Connected) {
+            return Result.failure(IllegalStateException("Please connect to daemon for resync"))
+        }
+        if (height < 0L) {
+            return Result.failure(IllegalArgumentException("Invalid restore height"))
+        }
         val operationId = userOperationGeneration.incrementAndGet()
         val stopJob = userOperationScope.launch {
             runCatching { wallet.pauseRefresh() }
@@ -760,6 +766,14 @@ class WalletState {
                 Result.success(value)
             }
         } catch (e: Exception) {
+            if (operationId == userOperationGeneration.get() &&
+                wallet.fullStatus.connectionStatus == Wallet.ConnectionStatus.ConnectionStatus_Connected
+            ) {
+                runCatching {
+                    setLoading(true)
+                    wallet.startRefresh()
+                }.onFailure { Timber.tag(TAG).w(it, "Could not resume refresh after query failure") }
+            }
             Result.failure(e)
         }
     }
@@ -772,7 +786,9 @@ class WalletState {
         customRescanFinishJob = null
         scanDataRefreshJob?.cancelAndJoin()
         scanDataRefreshJob = null
+        finishRestoreProgress()
         scanDataRefreshRunning.set(false)
+        customRescanRequesting.set(false)
         customRescanScanStarted.set(false)
         customRescanFinishStarted.set(false)
         customRescanInProgress = false
