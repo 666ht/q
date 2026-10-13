@@ -23,6 +23,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -53,6 +54,11 @@ fun ResetSyncPage(
 ) {
     val walletState = koinInject<WalletState>()
     val wallet = WalletManager.instance?.wallet
+    // Observe refresh/sync state so the saved-height date lookup waits until
+    // the native wallet is available instead of racing a refresh callback.
+    val isLoading by walletState.isLoading.collectAsState(false)
+    val syncProgress by walletState.syncProgress.collectAsState(null)
+    val canQueryBlockDate = walletState.canQueryBlockDate() && !isLoading && syncProgress == null
     val dateFormat = remember {
         SimpleDateFormat("yyyy-MM-dd", Locale.US).apply {
             isLenient = false
@@ -111,10 +117,13 @@ fun ResetSyncPage(
 
     // Resolve the saved height's date in the background. Initialization must not
     // drive the button spinner or disable either input field.
-    LaunchedEffect(wallet) {
+    LaunchedEffect(wallet, canQueryBlockDate) {
         val initialHeight = height.toLongOrNull()
         val activeWallet = wallet
-        if (activeWallet != null && initialHeight != null && initialHeight >= 0L && date.isBlank()) {
+        if (canQueryBlockDate && !querying &&
+            activeWallet != null && initialHeight != null &&
+            initialHeight >= 0L && date.isBlank()
+        ) {
             try {
                 val resolvedDate = heightToDateCache[initialHeight]
                     ?: preferences.getString(dateCacheKey(initialHeight), null)
@@ -213,6 +222,24 @@ fun ResetSyncPage(
 
                             val requestedHeight = height
                             val requestedDate = date
+
+                            // Cached lookups are local and safe during refresh. A
+                            // cache miss must wait for wallet2 to leave refresh/scan.
+                            val cacheHit = if (hasHeightInput) {
+                                val h = requestedHeight.toLongOrNull()
+                                h != null && (
+                                    heightToDateCache.containsKey(h) ||
+                                        preferences.contains(dateCacheKey(h))
+                                    )
+                            } else {
+                                dateToHeightCache.containsKey(requestedDate) ||
+                                    preferences.contains(heightCacheKey(requestedDate))
+                            }
+                            if (!cacheHit && !walletState.canQueryBlockDate()) {
+                                error = "钱包刷新或同步中，未缓存的查询请在当前操作结束后重试"
+                                return@AnonOutlineButton
+                            }
+
                             querying = true
                             error = null
                             coroutineScope.launch {
@@ -224,14 +251,24 @@ fun ResetSyncPage(
                                             return@launch
                                         }
 
-                                        val resolvedDate = heightToDateCache[queryHeight]
+                                        val cachedDate = heightToDateCache[queryHeight]
                                             ?: preferences.getString(dateCacheKey(queryHeight), null)
-                                            ?: withContext(Dispatchers.IO) {
+                                        val resolvedDate = if (cachedDate != null) {
+                                            cachedDate
+                                        } else {
+                                            // Re-check immediately before JNI in case a
+                                            // refresh started after the button was pressed.
+                                            if (!walletState.canQueryBlockDate()) {
+                                                error = "钱包刷新或同步中，未缓存的查询请在当前操作结束后重试"
+                                                return@launch
+                                            }
+                                            withContext(Dispatchers.IO) {
                                                 val timestamp = runCatching {
                                                     activeWallet.getBlockTimestamp(queryHeight)
                                                 }.getOrDefault(0L)
                                                 if (timestamp > 0L) dateForTimestamp(timestamp) else null
                                             }
+                                        }
 
                                         if (height != requestedHeight || date.isNotBlank()) return@launch
                                         if (resolvedDate == null) {
@@ -257,8 +294,16 @@ fun ResetSyncPage(
                                                 heightCacheKey(requestedDate),
                                                 Long.MIN_VALUE
                                             ).takeIf { it != Long.MIN_VALUE }
-                                        val resolvedHeight = cachedHeight
-                                            ?: withContext(Dispatchers.IO) {
+                                        val resolvedHeight = if (cachedHeight != null) {
+                                            cachedHeight
+                                        } else {
+                                            // Re-check immediately before JNI in case a
+                                            // refresh started after the button was pressed.
+                                            if (!walletState.canQueryBlockDate()) {
+                                                error = "钱包刷新或同步中，未缓存的查询请在当前操作结束后重试"
+                                                return@launch
+                                            }
+                                            withContext(Dispatchers.IO) {
                                                 runCatching {
                                                     val calendar = java.util.Calendar.getInstance().apply {
                                                         time = parsedDate
@@ -274,6 +319,7 @@ fun ResetSyncPage(
                                                     )
                                                 }.getOrNull()
                                             }
+                                        }
 
                                         if (date != requestedDate || height.isNotBlank()) return@launch
                                         if (resolvedHeight == null || resolvedHeight < 0L) {
