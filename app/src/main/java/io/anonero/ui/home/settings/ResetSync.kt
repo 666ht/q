@@ -29,6 +29,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.size
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -261,13 +262,18 @@ fun ResetSyncPage(
                         },
                         modifier = Modifier.fillMaxWidth(.9f)
                     ) {
-                        if (querying || resetting) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.height(20.dp),
-                                strokeWidth = 2.dp
-                            )
-                        } else {
-                            Text(if (canReset) "重置" else "查询")
+                        androidx.compose.foundation.layout.Box(
+                            modifier = Modifier.size(width = 64.dp, height = 24.dp),
+                            contentAlignment = androidx.compose.ui.Alignment.Center
+                        ) {
+                            if (querying || resetting) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(18.dp),
+                                    strokeWidth = 2.dp
+                                )
+                            } else {
+                                Text(if (canReset) "重置" else "查询")
+                            }
                         }
                     }
                 }
