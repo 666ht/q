@@ -96,21 +96,19 @@ fun WalletProgressIndicator(modifier: Modifier = Modifier, refreshIndicatorProgr
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp),
                 )
-                if (progress.left > 50) {
-                    // Block counts are integers: never abbreviate or round them
-                    // to compact values such as "3.8M" or "10万".
-                    val blocksLeft = NumberFormat.getIntegerInstance(Locale.getDefault())
-                        .format(progress.left)
-                    Text(
-                        stringResource(
-                            R.string.blocks_left,
-                            blocksLeft
-                        ),
-                        modifier = Modifier.padding(top = 8.dp),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
+                // Always show the exact remaining block count, including 50, 1, and 0.
+                // Use full integer formatting without compact notation or rounding.
+                val blocksLeft = NumberFormat.getIntegerInstance(Locale.getDefault())
+                    .format(progress.left)
+                Text(
+                    stringResource(
+                        R.string.blocks_left,
+                        blocksLeft
+                    ),
+                    modifier = Modifier.padding(top = 8.dp),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary
+                )
             }
         } else if (refreshIndicatorProgress != 0.0f && !showIndefiniteLoading && isConnected && isNetworkConnected) {
             LinearProgressIndicator(
