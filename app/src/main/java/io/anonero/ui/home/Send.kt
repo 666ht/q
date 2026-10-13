@@ -109,20 +109,20 @@ private fun localizeTransactionError(message: String?): String? {
         RegexOption.IGNORE_CASE
     ).find(error)
     if (overallBalance != null) {
-        return "钱包总余额不足：总余额 ${overallBalance.groupValues[1].trim()} XMR，转账金额 ${overallBalance.groupValues[2].trim()} XMR"
+        return "转账资金不足，总余额只有 ${overallBalance.groupValues[1].trim()}，发送金额 ${overallBalance.groupValues[2].trim()}"
     }
     val availableBalance = Regex(
         """not enough money to transfer, available only\s+([^,]+),\s*(?:sent amount|transaction amount)\s+(.+)""",
         RegexOption.IGNORE_CASE
     ).find(error)
     if (availableBalance != null) {
-        return "可用余额不足：可用余额 ${availableBalance.groupValues[1].trim()} XMR，转账金额及手续费信息：${availableBalance.groupValues[2].trim()}"
+        return "转账资金不足，可用余额只有 ${availableBalance.groupValues[1].trim()}，${if (error.contains("transaction amount", ignoreCase = true)) "交易金额" else "发送金额"} ${availableBalance.groupValues[2].trim()}"
     }
 
     val lower = error.lowercase()
     return when {
         lower.contains("internal error: no unlocked balance in the specified account") ->
-            "内部错误：指定账户中没有可用的未锁定余额"
+            "内部错误：指定账户中没有未解锁的余额"
         lower.contains("no unlocked balance in the specified account") ->
             "指定账户中没有可用的未锁定余额"
         lower.contains("insufficient wallet balance") ->
