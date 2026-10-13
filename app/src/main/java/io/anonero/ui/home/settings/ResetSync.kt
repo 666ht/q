@@ -453,9 +453,7 @@ fun ResetSyncPage(
                     error = null
                     height = it.filter(Char::isDigit)
                     queryByHeight = true
-                    // Deleting the height must not erase the date field.
-                    // Only clear the paired value when the user enters a non-empty height.
-                    if (height.isNotBlank()) date = ""
+                    // Height and date are independent fields; editing either never clears the other.
                 },
                 shape = MaterialTheme.shapes.medium,
                 modifier = Modifier.fillMaxWidth(),
@@ -473,9 +471,7 @@ fun ResetSyncPage(
                     error = null
                     date = it
                     queryByHeight = false
-                    // Deleting the date must not erase the height field.
-                    // Only clear the paired value when the user enters a non-empty date.
-                    if (date.isNotBlank()) height = ""
+                    // Date and height are independent fields; editing either never clears the other.
                 },
                 shape = MaterialTheme.shapes.medium,
                 modifier = Modifier.fillMaxWidth(),
