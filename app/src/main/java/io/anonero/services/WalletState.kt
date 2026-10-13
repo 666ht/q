@@ -19,6 +19,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.launch
@@ -69,6 +70,8 @@ class WalletState {
     // Switching the native wallet while a foreground scan is active can race its refresh worker.
     private val nativeBackgroundSyncActive = AtomicBoolean(false)
     private val customRescanScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    // A native block callback wakes the progress reader immediately; the timeout is a fallback.
+    private val customRescanProgressSignals = Channel<Unit>(capacity = Channel.CONFLATED)
     private var customRescanJob: Job? = null
     private val customRescanFinishStarted = AtomicBoolean(false)
     private val customRescanRequesting = AtomicBoolean(false)
@@ -815,7 +818,7 @@ class WalletState {
                         customRescanScanStarted.set(true)
                     } else {
                         syncUpdate(SyncProgress(0f, (endHeight - startHeight).coerceAtLeast(0L)))
-                        delay(400)
+                        withTimeoutOrNull(400L) { customRescanProgressSignals.receive() }
                         continue
                     }
                 }
@@ -833,7 +836,8 @@ class WalletState {
                     .toFloat()
 
                 syncUpdate(SyncProgress(progress, left))
-                delay(400)
+                // Update on the next native block callback, or at least every 400ms.
+                withTimeoutOrNull(400L) { customRescanProgressSignals.receive() }
             }
         }
     }
@@ -853,6 +857,9 @@ class WalletState {
         // reads the actual wallet cursor and publishes both values from that cursor.
         if (height >= start && height >= 0L && end >= start) {
             customRescanScanStarted.set(true)
+            // Do not trust callback height for the displayed count; wake the IO poller
+            // so it reads the wallet’s authoritative scan cursor immediately.
+            customRescanProgressSignals.trySend(Unit)
         }
     }
 
