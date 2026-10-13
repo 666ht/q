@@ -17,6 +17,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -70,6 +71,7 @@ class WalletState {
     private val customRescanScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var customRescanJob: Job? = null
     private val customRescanFinishStarted = AtomicBoolean(false)
+    private val customRescanRequesting = AtomicBoolean(false)
 
 
     // During mnemonic restore, expose discovered wallet data while the native
@@ -83,6 +85,12 @@ class WalletState {
     // The async native request is queued before wallet2 clears its old blockchain.
     // Do not let the first poll of the old tip falsely finish the custom rescan.
     private val customRescanScanStarted = AtomicBoolean(false)
+
+    // Native rescan can wait for an in-flight wallet refresh to release its lock.
+    // While preparing, ignore callbacks from the old sync so they cannot finish
+    // or publish progress for the new scan before the native reset is accepted.
+    @Volatile
+    var customRescanPreparing: Boolean = false
 
     @Volatile
     var customRescanInProgress: Boolean = false
@@ -625,68 +633,117 @@ class WalletState {
         getWallet?.refreshHistory()
     }
 
-    fun resetSyncFromHeight(height: Long, dayEndHeight: Long? = null): Result<Boolean> = try {
-        val wallet = getWallet ?: return Result.failure(Exception("Wallet not initialized"))
-        if (wallet.fullStatus.connectionStatus != Wallet.ConnectionStatus.ConnectionStatus_Connected) {
-            return Result.failure(Exception("Please connect to daemon for resync"))
-        }
-        if (height < 0L) {
-            return Result.failure(IllegalArgumentException("Invalid restore height"))
+    suspend fun resetSyncFromHeight(height: Long, dayEndHeight: Long? = null): Result<Boolean> {
+        if (!customRescanRequesting.compareAndSet(false, true)) {
+            return Result.failure(IllegalStateException("A reset is already being prepared"))
         }
 
-        // This is an in-wallet rescan, not wallet creation/recovery. The height
-        // entered here belongs only to this rescan operation. The wallet's
-        // original recovery height is never read or overwritten by this path.
-        wallet.pauseRefresh()
+        val wallet = getWallet
+        if (wallet == null) {
+            customRescanRequesting.set(false)
+            return Result.failure(IllegalStateException("Wallet not initialized"))
+        }
+        if (customRescanInProgress || customRescanFinalizing || restoreProgressFinalizing) {
+            customRescanRequesting.set(false)
+            return Result.failure(
+                IllegalStateException("A rescan is already running or finishing")
+            )
+        }
+
+        var preparationStarted = false
+        var refreshPaused = false
         try {
-            customRescanFinishStarted.set(false)
-            customRescanScanStarted.set(false)
-            customRescanFinished = false
-            customRescanFinalizing = false
+            if (wallet.fullStatus.connectionStatus != Wallet.ConnectionStatus.ConnectionStatus_Connected) {
+                throw IllegalStateException("Please connect to daemon for resync")
+            }
+            if (height < 0L) {
+                throw IllegalArgumentException("Invalid restore height")
+            }
 
-            // A custom scan always has a hard end: use the requested end height
-            // when provided, otherwise stop at the daemon's current height.
             val effectiveEnd = (dayEndHeight ?: wallet.getDaemonBlockChainHeight())
                 .takeIf { it >= height }
                 ?: throw IllegalArgumentException("Invalid custom end height")
 
-            setLoading(true)
+            // This is an in-wallet rescan, not wallet creation/recovery. The height
+            // entered here belongs only to this rescan operation. The wallet's
+            // original recovery height is never read or overwritten by this path.
+            //
+            // Set the preparation gate before pausing/waiting for native wallet locks:
+            // callbacks from the old sync must not be mistaken for this new scan.
+            customRescanPreparing = true
+            preparationStarted = true
             customRescanJob?.cancel()
+            customRescanJob = null
+            customRescanScanStarted.set(false)
+            customRescanFinishStarted.set(false)
+            customRescanFinished = false
+            customRescanFinalizing = false
+            customRescanStartHeight = null
+            customRescanDayEndHeight = null
+            customRescanInProgress = false
+
+            // A manual reset supersedes mnemonic-restore progress but does not
+            // change the wallet's stored restore height. Wait for any in-flight
+            // incremental history refresh to leave JNI before clearing the chain.
+            val pendingRestoreRefresh = restoreDataRefreshJob
+            restoreProgressInProgress = false
+            pendingRestoreRefresh?.cancelAndJoin()
+            finishRestoreProgress()
+            restoreProgressCompleted = false
+            restoreProgressFinalizing = false
+            _syncProgress.value = null
+            _isSyncing.set(false)
+            setLoading(true)
+
+            wallet.pauseRefresh()
+            refreshPaused = true
+
+            // The native implementation serializes the clear/rescan request behind
+            // any currently executing refresh. This method therefore runs on IO,
+            // never on the UI thread (see ResetSyncPage).
+            if (!wallet.rescanBlockchainAsyncFromHeight(height)) {
+                throw IllegalStateException("Blockchain rescan was not started")
+            }
+
+            // The native request has been accepted and the old scan cursor cleared.
             customRescanStartHeight = height
             customRescanDayEndHeight = effectiveEnd
             customRescanInProgress = true
-
-            if (!wallet.rescanBlockchainAsyncFromHeight(height)) {
-                customRescanStartHeight = null
-                customRescanDayEndHeight = null
-                customRescanInProgress = false
-                setLoading(false)
-                wallet.startRefresh()
-                return Result.failure(
-                    IllegalStateException("Blockchain rescan was not started")
-                )
-            }
-
             startCustomRescanProgressPolling(wallet, height, effectiveEnd)
+            customRescanPreparing = false
 
             Timber.tag(TAG).i(
                 "Reset wallet scan from custom height: requested=%d end=%d",
                 height, effectiveEnd
             )
-            Result.success(true)
+            return Result.success(true)
         } catch (e: Exception) {
-            customRescanJob?.cancel()
-            customRescanScanStarted.set(false)
-            customRescanStartHeight = null
-            customRescanDayEndHeight = null
-            customRescanInProgress = false
-            setLoading(false)
-            wallet.startRefresh()
-            throw e
+            if (preparationStarted) {
+                // Keep callback suppression enabled while state is reset and the
+                // existing refresh loop is resumed after a failed request.
+                customRescanPreparing = true
+                customRescanJob?.cancel()
+                customRescanJob = null
+                customRescanScanStarted.set(false)
+                customRescanStartHeight = null
+                customRescanDayEndHeight = null
+                customRescanInProgress = false
+                customRescanFinalizing = false
+                customRescanFinished = false
+                _syncProgress.value = null
+                _isSyncing.set(false)
+                setLoading(false)
+                if (refreshPaused) {
+                    runCatching { wallet.startRefresh() }
+                        .onFailure { Timber.tag(TAG).e(it, "Failed to resume refresh after reset error") }
+                }
+            }
+            Timber.tag(TAG).e(e, "Failed to reset wallet scan from custom height: %d", height)
+            return Result.failure(e)
+        } finally {
+            customRescanPreparing = false
+            customRescanRequesting.set(false)
         }
-    } catch (e: Exception) {
-        Timber.tag(TAG).e(e, "Failed to reset wallet scan from custom height: %d", height)
-        Result.failure(e)
     }
 
     /**
@@ -743,49 +800,28 @@ class WalletState {
      * custom end height; the 400ms poller remains as a fallback if callbacks lag.
      */
     fun onCustomRescanBlock(height: Long) {
-        if (!customRescanInProgress) return
-        val wallet = getWallet ?: return
+        if (customRescanPreparing || !customRescanInProgress) return
         val start = customRescanStartHeight ?: return
         val end = customRescanDayEndHeight ?: return
 
-        // Ignore callbacks from the old pre-rescan chain tip. A real custom
-        // rescan is considered started only after callbacks enter its requested
-        // range, or the polling path observes the native chain reset.
-        if (!customRescanScanStarted.get()) {
-            if (height <= start) {
-                customRescanScanStarted.set(true)
-            } else if (height < end) {
-                customRescanScanStarted.set(true)
-            } else {
-                return
-            }
+        // Do not publish progress or finish from this callback. The callback height
+        // can lag the wallet cursor and compete with the 400ms poller, making the
+        // displayed percentage disagree with remaining blocks. The poller alone
+        // reads the actual wallet cursor and publishes both values from that cursor.
+        if (height >= start && height >= 0L && end >= start) {
+            customRescanScanStarted.set(true)
         }
-
-        if (height >= end) {
-            requestCustomRescanCompletion(wallet, end)
-            return
-        }
-
-        val total = (end - start).coerceAtLeast(1L)
-        val current = height.coerceAtLeast(start)
-        val left = (end - current).coerceAtLeast(0L)
-        val progress = ((current - start).toDouble() / total.toDouble())
-            .coerceIn(0.0, 0.999999)
-            .toFloat()
-        syncUpdate(SyncProgress(progress, left))
     }
 
     private fun requestCustomRescanCompletion(wallet: Wallet, endHeight: Long) {
         if (!customRescanInProgress) return
         if (!customRescanFinishStarted.compareAndSet(false, true)) return
 
-        // Stop the native refresh immediately when the custom end height is reached.
-        runCatching { wallet.pauseRefresh() }
-            .onFailure { Timber.tag(TAG).e(it, "Failed to stop custom rescan at %d", endHeight) }
-
-        // Native callbacks run under the JNI listener lock. Do the potentially
-        // callback-producing wallet refreshes off that thread.
+        // Stop the native refresh from the IO coroutine, never on a JNI callback
+        // thread. Native callbacks are invoked while the listener mutex is held.
         customRescanScope.launch {
+            runCatching { wallet.pauseRefresh() }
+                .onFailure { Timber.tag(TAG).e(it, "Failed to stop custom rescan at %d", endHeight) }
             completeCustomRescan(wallet, endHeight)
         }
     }

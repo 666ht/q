@@ -42,6 +42,10 @@ class MoneroHandlerThread(
     override fun unconfirmedMoneyReceived(txId: String?, amount: Long) {}
 
     override fun newBlock(height: Long) {
+        if (walletState.customRescanPreparing) {
+            Timber.tag(name).d("Ignoring block callback while custom rescan is being prepared")
+            return
+        }
         Timber.tag(name).i("newBlock: %s", height)
 
         // Custom-height scans have their own hard end and progress cursor. Do not
@@ -95,6 +99,13 @@ class MoneroHandlerThread(
     }
 
     private fun updateSyncProgress(height: Long) {
+        // Custom rescans have a single progress publisher in WalletState's 400ms
+        // cursor poller; normal callbacks must not overwrite it with a different height.
+        if (walletState.customRescanPreparing ||
+            walletState.customRescanInProgress ||
+            walletState.customRescanFinalizing
+        ) return
+
         val syncHeight = wallet.getBlockChainHeight()
         val daemonHeight = wallet.getDaemonBlockChainHeight()
         val customStart = walletState.customRescanStartHeight
@@ -181,10 +192,11 @@ class MoneroHandlerThread(
         // During either finalization phase, wallet2 can emit an intermediate
         // callback while history/coins are temporarily incomplete. Do not
         // publish a transient snapshot or start another refresh loop.
-        if (walletState.restoreProgressFinalizing ||
+        if (walletState.customRescanPreparing ||
+            walletState.restoreProgressFinalizing ||
             walletState.customRescanFinalizing
         ) {
-            Timber.tag(name).i("updated() ignored during final wallet refresh")
+            Timber.tag(name).i("updated() ignored during sync/reset transition")
             return
         }
         refresh(false)
@@ -193,6 +205,10 @@ class MoneroHandlerThread(
     }
 
     override fun refreshed() {
+        if (walletState.customRescanPreparing) {
+            Timber.tag(name).d("Ignoring refreshed callback while custom rescan is being prepared")
+            return
+        }
         val status = wallet.fullStatus.connectionStatus
         val daemonHeight = wallet.getDaemonBlockChainHeight()
         val chainHeight = wallet.getBlockChainHeight()

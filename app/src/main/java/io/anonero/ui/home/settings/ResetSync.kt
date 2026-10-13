@@ -66,6 +66,7 @@ fun ResetSyncPage(
     var date by remember { mutableStateOf("") }
     var selectedDateEndHeight by remember { mutableStateOf<Long?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
+    var resetting by remember { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
     var heightDateJob by remember { mutableStateOf<Job?>(null) }
     val heightToDateCache = remember(wallet) { mutableMapOf<Long, String>() }
@@ -113,18 +114,31 @@ fun ResetSyncPage(
                 ) {
                     AnonOutlineButton(
                         onClick = {
-                    val restoreHeight = height.toLongOrNull()
-                    if (restoreHeight == null) {
-                        error = "请输入有效高度或日期"
-                        return@AnonOutlineButton
-                    }
-                    val result = walletState.resetSyncFromHeight(restoreHeight, selectedDateEndHeight)
-                    if (result.isSuccess) {
-                        onBackPress()
-                    } else {
-                        error = result.exceptionOrNull()?.message ?: "重置失败"
-                    }
-                },
+                            if (resetting) return@AnonOutlineButton
+                            val restoreHeight = height.toLongOrNull()
+                            if (restoreHeight == null) {
+                                error = "请输入有效高度或日期"
+                                return@AnonOutlineButton
+                            }
+
+                            val endHeight = selectedDateEndHeight
+                            resetting = true
+                            coroutineScope.launch {
+                                val conversionJob = heightDateJob
+                                conversionJob?.cancel()
+                                conversionJob?.join()
+
+                                val result = withContext(Dispatchers.IO) {
+                                    walletState.resetSyncFromHeight(restoreHeight, endHeight)
+                                }
+                                resetting = false
+                                if (result.isSuccess) {
+                                    onBackPress()
+                                } else {
+                                    error = result.exceptionOrNull()?.message ?: "重置失败"
+                                }
+                            }
+                        },
                         modifier = Modifier.fillMaxWidth(.9f)
                     ) {
                         Text("重置")
@@ -176,6 +190,7 @@ fun ResetSyncPage(
                 },
                 shape = MaterialTheme.shapes.medium,
                 modifier = Modifier.fillMaxWidth(),
+                enabled = !resetting,
                 label = { Text("高度恢复") },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
@@ -251,6 +266,7 @@ fun ResetSyncPage(
                 },
                 shape = MaterialTheme.shapes.medium,
                 modifier = Modifier.fillMaxWidth(),
+                enabled = !resetting,
                 label = { Text("日期恢复") },
                 singleLine = true
             )
