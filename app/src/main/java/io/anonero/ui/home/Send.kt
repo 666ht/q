@@ -105,14 +105,14 @@ private fun localizeTransactionError(message: String?): String? {
     if (message.isNullOrBlank()) return message
     val error = message.trim()
     val overallBalance = Regex(
-        """not enough money to transfer, overall balance only\s+([^,]+),\\s*sent amount\\s+(.+)""",
+        """not enough money to transfer, overall balance only\s+([^,]+),\s*sent amount\s+(.+)""",
         RegexOption.IGNORE_CASE
     ).find(error)
     if (overallBalance != null) {
         return "钱包总余额不足：总余额 ${overallBalance.groupValues[1].trim()} XMR，转账金额 ${overallBalance.groupValues[2].trim()} XMR"
     }
     val availableBalance = Regex(
-        """not enough money to transfer, available only\s+([^,]+),\\s*(?:sent amount|transaction amount)\\s+(.+)""",
+        """not enough money to transfer, available only\s+([^,]+),\s*(?:sent amount|transaction amount)\s+(.+)""",
         RegexOption.IGNORE_CASE
     ).find(error)
     if (availableBalance != null) {
