@@ -2,6 +2,7 @@ package io.anonero.ui.home.settings
 
 import AnonNeroTheme
 import AnonOutlineButton
+import android.content.Context
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -29,10 +30,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.layout.size
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import io.anonero.AnonConfig
 import io.anonero.model.WalletManager
 import io.anonero.services.WalletState
 import org.koin.compose.koinInject
@@ -70,10 +73,27 @@ fun ResetSyncPage(
         }
     }
 
-    var height by remember {
-        mutableStateOf(wallet?.getRestoreHeight()?.toString() ?: "")
+    val appContext = LocalContext.current.applicationContext
+    val preferences = remember(appContext) {
+        appContext.getSharedPreferences(AnonConfig.PREFS, Context.MODE_PRIVATE)
     }
-    var date by remember { mutableStateOf("") }
+    // Date cache is separated by network because the same block height can map
+    // to different timestamps on mainnet, testnet, and stagenet.
+    val dateCacheNamespace = wallet?.networkType?.value ?: -1
+    fun dateCacheKey(heightValue: Long): String =
+        "reset_sync_height_date_${dateCacheNamespace}_${heightValue}"
+
+    val savedRestoreHeight = wallet?.getRestoreHeight()
+    var height by remember(wallet) {
+        mutableStateOf(savedRestoreHeight?.toString() ?: "")
+    }
+    // Load a previously resolved date synchronously so it appears in the first
+    // frame when the page is reopened, instead of waiting for a daemon lookup.
+    var date by remember(wallet, preferences, savedRestoreHeight) {
+        mutableStateOf(
+            savedRestoreHeight?.let { preferences.getString(dateCacheKey(it), null) }.orEmpty()
+        )
+    }
     var error by remember { mutableStateOf<String?>(null) }
     var querying by remember { mutableStateOf(false) }
     var resetting by remember { mutableStateOf(false) }
@@ -93,6 +113,7 @@ fun ResetSyncPage(
         if (activeWallet != null && initialHeight != null && initialHeight >= 0L && date.isBlank()) {
             try {
                 val resolvedDate = heightToDateCache[initialHeight]
+                    ?: preferences.getString(dateCacheKey(initialHeight), null)
                     ?: withContext(Dispatchers.IO) {
                         val timestamp = runCatching {
                             activeWallet.getBlockTimestamp(initialHeight)
@@ -102,6 +123,9 @@ fun ResetSyncPage(
                 if (height.toLongOrNull() == initialHeight && date.isBlank()) {
                     if (resolvedDate != null) {
                         heightToDateCache[initialHeight] = resolvedDate
+                        preferences.edit()
+                            .putString(dateCacheKey(initialHeight), resolvedDate)
+                            .apply()
                         date = resolvedDate
                     } else {
                         error = "无法查询该高度的区块时间，请检查节点连接"
@@ -199,6 +223,7 @@ fun ResetSyncPage(
                                         }
 
                                         val resolvedDate = heightToDateCache[queryHeight]
+                                            ?: preferences.getString(dateCacheKey(queryHeight), null)
                                             ?: withContext(Dispatchers.IO) {
                                                 val timestamp = runCatching {
                                                     activeWallet.getBlockTimestamp(queryHeight)
@@ -213,6 +238,9 @@ fun ResetSyncPage(
                                         }
 
                                         heightToDateCache[queryHeight] = resolvedDate
+                                        preferences.edit()
+                                            .putString(dateCacheKey(queryHeight), resolvedDate)
+                                            .apply()
                                         date = resolvedDate
                                         error = null
                                     } else {
