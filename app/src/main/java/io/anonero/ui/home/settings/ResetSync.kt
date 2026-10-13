@@ -43,7 +43,6 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -83,6 +82,8 @@ fun ResetSyncPage(
         "${wallet?.networkType?.value ?: -1}_${java.util.TimeZone.getDefault().id}"
     fun dateCacheKey(heightValue: Long): String =
         "reset_sync_height_date_${dateCacheNamespace}_${heightValue}"
+    fun heightCacheKey(dateValue: String): String =
+        "reset_sync_date_height_${dateCacheNamespace}_${dateValue}"
 
     val savedRestoreHeight = preferences.getLong("MNEMONIC_SELECTED_RESTORE_HEIGHT", Long.MIN_VALUE)
         .takeIf { it != Long.MIN_VALUE }
@@ -216,8 +217,6 @@ fun ResetSyncPage(
                             error = null
                             coroutineScope.launch {
                                 try {
-                                    // Keep the spinner visible for a frame even when the lookup is cached.
-                                    delay(80L)
                                     if (hasHeightInput) {
                                         val queryHeight = requestedHeight.toLongOrNull()
                                         if (queryHeight == null || queryHeight < 0L) {
@@ -253,7 +252,12 @@ fun ResetSyncPage(
                                             return@launch
                                         }
 
-                                        val resolvedHeight = dateToHeightCache[requestedDate]
+                                        val cachedHeight = dateToHeightCache[requestedDate]
+                                            ?: preferences.getLong(
+                                                heightCacheKey(requestedDate),
+                                                Long.MIN_VALUE
+                                            ).takeIf { it != Long.MIN_VALUE }
+                                        val resolvedHeight = cachedHeight
                                             ?: withContext(Dispatchers.IO) {
                                                 runCatching {
                                                     val calendar = java.util.Calendar.getInstance().apply {
@@ -278,6 +282,9 @@ fun ResetSyncPage(
                                         }
 
                                         dateToHeightCache[requestedDate] = resolvedHeight
+                                        preferences.edit()
+                                            .putLong(heightCacheKey(requestedDate), resolvedHeight)
+                                            .apply()
                                         height = resolvedHeight.toString()
                                         error = null
                                     }
