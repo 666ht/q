@@ -731,9 +731,6 @@ class WalletState {
     suspend fun <T> executeLatestWalletQuery(query: (Wallet) -> T): Result<T> {
         val wallet = getWallet
             ?: return Result.failure(IllegalStateException("Wallet not initialized"))
-        if (wallet.fullStatus.connectionStatus != Wallet.ConnectionStatus.ConnectionStatus_Connected) {
-            return Result.failure(IllegalStateException("Please connect to daemon for query"))
-        }
         val operationId = userOperationGeneration.incrementAndGet()
         val stopJob = userOperationScope.launch {
             runCatching { wallet.pauseRefresh() }
