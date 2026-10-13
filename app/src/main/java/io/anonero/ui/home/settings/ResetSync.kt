@@ -115,9 +115,6 @@ fun ResetSyncPage(
     val selectedHeight = height.toLongOrNull()
     val selectedDate = parseDate(date)
     val canReset = selectedHeight != null && selectedHeight >= 0L && selectedDate != null
-    // Keep the single button in Query mode until a query succeeds for the current inputs.
-    // Editing either field invalidates that confirmation; this changes behavior only, not UI.
-    var queryComplete by remember(wallet) { mutableStateOf(false) }
     var queryByHeight by remember(wallet) { mutableStateOf(true) }
 
     // Resolve the saved height's date in the background. Initialization must not
@@ -181,8 +178,7 @@ fun ResetSyncPage(
                 ) {
                     AnonOutlineButton(
                         onClick = {
-                            // A first tap only queries. Reset is dispatched only by a
-                            // later explicit tap after a successful query changed the label.
+                            // When both a valid height and date are displayed, this button resets.
                             if (querying || resetting) return@AnonOutlineButton
 
                             val heightValue = height.toLongOrNull()
@@ -191,7 +187,7 @@ fun ResetSyncPage(
                                 heightValue >= 0L &&
                                 dateValue != null
 
-                            if (queryComplete && readyToReset) {
+                            if (canReset && readyToReset) {
                                 val requestId = actionGeneration + 1L
                                 actionGeneration = requestId
                                 querying = false
@@ -273,7 +269,6 @@ fun ResetSyncPage(
                                             .putString(dateCacheKey(queryHeight), resolvedDate)
                                             .apply()
                                         date = resolvedDate
-                                        queryComplete = true
                                         error = null
                                     } else {
                                         val parsedDate = parseDate(requestedDate)
@@ -348,7 +343,7 @@ fun ResetSyncPage(
                                     strokeWidth = 2.dp
                                 )
                             } else {
-                                Text(if (queryComplete && canReset) "重置" else "查询")
+                                Text(if (canReset) "重置" else "查询")
                             }
                         }
                     }
@@ -370,9 +365,8 @@ fun ResetSyncPage(
                 onValueChange = {
                     error = null
                     height = it.filter(Char::isDigit)
-                    queryComplete = false
                     queryByHeight = true
-                    // A changed height invalidates the old date until the user runs Query.
+                    // Changing height clears the date; the button stays Query until both are present.
                     date = ""
                 },
                 shape = MaterialTheme.shapes.medium,
@@ -392,7 +386,7 @@ fun ResetSyncPage(
                     date = it
                     queryComplete = false
                     queryByHeight = false
-                    // A changed date invalidates the old height until the user runs Query.
+                    // Changing date clears the height; the button stays Query until both are present.
                     height = ""
                 },
                 shape = MaterialTheme.shapes.medium,
