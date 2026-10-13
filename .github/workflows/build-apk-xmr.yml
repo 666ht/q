@@ -28,11 +28,11 @@ jobs:
           submodules: recursive
           fetch-depth: 1
 
-      - name: Pin XMR pause-refresh barrier fix
+      - name: Pin XMR refresh-cancellation fix
         working-directory: external-libs/monero
         run: |
-          git fetch --depth=1 origin d210f883f6abc8a48f253b6a39b36bf8ae6e1da8
-          git checkout d210f883f6abc8a48f253b6a39b36bf8ae6e1da8
+          git fetch --depth=1 origin c5f0cd103fecf2e40578f60890651f7cffe43575
+          git checkout c5f0cd103fecf2e40578f60890651f7cffe43575
 
       - name: Read XMR revision
         id: xmr
@@ -46,7 +46,7 @@ jobs:
             external-libs/arm64-v8a
             external-libs/armeabi-v7a
             external-libs/include
-          key: anonero-native-stopwait-v2-${{ runner.os }}-${{ steps.xmr.outputs.sha }}-${{ hashFiles('external-libs/build.sh', 'external-libs/Containerfile', 'external-libs/Makefile') }}
+          key: anonero-native-refresh-cancel-v3-${{ runner.os }}-${{ steps.xmr.outputs.sha }}-${{ hashFiles('external-libs/build.sh', 'external-libs/Containerfile', 'external-libs/Makefile') }}
 
       - name: Build native libraries on cache miss
         if: steps.native-cache.outputs.cache-hit != 'true'

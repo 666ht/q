@@ -615,9 +615,28 @@ class WalletState {
     }
 
     fun refresh() {
-        if(getWallet?.isInitialized != true) {
-            return;
+        val wallet = getWallet
+        if (wallet?.isInitialized != true) {
+            return
         }
+
+        // A native scan owns the wallet's mutable blockchain and transaction
+        // state until its next callback/finalization. Starting another JNI
+        // history read here can race the scan, freeze reset, or crash. The active
+        // scan already publishes incremental data and performs a final history
+        // refresh, so coalesce manual refreshes into that existing operation.
+        val scanOwnsWallet = customRescanPreparing ||
+            customRescanInProgress ||
+            customRescanFinalizing ||
+            restoreProgressInProgress ||
+            restoreProgressFinalizing ||
+            isSyncing ||
+            _isLoading.value
+        if (scanOwnsWallet) {
+            Timber.tag(TAG).i("Manual refresh coalesced with active wallet scan")
+            return
+        }
+
         customRescanFinished = false
 
         // A user-triggered refresh starts the normal background refresh loop,
@@ -626,11 +645,11 @@ class WalletState {
         // a normal refresh completion.
         restoreProgressCompleted = false
 
-        if (getWallet?.fullStatus?.connectionStatus == Wallet.ConnectionStatus.ConnectionStatus_Connected) {
+        if (wallet.fullStatus.connectionStatus == Wallet.ConnectionStatus.ConnectionStatus_Connected) {
             setLoading(true)
-            getWallet?.startRefresh()
+            wallet.startRefresh()
         }
-        getWallet?.refreshHistory()
+        wallet.refreshHistory()
     }
 
     suspend fun resetSyncFromHeight(height: Long, dayEndHeight: Long? = null): Result<Boolean> {
