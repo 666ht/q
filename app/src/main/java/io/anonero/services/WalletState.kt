@@ -194,6 +194,18 @@ class WalletState {
         }
     }
 
+    /**
+     * The daemon has not reached the user-selected restore height yet, so the
+     * wallet has no valid scan cursor. Show indeterminate loading without inventing
+     * a remaining-block number (especially a misleading zero).
+     */
+    fun waitForRestoreHeight() {
+        if (!restoreProgressInProgress || restoreProgressCompleted) return
+        _syncProgress.value = null
+        _isSyncing.set(false)
+        _isLoading.value = true
+    }
+
     fun initializeRestoreProgress(daemonHeight: Long, scanHeight: Long) {
         val start = restoreProgressStartHeight ?: return
         if (!restoreProgressInProgress || daemonHeight < start) {
@@ -584,6 +596,8 @@ class WalletState {
             if (keepProgressVisible) syncProgress else null
         }
         _isSyncing.set(keepProgressVisible)
+        // A real cursor update replaces the indeterminate waiting state.
+        _isLoading.value = false
         if (done && !scanFinalizing) {
             _connectionStatus.update { Wallet.ConnectionStatus.ConnectionStatus_Connected }
         }
@@ -1026,7 +1040,13 @@ class WalletState {
             while (isActive && customRescanInProgress) {
                 val rawHeight = runCatching {
                     wallet.getBlockChainHeight()
-                }.getOrDefault(startHeight)
+                }.getOrNull()
+                if (rawHeight == null || rawHeight < 0L) {
+                    // A failed cursor read is not evidence that the scan reached its
+                    // start height. Keep waiting instead of fabricating progress.
+                    withTimeoutOrNull(400L) { customRescanProgressSignals.receive() }
+                    continue
+                }
 
                 // rescanBlockchainAsyncFromHeight() only queues the native job.
                 // Until wallet2 clears its old blockchain, getBlockChainHeight()
@@ -1066,14 +1086,10 @@ class WalletState {
         val start = customRescanStartHeight ?: return
         val end = customRescanDayEndHeight ?: return
 
-        // Do not publish progress or finish from this callback. The callback height
-        // can lag the wallet cursor and compete with the 400ms poller, making the
-        // displayed percentage disagree with remaining blocks. The poller alone
-        // reads the actual wallet cursor and publishes both values from that cursor.
-        if (height >= start && height >= 0L && end >= start) {
-            customRescanScanStarted.set(true)
-            // Do not trust callback height for the displayed count; wake the IO poller
-            // so it reads the wallet’s authoritative scan cursor immediately.
+        // A callback is only a wake-up signal, never proof that the new scan started:
+        // it may belong to the old chain tip while wallet2 is still clearing it.
+        // The poller alone marks the scan started after reading the native cursor.
+        if (height >= 0L && end >= start) {
             customRescanProgressSignals.trySend(Unit)
         }
     }
