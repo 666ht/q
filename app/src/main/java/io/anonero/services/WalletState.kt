@@ -699,9 +699,10 @@ class WalletState {
             runCatching { wallet.pauseRefresh() }
                 .onFailure { Timber.tag(TAG).w(it, "Could not signal cancellation before manual refresh") }
 
-            userOperationMutex.withLock {
+            userOperationMutex.lock()
+            try {
                 runCatching { wallet.pauseRefresh() }
-                if (operationId != userOperationGeneration.get()) return@withLock
+                if (operationId != userOperationGeneration.get()) return@launch
 
                 cancelScanUiStateForLatestOperation()
                 deferredManualRefresh.set(false)
@@ -716,6 +717,8 @@ class WalletState {
                     runCatching { wallet.refreshHistory() }
                         .onFailure { Timber.tag(TAG).e(it, "Manual refresh history update failed") }
                 }
+            } finally {
+                userOperationMutex.unlock()
             }
         }
     }
@@ -739,22 +742,23 @@ class WalletState {
 
         return try {
             stopJob.join()
-            userOperationMutex.withLock {
+            userOperationMutex.lock()
+            try {
                 if (operationId != userOperationGeneration.get()) {
-                    return@withLock Result.failure(IllegalStateException("查询已被更新操作取代"))
+                    return Result.failure(IllegalStateException("查询已被更新操作取代"))
                 }
 
                 // Repeat the barrier after obtaining the coordinator: an older operation
                 // may have queued work after the first stop signal was sent.
                 withContext(Dispatchers.IO) { wallet.pauseRefresh() }
                 if (operationId != userOperationGeneration.get()) {
-                    return@withLock Result.failure(IllegalStateException("查询已被更新操作取代"))
+                    return Result.failure(IllegalStateException("查询已被更新操作取代"))
                 }
 
                 cancelScanUiStateForLatestOperation()
                 val value = withContext(Dispatchers.IO) { query(wallet) }
                 if (operationId != userOperationGeneration.get()) {
-                    return@withLock Result.failure(IllegalStateException("查询已被更新操作取代"))
+                    return Result.failure(IllegalStateException("查询已被更新操作取代"))
                 }
 
                 if (wallet.fullStatus.connectionStatus == Wallet.ConnectionStatus.ConnectionStatus_Connected) {
@@ -762,6 +766,8 @@ class WalletState {
                     wallet.startRefresh()
                 }
                 Result.success(value)
+            } finally {
+                userOperationMutex.unlock()
             }
         } catch (e: Exception) {
             if (operationId == userOperationGeneration.get() &&
@@ -822,17 +828,28 @@ class WalletState {
 
         return try {
             stopJob.join()
-            userOperationMutex.withLock {
+            userOperationMutex.lock()
+            try {
                 if (operationId != userOperationGeneration.get()) {
-                    return@withLock Result.failure(IllegalStateException("重置已被更新操作取代"))
+                    return Result.failure(IllegalStateException("重置已被更新操作取代"))
                 }
                 // Stop again after taking ownership, covering work an older task
                 // might have queued just before it noticed the newer generation.
                 wallet.pauseRefresh()
                 if (operationId != userOperationGeneration.get()) {
-                    return@withLock Result.failure(IllegalStateException("重置已被更新操作取代"))
+                    return Result.failure(IllegalStateException("重置已被更新操作取代"))
                 }
-                resetSyncFromHeightInternal(height, dayEndHeight, operationId)
+                val result = resetSyncFromHeightInternal(height, dayEndHeight, operationId)
+                if (result.isFailure && operationId == userOperationGeneration.get() &&
+                    wallet.fullStatus.connectionStatus == Wallet.ConnectionStatus.ConnectionStatus_Connected
+                ) {
+                    // Invalid end heights and other pre-scan failures may happen before
+                    // the internal method marks the pause as owned; never strand refresh.
+                    runCatching { wallet.startRefresh() }
+                }
+                result
+            } finally {
+                userOperationMutex.unlock()
             }
         } catch (e: Exception) {
             Result.failure(e)
