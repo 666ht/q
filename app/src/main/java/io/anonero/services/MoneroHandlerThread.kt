@@ -180,7 +180,7 @@ class MoneroHandlerThread(
         }
         val progress = calculateSyncProgress(progressStart, currentHeight, effectiveTarget)
         // Keep remaining-blocks and percentage derived from the same calculation.
-        walletState.syncUpdate(progress.copy(left = left))
+        walletState.syncUpdate(progress)
     }
 
     override fun updated() {
