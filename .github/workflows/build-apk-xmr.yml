@@ -10,11 +10,6 @@ on:
 permissions:
   contents: read
 
-# Queue builds for the same ref instead of cancelling an in-progress build.
-concurrency:
-  group: build-apk-${{ github.ref }}
-  cancel-in-progress: false
-
 env:
   GRADLE_OPTS: >-
     -Dorg.gradle.caching=true
@@ -87,8 +82,8 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       # setup-gradle caches the Gradle distribution, dependency cache, and build cache.
-      # Do not cache app/build directly: source changes make that cache ineffective and can
-      # restore stale intermediates that Gradle must invalidate anyway.
+      # Do not cache app/build directly: source changes make that cache ineffective and Gradle
+      # must invalidate stale intermediates when sources change.
 
       - name: Build APK
         run: ./gradlew --no-daemon assembleAnonRelease -PbuildNumber="${{ github.run_number }}"
