@@ -38,6 +38,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -156,6 +157,8 @@ fun ResetSyncPage(
                             error = null
                             coroutineScope.launch {
                                 try {
+                                    // Keep the spinner visible for a frame even when the lookup is cached.
+                                    delay(80L)
                                     if (hasHeightInput) {
                                         val queryHeight = requestedHeight.toLongOrNull()
                                         if (queryHeight == null || queryHeight < 0L) {
