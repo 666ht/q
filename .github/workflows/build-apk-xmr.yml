@@ -10,11 +10,10 @@ on:
 permissions:
   contents: read
 
-# Keep only the newest build for the same ref running; repeated source fixes
-# should not waste runners rebuilding stale native revisions.
+# Queue builds for the same ref instead of cancelling an in-progress build.
 concurrency:
   group: build-apk-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 env:
   GRADLE_OPTS: >-
