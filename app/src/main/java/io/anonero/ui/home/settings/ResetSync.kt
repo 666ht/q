@@ -79,7 +79,8 @@ fun ResetSyncPage(
     }
     // Date cache is separated by network because the same block height can map
     // to different timestamps on mainnet, testnet, and stagenet.
-    val dateCacheNamespace = wallet?.networkType?.value ?: -1
+    val dateCacheNamespace =
+        "${wallet?.networkType?.value ?: -1}_${java.util.TimeZone.getDefault().id}"
     fun dateCacheKey(heightValue: Long): String =
         "reset_sync_height_date_${dateCacheNamespace}_${heightValue}"
 
