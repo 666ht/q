@@ -115,10 +115,8 @@ fun ResetSyncPage(
     val selectedHeight = height.toLongOrNull()
     val selectedDate = parseDate(date)
     val canReset = selectedHeight != null && selectedHeight >= 0L && selectedDate != null
-    // Keep the visible action and the click handler in sync. A background date lookup
-    // may populate both fields, but that alone must never turn a Query tap into Reset.
-    // A query only enables the separate Reset action; cached fields never
-    // change the meaning of Query or automatically authorize a rescan.
+    // Keep the original single-button UI. Cached fields alone must not authorize
+    // a reset; only a successful explicit query arms the next tap for Reset.
     var resetReady by remember(wallet, preferences, savedRestoreHeight) {
         mutableStateOf(false)
     }
@@ -183,15 +181,38 @@ fun ResetSyncPage(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally
                 ) {
-                    androidx.compose.foundation.layout.Row(
-                        modifier = Modifier.fillMaxWidth(.9f),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
-                    ) {
                     AnonOutlineButton(
                         onClick = {
-                            // Query is read-only and must never dispatch a rescan.
+                            // A first tap only queries. Reset is dispatched only by a
+                            // later explicit tap after a successful query changed the label.
                             if (querying || resetting) return@AnonOutlineButton
+
+                            val heightValue = height.toLongOrNull()
+                            val dateValue = parseDate(date)
+                            val readyToReset = heightValue != null &&
+                                heightValue >= 0L &&
+                                dateValue != null
+
+                            if (resetReady && readyToReset) {
+                                val requestId = actionGeneration + 1L
+                                actionGeneration = requestId
+                                querying = false
+                                resetting = true
+                                error = null
+                                coroutineScope.launch {
+                                    val result = withContext(Dispatchers.IO) {
+                                        walletState.resetSyncFromHeight(heightValue!!)
+                                    }
+                                    if (requestId != actionGeneration) return@launch
+                                    resetting = false
+                                    if (result.isSuccess) {
+                                        onBackPress()
+                                    } else {
+                                        error = result.exceptionOrNull()?.message ?: "重置失败"
+                                    }
+                                }
+                                return@AnonOutlineButton
+                            }
 
                             val hasHeightInput = height.isNotBlank()
                             val hasDateInput = date.isNotBlank()
@@ -207,26 +228,12 @@ fun ResetSyncPage(
 
                             val requestedHeight = height
                             val requestedDate = date
-                            // If an initialization lookup filled the second field in the
-                            // background, retain Query mode and query the selected source.
                             val queryHeightMode = when {
                                 hasHeightInput && hasDateInput -> queryByHeight
                                 hasHeightInput -> true
                                 else -> false
                             }
 
-                            // Cached lookups are local and safe during refresh. A
-                            // cache miss must wait for wallet2 to leave refresh/scan.
-                            val cacheHit = if (queryHeightMode) {
-                                val h = requestedHeight.toLongOrNull()
-                                h != null && (
-                                    heightToDateCache.containsKey(h) ||
-                                        preferences.contains(dateCacheKey(h))
-                                    )
-                            } else {
-                                dateToHeightCache.containsKey(requestedDate) ||
-                                    preferences.contains(heightCacheKey(requestedDate))
-                            }
                             val requestId = actionGeneration + 1L
                             actionGeneration = requestId
                             resetting = false
@@ -332,67 +339,21 @@ fun ResetSyncPage(
                                 }
                             }
                         },
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.fillMaxWidth(.9f)
                     ) {
                         androidx.compose.foundation.layout.Box(
                             modifier = Modifier.size(width = 64.dp, height = 24.dp),
                             contentAlignment = androidx.compose.ui.Alignment.Center
                         ) {
-                            if (querying) {
+                            if (querying || resetting) {
                                 CircularProgressIndicator(
                                     modifier = Modifier.size(28.dp),
                                     strokeWidth = 2.dp
                                 )
                             } else {
-                                Text("查询")
+                                Text(if (resetReady && canReset) "重置" else "查询")
                             }
                         }
-                    }
-                    if (resetReady && canReset) {
-                        AnonOutlineButton(
-                            onClick = {
-                                if (querying || resetting) return@AnonOutlineButton
-                                val heightValue = height.toLongOrNull()
-                                if (heightValue == null || heightValue < 0L || parseDate(date) == null) {
-                                    error = "请先查询有效的高度和日期"
-                                    resetReady = false
-                                    return@AnonOutlineButton
-                                }
-                                val requestId = actionGeneration + 1L
-                                actionGeneration = requestId
-                                querying = false
-                                resetting = true
-                                error = null
-                                coroutineScope.launch {
-                                    val result = withContext(Dispatchers.IO) {
-                                        walletState.resetSyncFromHeight(heightValue)
-                                    }
-                                    if (requestId != actionGeneration) return@launch
-                                    resetting = false
-                                    if (result.isSuccess) {
-                                        onBackPress()
-                                    } else {
-                                        error = result.exceptionOrNull()?.message ?: "重置失败"
-                                    }
-                                }
-                            },
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            androidx.compose.foundation.layout.Box(
-                                modifier = Modifier.size(width = 64.dp, height = 24.dp),
-                                contentAlignment = androidx.compose.ui.Alignment.Center
-                            ) {
-                                if (resetting) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(28.dp),
-                                        strokeWidth = 2.dp
-                                    )
-                                } else {
-                                    Text("重置")
-                                }
-                            }
-                        }
-                    }
                     }
                 }
             }
