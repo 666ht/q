@@ -66,6 +66,7 @@ class OnboardViewModel(private val prefs: SharedPreferences) : ViewModel() {
             val crazyPass: String = KeyStoreHelper.getCrazyPass(AnonConfig.context, passPhrase)
             prefs.edit {
                 putString(PREFS_PASSPHRASE_HASH, crazyPass)
+                remove("MNEMONIC_SELECTED_RESTORE_HEIGHT")
             }
 
             //adds padding to the pin if it's less than 32 bytes
@@ -185,6 +186,8 @@ class OnboardViewModel(private val prefs: SharedPreferences) : ViewModel() {
                 putLong(RESTORE_HEIGHT, it)
             }
             putBoolean(RESTORE_NEEDS_RESCAN, true)
+            restorePayload?.restoreHeight?.let { putLong("MNEMONIC_SELECTED_RESTORE_HEIGHT", it) }
+                ?: remove("MNEMONIC_SELECTED_RESTORE_HEIGHT")
         }
         try {
             anonWallet.close()
