@@ -84,7 +84,9 @@ fun ResetSyncPage(
     fun dateCacheKey(heightValue: Long): String =
         "reset_sync_height_date_${dateCacheNamespace}_${heightValue}"
 
-    val savedRestoreHeight = wallet?.getRestoreHeight()
+    val savedRestoreHeight = preferences.getLong("MNEMONIC_SELECTED_RESTORE_HEIGHT", Long.MIN_VALUE)
+        .takeIf { it != Long.MIN_VALUE }
+        ?: wallet?.getRestoreHeight()
     var height by remember(wallet) {
         mutableStateOf(savedRestoreHeight?.toString() ?: "")
     }
