@@ -192,63 +192,49 @@ class NodeSettingsViewModel(
 
     suspend fun connect(node: Node) {
         withContext(Dispatchers.IO) {
-            uriValidationError.postValue(null)
+            val editor = prefs.edit()
             try {
-                val walletManager = WalletManager.instance
-                    ?: throw IllegalStateException("钱包管理器未初始化")
-                val wallet = walletManager.wallet
-                    ?: throw IllegalStateException("钱包未打开")
+                WalletManager.instance?.wallet?.pauseRefresh()
+                editor.putString(
+                    NodeFields.RPC_HOST.value,
+                    node.host
+                )
+                editor.putInt(
+                    NodeFields.RPC_PORT.value,
+                    node.rpcPort
+                )
+                editor.putString(
+                    NodeFields.RPC_USERNAME.value,
+                    node.username
+                )
+                editor.putString(
+                    NodeFields.RPC_PASSWORD.value,
+                    node.password
+                )
 
-                wallet.pauseRefresh()
-                prefs.edit {
-                    putString(NodeFields.RPC_HOST.value, node.host)
-                    putInt(NodeFields.RPC_PORT.value, node.rpcPort)
-                    putString(NodeFields.RPC_USERNAME.value, node.username)
-                    putString(NodeFields.RPC_PASSWORD.value, node.password)
-                }
-
-                // Apply the selected RPC endpoint before reinitializing wallet2.
+                editor.apply()
+                // Preserve the known-working #1070 connection sequence. The Tor
+                // runtime starts asynchronously; wallet2 owns the subsequent RPC
+                // handshake and sync callbacks. Do not abort refresh merely because
+                // init() returns false during an initial/reconnection transition.
+                torService.start()
                 walletHandler.updateDaemon(node)
-                val initialized = wallet.init(0L)
-                if (!initialized) {
-                    val nativeError = wallet.status.errorString
-                    throw IllegalStateException(
-                        nativeError.takeIf { it.isNotBlank() }
-                            ?: "节点初始化失败，请检查地址、端口和网络"
+                walletState.setLoading(false)
+                walletState.update()
+                val wallet = WalletManager.instance?.wallet
+                val initialized = wallet?.init(0L)
+                if (initialized == false) {
+                    Timber.tag(TAG).w(
+                        "wallet.init returned false while reconnecting to %s:%d; continuing refresh",
+                        node.host,
+                        node.rpcPort
                     )
                 }
-
-                wallet.setTrustedDaemon(true)
-                wallet.startRefresh()
-
-                // init() may succeed before the asynchronous RPC handshake finishes.
-                // Wait for the actual wallet connection status instead of reporting
-                // the connect action as successful immediately.
-                val deadline = System.currentTimeMillis() + 20_000L
-                while (System.currentTimeMillis() < deadline) {
-                    when (wallet.fullStatus.connectionStatus) {
-                        io.anonero.model.Wallet.ConnectionStatus.ConnectionStatus_Connected -> {
-                            walletState.setLoading(false)
-                            walletState.update()
-                            return@withContext
-                        }
-                        io.anonero.model.Wallet.ConnectionStatus.ConnectionStatus_WrongVersion -> {
-                            throw IllegalStateException("节点版本不兼容，请更换节点")
-                        }
-                        else -> kotlinx.coroutines.delay(300L)
-                    }
-                }
-
-                val nativeError = wallet.status.errorString
-                throw IllegalStateException(
-                    "连接节点超时（${node.host}:${node.rpcPort}）" +
-                        nativeError.takeIf { it.isNotBlank() }?.let { "：$it" }.orEmpty() +
-                        "。请检查节点地址、RPC 端口及节点是否在线"
-                )
+                wallet?.setTrustedDaemon(true)
+                wallet?.startRefresh()
             } catch (e: Exception) {
-                Timber.tag(TAG).e(e, "Node connection failed: %s:%d", node.host, node.rpcPort)
-                walletState.setLoading(false)
-                uriValidationError.postValue(e.message ?: "节点连接失败")
+                Timber.tag(TAG).e(e, "Node connection attempt failed: %s:%d", node.host, node.rpcPort)
+                uriValidationError.postValue(e.message)
             }
         }
     }
