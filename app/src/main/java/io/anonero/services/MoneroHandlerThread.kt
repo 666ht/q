@@ -112,7 +112,10 @@ class MoneroHandlerThread(
         val daemonHeight = wallet.getDaemonBlockChainHeight()
         val restoreStart = walletState.restoreProgressStartHeight
 
-        if (daemonHeight < 0L || syncHeight < 0L) return
+        if (daemonHeight < 0L || syncHeight < 0L) {
+            walletState.waitForSyncHeights()
+            return
+        }
 
         val restoreActive = walletState.restoreProgressInProgress && restoreStart != null
 
@@ -125,7 +128,12 @@ class MoneroHandlerThread(
         // reached the user-selected restore height, there is no wallet scan cursor
         // to report yet. Keep the loading indicator alive without displaying a fake
         // remaining-block count.
-        if (restoreActive && daemonHeight < restoreStart) {
+        if (restoreActive && (
+                daemonHeight < restoreStart ||
+                !walletState.restoreProgressRescanStarted ||
+                !walletState.hasObservedRestoreProgressCursor(syncHeight)
+            )
+        ) {
             walletState.waitForRestoreHeight()
             return
         }

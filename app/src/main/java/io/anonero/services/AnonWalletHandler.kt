@@ -145,10 +145,7 @@ class AnonWalletHandler(
 
             if (walletState.restoreProgressInProgress) {
                 runCatching {
-                    walletState.initializeRestoreProgress(
-                        wallet.getDaemonBlockChainHeight(),
-                        wallet.getBlockChainHeight()
-                    )
+                    walletState.initializeRestoreProgress(wallet.getBlockChainHeight())
                 }.onFailure {
                     Timber.tag(TAG).w(it, "Unable to initialize restore progress")
                 }
@@ -195,10 +192,13 @@ class AnonWalletHandler(
                     // wallet generation and guarantees the displayed remaining range
                     // matches the actual recovery start.
                     wallet.setRestoreHeight(effectiveRestoreHeight)
+                    val initialWalletHeight = runCatching {
+                        wallet.getBlockChainHeight()
+                    }.getOrNull()
                     restoreRescanStarted =
                         wallet.rescanBlockchainAsyncFromHeight(effectiveRestoreHeight)
                     if (restoreRescanStarted) {
-                        walletState.markRestoreProgressRescanStarted()
+                        walletState.markRestoreProgressRescanStarted(initialWalletHeight)
                     }
                     if (!restoreRescanStarted) {
                         Timber.tag(TAG).w(

@@ -117,12 +117,10 @@ fun ResetSyncPage(
     val canReset = selectedHeight != null && selectedHeight >= 0L && selectedDate != null
     // Keep the visible action and the click handler in sync. A background date lookup
     // may populate both fields, but that alone must never turn a Query tap into Reset.
+    // A query only enables the separate Reset action; cached fields never
+    // change the meaning of Query or automatically authorize a rescan.
     var resetReady by remember(wallet, preferences, savedRestoreHeight) {
-        mutableStateOf(
-            savedRestoreHeight?.takeIf { it >= 0L }?.let { restoredHeight ->
-                parseDate(preferences.getString(dateCacheKey(restoredHeight), null).orEmpty()) != null
-            } == true
-        )
+        mutableStateOf(false)
     }
     var queryByHeight by remember(wallet) { mutableStateOf(true) }
 
@@ -185,36 +183,15 @@ fun ResetSyncPage(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally
                 ) {
+                    androidx.compose.foundation.layout.Row(
+                        modifier = Modifier.fillMaxWidth(.9f),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                    ) {
                     AnonOutlineButton(
                         onClick = {
-                            val heightValue = height.toLongOrNull()
-                            val dateValue = parseDate(date)
-                            val readyToReset = heightValue != null &&
-                                heightValue >= 0L &&
-                                dateValue != null
-
-                            if (resetReady && readyToReset) {
-                                val requestId = actionGeneration + 1L
-                                actionGeneration = requestId
-                                querying = false
-                                resetting = true
-                                error = null
-                                coroutineScope.launch {
-                                    val result = withContext(Dispatchers.IO) {
-                                        // The selected height is the scan start; WalletState uses the current
-                                        // daemon height as the end of the rescan.
-                                        walletState.resetSyncFromHeight(heightValue!!)
-                                    }
-                                    if (requestId != actionGeneration) return@launch
-                                    resetting = false
-                                    if (result.isSuccess) {
-                                        onBackPress()
-                                    } else {
-                                        error = result.exceptionOrNull()?.message ?: "重置失败"
-                                    }
-                                }
-                                return@AnonOutlineButton
-                            }
+                            // Query is read-only and must never dispatch a rescan.
+                            if (querying || resetting) return@AnonOutlineButton
 
                             val hasHeightInput = height.isNotBlank()
                             val hasDateInput = date.isNotBlank()
@@ -281,7 +258,7 @@ fun ResetSyncPage(
                                         }
                                         val resolvedDate = queryResult.getOrThrow()
 
-                                        if (height != requestedHeight || date.isNotBlank()) return@launch
+                                        if (height != requestedHeight || !queryByHeight) return@launch
                                         if (resolvedDate == null) {
                                             error = "无法查询该高度的区块时间，请检查节点连接"
                                             return@launch
@@ -332,7 +309,7 @@ fun ResetSyncPage(
                                         }
                                         val resolvedHeight = queryResult.getOrThrow()
 
-                                        if (date != requestedDate || height.isNotBlank()) return@launch
+                                        if (date != requestedDate || queryByHeight) return@launch
                                         if (resolvedHeight == null || resolvedHeight < 0L) {
                                             error = "无法查询该日期的区块高度，请检查节点连接或日期"
                                             return@launch
@@ -355,21 +332,67 @@ fun ResetSyncPage(
                                 }
                             }
                         },
-                        modifier = Modifier.fillMaxWidth(.9f)
+                        modifier = Modifier.weight(1f)
                     ) {
                         androidx.compose.foundation.layout.Box(
                             modifier = Modifier.size(width = 64.dp, height = 24.dp),
                             contentAlignment = androidx.compose.ui.Alignment.Center
                         ) {
-                            if (querying || resetting) {
+                            if (querying) {
                                 CircularProgressIndicator(
                                     modifier = Modifier.size(28.dp),
                                     strokeWidth = 2.dp
                                 )
                             } else {
-                                Text(if (resetReady && canReset) "重置" else "查询")
+                                Text("查询")
                             }
                         }
+                    }
+                    if (resetReady && canReset) {
+                        AnonOutlineButton(
+                            onClick = {
+                                if (querying || resetting) return@AnonOutlineButton
+                                val heightValue = height.toLongOrNull()
+                                if (heightValue == null || heightValue < 0L || parseDate(date) == null) {
+                                    error = "请先查询有效的高度和日期"
+                                    resetReady = false
+                                    return@AnonOutlineButton
+                                }
+                                val requestId = actionGeneration + 1L
+                                actionGeneration = requestId
+                                querying = false
+                                resetting = true
+                                error = null
+                                coroutineScope.launch {
+                                    val result = withContext(Dispatchers.IO) {
+                                        walletState.resetSyncFromHeight(heightValue)
+                                    }
+                                    if (requestId != actionGeneration) return@launch
+                                    resetting = false
+                                    if (result.isSuccess) {
+                                        onBackPress()
+                                    } else {
+                                        error = result.exceptionOrNull()?.message ?: "重置失败"
+                                    }
+                                }
+                            },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            androidx.compose.foundation.layout.Box(
+                                modifier = Modifier.size(width = 64.dp, height = 24.dp),
+                                contentAlignment = androidx.compose.ui.Alignment.Center
+                            ) {
+                                if (resetting) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(28.dp),
+                                        strokeWidth = 2.dp
+                                    )
+                                } else {
+                                    Text("重置")
+                                }
+                            }
+                        }
+                    }
                     }
                 }
             }

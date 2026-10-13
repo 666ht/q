@@ -158,6 +158,13 @@ class WalletState {
     @Volatile
     var restoreProgressRescanStarted: Boolean = false
 
+    // Capture the cursor before rescan enqueue; the old tip is not valid progress.
+    @Volatile
+    private var restoreProgressInitialWalletHeight: Long? = null
+
+    @Volatile
+    private var restoreProgressCursorObserved: Boolean = false
+
     // Once the restore remaining-block counter reaches zero, this locks the
     // completion path so late native callbacks cannot recreate sync progress.
     @Volatile
@@ -176,6 +183,8 @@ class WalletState {
         restoreProgressFinalizing = false
         restoreProgressStartHeight = startHeight
         restoreProgressRescanStarted = false
+        restoreProgressInitialWalletHeight = null
+        restoreProgressCursorObserved = false
         restoreProgressCompleted = false
         restoreProgressInProgress = true
         // Drop any stale normal-sync "blocks left" value immediately. Until the
@@ -188,16 +197,39 @@ class WalletState {
         _isLoading.value = false
     }
 
-    fun markRestoreProgressRescanStarted() {
+    fun markRestoreProgressRescanStarted(initialWalletHeight: Long? = null) {
         if (restoreProgressInProgress) {
+            restoreProgressInitialWalletHeight = initialWalletHeight?.takeIf { it >= 0L }
+                ?: restoreProgressInitialWalletHeight
+            restoreProgressCursorObserved = false
             restoreProgressRescanStarted = true
         }
     }
 
     /**
-     * The daemon has not reached the user-selected restore height yet, so the
-     * wallet has no valid scan cursor. Show indeterminate loading without inventing
-     * a remaining-block number (especially a misleading zero).
+     * True only after wallet2 has moved the cursor into the selected restore range.
+     * Enqueuing an async rescan alone is not proof that the old tip has been cleared.
+     */
+    fun hasObservedRestoreProgressCursor(currentHeight: Long): Boolean {
+        if (!restoreProgressInProgress || !restoreProgressRescanStarted || restoreProgressCompleted) {
+            return false
+        }
+        if (restoreProgressCursorObserved) return true
+        if (currentHeight < 0L) return false
+
+        val start = restoreProgressStartHeight ?: return false
+        val initial = restoreProgressInitialWalletHeight
+        val observed = when {
+            initial == null || initial > start -> currentHeight <= start
+            else -> currentHeight != initial && currentHeight >= start
+        }
+        if (observed) restoreProgressCursorObserved = true
+        return restoreProgressCursorObserved
+    }
+
+    /**
+     * The selected restore cursor is not valid yet. Clear stale counts and show
+     * indeterminate loading until the native cursor can be trusted.
      */
     fun waitForRestoreHeight() {
         if (!restoreProgressInProgress || restoreProgressCompleted) return
@@ -206,18 +238,30 @@ class WalletState {
         _isLoading.value = true
     }
 
-    fun initializeRestoreProgress(daemonHeight: Long, scanHeight: Long) {
-        val start = restoreProgressStartHeight ?: return
-        if (!restoreProgressInProgress || daemonHeight < start) {
+    /** Clear stale numeric progress whenever native height reads are unavailable. */
+    fun waitForSyncHeights() {
+        if (restoreProgressInProgress && !restoreProgressCompleted) {
+            waitForRestoreHeight()
             return
         }
-        val current = maxOf(scanHeight, start)
-        syncUpdate(calculateSyncProgress(start, current, daemonHeight))
+        _syncProgress.value = null
+        _isSyncing.set(false)
+        _isLoading.value = true
+    }
+
+    fun initializeRestoreProgress(scanHeight: Long) {
+        if (!restoreProgressInProgress) return
+        restoreProgressInitialWalletHeight = scanHeight.takeIf { it >= 0L }
+        restoreProgressCursorObserved = false
+        // This is called before the native rescan is queued; do not publish the old tip.
+        waitForRestoreHeight()
     }
 
     fun finishRestoreProgress() {
         restoreProgressStartHeight = null
         restoreProgressRescanStarted = false
+        restoreProgressInitialWalletHeight = null
+        restoreProgressCursorObserved = false
         restoreProgressInProgress = false
         // Cancel any queued/running incremental scan refresh so it cannot race
         // the final refresh or publish a transient/partial history.
@@ -402,6 +446,8 @@ class WalletState {
         // window held by this singleton state object.
         restoreProgressStartHeight = null
         restoreProgressRescanStarted = false
+        restoreProgressInitialWalletHeight = null
+        restoreProgressCursorObserved = false
         restoreProgressInProgress = false
         restoreProgressCompleted = false
         restoreProgressFinalizing = false
@@ -814,6 +860,8 @@ class WalletState {
         customRescanDayEndHeight = null
         restoreProgressStartHeight = null
         restoreProgressRescanStarted = false
+        restoreProgressInitialWalletHeight = null
+        restoreProgressCursorObserved = false
         restoreProgressInProgress = false
         restoreProgressCompleted = false
         restoreProgressFinalizing = false
@@ -967,6 +1015,10 @@ class WalletState {
             // The native implementation serializes the clear/rescan request behind
             // any currently executing refresh. This method therefore runs on IO,
             // never on the UI thread (see ResetSyncPage).
+            val initialWalletHeight = runCatching {
+                wallet.getBlockChainHeight()
+            }.getOrNull()?.takeIf { it >= 0L }
+
             if (!wallet.rescanBlockchainAsyncFromHeight(height)) {
                 throw IllegalStateException("Blockchain rescan was not started")
             }
@@ -986,7 +1038,7 @@ class WalletState {
             customRescanStartHeight = height
             customRescanDayEndHeight = effectiveEnd
             customRescanInProgress = true
-            startCustomRescanProgressPolling(wallet, height, effectiveEnd)
+            startCustomRescanProgressPolling(wallet, height, effectiveEnd, initialWalletHeight)
             customRescanPreparing = false
 
             Timber.tag(TAG).i(
@@ -1033,7 +1085,8 @@ class WalletState {
     private fun startCustomRescanProgressPolling(
         wallet: Wallet,
         startHeight: Long,
-        endHeight: Long
+        endHeight: Long,
+        initialWalletHeight: Long?
     ) {
         customRescanJob?.cancel()
         customRescanJob = customRescanScope.launch {
@@ -1043,7 +1096,10 @@ class WalletState {
                 }.getOrNull()
                 if (rawHeight == null || rawHeight < 0L) {
                     // A failed cursor read is not evidence that the scan reached its
-                    // start height. Keep waiting instead of fabricating progress.
+                    // start height. Clear stale numbers and keep waiting.
+                    _syncProgress.value = null
+                    _isSyncing.set(false)
+                    _isLoading.value = true
                     withTimeoutOrNull(400L) { customRescanProgressSignals.receive() }
                     continue
                 }
@@ -1053,10 +1109,19 @@ class WalletState {
                 // still reports the pre-rescan tip. That old tip may already be
                 // >= endHeight, which must never be treated as completion.
                 if (!customRescanScanStarted.get()) {
-                    if (rawHeight <= startHeight) {
+                    val cursorReachedSelectedRange = when {
+                        initialWalletHeight == null || initialWalletHeight > startHeight ->
+                            rawHeight <= startHeight
+                        else -> rawHeight != initialWalletHeight && rawHeight >= startHeight
+                    }
+                    if (cursorReachedSelectedRange) {
                         customRescanScanStarted.set(true)
                     } else {
-                        syncUpdate(SyncProgress(0f, (endHeight - startHeight).coerceAtLeast(0L)))
+                        // The native request is queued, but this cursor still belongs
+                        // to the pre-reset wallet. Do not publish a fabricated total.
+                        _syncProgress.value = null
+                        _isSyncing.set(false)
+                        _isLoading.value = true
                         withTimeoutOrNull(400L) { customRescanProgressSignals.receive() }
                         continue
                     }
