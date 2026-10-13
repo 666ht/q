@@ -317,21 +317,23 @@ class MoneroHandlerThread(
             wallet.refreshHistory()
             wallet.refreshCoins(force = true)
             wallet.store()
-            walletState.update()
+
+            // Open the publication gate before finishSync(): its final update must
+            // replace the temporary merged transaction list with the exact refreshed
+            // wallet history, matching the custom-rescan completion path.
+            walletState.restoreProgressFinalizing = false
             walletState.finishSync()
 
-            walletState.restoreProgressFinalizing = false
-            // The restore terminal guard protects this final refresh only.
-            // Leaving it set would make later ordinary refreshed/newBlock callbacks
-            // return early and keep the generic refresh indicator active.
+            // Keep the terminal guard until the final snapshot has been published.
+            // Leaving it set after this point would block later ordinary refreshes.
             walletState.restoreProgressCompleted = false
             runCatching { onRestoreCompleted() }
                 .onFailure { Timber.tag(name).e(it, "Failed to clear completed restore request") }
         } catch (e: Exception) {
             Timber.tag(name).e(e, "Failed to finalize restored wallet data")
             walletState.finishRestoreProgress()
-            walletState.finishSync()
             walletState.restoreProgressFinalizing = false
+            walletState.finishSync()
             walletState.restoreProgressCompleted = false
         }
     }
