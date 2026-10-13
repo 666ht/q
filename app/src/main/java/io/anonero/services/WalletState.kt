@@ -220,7 +220,16 @@ class WalletState {
         val start = restoreProgressStartHeight ?: return false
         val initial = restoreProgressInitialWalletHeight
         val observed = when {
-            initial == null || initial > start -> currentHeight <= start
+            // If the pre-rescan wallet tip was above the selected restore height,
+            // the native cursor may jump from that old tip to start+N between
+            // callbacks. Waiting for an exact read at start can therefore block
+            // progress forever; any drop below the captured old tip confirms reset.
+            initial != null && initial > start -> currentHeight < initial
+            // Without a reliable baseline, only accept an observed cursor at/below
+            // the selected start. Never mistake the old high tip for live progress.
+            initial == null -> currentHeight <= start
+            // For a fresh wallet whose initial cursor is at/below the chosen start,
+            // wait until the scan actually enters that range.
             else -> currentHeight != initial && currentHeight >= start
         }
         if (observed) restoreProgressCursorObserved = true
