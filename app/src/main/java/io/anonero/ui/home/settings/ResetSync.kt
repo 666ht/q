@@ -453,8 +453,7 @@ fun ResetSyncPage(
                     error = null
                     height = it.filter(Char::isDigit)
                     queryByHeight = true
-                    // Changing height clears the date; the button stays Query until both are present.
-                    date = ""
+                    // Height and date are independent fields; editing either never clears the other.
                 },
                 shape = MaterialTheme.shapes.medium,
                 modifier = Modifier.fillMaxWidth(),
@@ -472,8 +471,7 @@ fun ResetSyncPage(
                     error = null
                     date = it
                     queryByHeight = false
-                    // Changing date clears the height; the button stays Query until both are present.
-                    height = ""
+                    // Date and height are independent fields; editing either never clears the other.
                 },
                 shape = MaterialTheme.shapes.medium,
                 modifier = Modifier.fillMaxWidth(),
