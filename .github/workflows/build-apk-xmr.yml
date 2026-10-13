@@ -32,7 +32,7 @@ jobs:
         working-directory: external-libs/monero
         run: |
           git fetch --depth=1 origin 4d1aea20d98d8d2139a3bac3276268bd5c16590e
-          git checkout 39c6177076faebbefbc1aca430240e0a4a48dcf7
+          git checkout 4d1aea20d98d8d2139a3bac3276268bd5c16590e
 
       - name: Read XMR revision
         id: xmr
