@@ -1084,24 +1084,38 @@ JNIEXPORT jlong JNICALL
 Java_io_anonero_model_Wallet_getBlockChainHeightByDateJ(JNIEnv *env, jobject instance,
                                                          jint year, jint month, jint day) {
     Monero::Wallet *wallet = getHandle<Monero::Wallet>(env, instance);
-    return wallet->getBlockChainHeightByDate(static_cast<uint16_t>(year),
+    if (wallet == nullptr) return static_cast<jlong>(-1);
+
+    try {
+        return static_cast<jlong>(
+            wallet->getBlockChainHeightByDate(static_cast<uint16_t>(year),
                                               static_cast<uint8_t>(month),
-                                              static_cast<uint8_t>(day));
+                                              static_cast<uint8_t>(day)));
+    } catch (const std::exception &e) {
+        LOGE("getBlockChainHeightByDate failed: %s", e.what());
+    } catch (...) {
+        LOGE("getBlockChainHeightByDate failed: unknown native exception");
+    }
+    // -1 is the Kotlin caller's invalid-result sentinel.
+    return static_cast<jlong>(-1);
 }
 
 JNIEXPORT jlong JNICALL
 Java_io_anonero_model_Wallet_getBlockTimestampJ(JNIEnv *env, jobject instance,
                                                 jlong height) {
     Monero::Wallet *wallet = getHandle<Monero::Wallet>(env, instance);
-    if (height < 0)
+    if (wallet == nullptr || height < 0)
         return static_cast<jlong>(0);
 
     try {
         return static_cast<jlong>(
             wallet->getBlockTimestamp(static_cast<uint64_t>(height)));
-    } catch (const std::exception &) {
-        return static_cast<jlong>(0);
+    } catch (const std::exception &e) {
+        LOGE("getBlockTimestamp failed: %s", e.what());
+    } catch (...) {
+        LOGE("getBlockTimestamp failed: unknown native exception");
     }
+    return static_cast<jlong>(0);
 }
 
 JNIEXPORT jlong JNICALL
