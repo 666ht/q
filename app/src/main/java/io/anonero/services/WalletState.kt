@@ -746,7 +746,7 @@ class WalletState {
 
                 // Repeat the barrier after obtaining the coordinator: an older operation
                 // may have queued work after the first stop signal was sent.
-                wallet.pauseRefresh()
+                withContext(Dispatchers.IO) { wallet.pauseRefresh() }
                 if (operationId != userOperationGeneration.get()) {
                     return@withLock Result.failure(IllegalStateException("查询已被更新操作取代"))
                 }
