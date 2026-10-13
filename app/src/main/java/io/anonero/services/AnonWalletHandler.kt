@@ -252,7 +252,8 @@ class AnonWalletHandler(
                     daemonHeight = 0L
                 )
             )
-            e.printStackTrace()
+            Timber.tag(TAG).e(e, "Failed to configure daemon")
+            throw e
         }
     }
 
