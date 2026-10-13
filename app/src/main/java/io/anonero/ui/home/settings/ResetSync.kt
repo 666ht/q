@@ -115,18 +115,19 @@ fun ResetSyncPage(
                     AnonOutlineButton(
                         onClick = {
                             if (resetting) return@AnonOutlineButton
-                            val restoreHeight = height.toLongOrNull()
-                            if (restoreHeight == null) {
-                                error = "请输入有效高度或日期"
-                                return@AnonOutlineButton
-                            }
-
-                            val endHeight = selectedDateEndHeight
                             resetting = true
                             coroutineScope.launch {
-                                val conversionJob = heightDateJob
-                                conversionJob?.cancel()
-                                conversionJob?.join()
+                                // Let an in-flight date/height conversion finish.
+                                // Do not cancel it and accidentally reuse the prior height.
+                                heightDateJob?.join()
+
+                                val restoreHeight = height.toLongOrNull()
+                                if (restoreHeight == null) {
+                                    resetting = false
+                                    error = "请输入有效高度或日期"
+                                    return@launch
+                                }
+                                val endHeight = selectedDateEndHeight
 
                                 val result = withContext(Dispatchers.IO) {
                                     walletState.resetSyncFromHeight(restoreHeight, endHeight)
