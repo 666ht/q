@@ -115,6 +115,16 @@ fun ResetSyncPage(
     val selectedHeight = height.toLongOrNull()
     val selectedDate = parseDate(date)
     val canReset = selectedHeight != null && selectedHeight >= 0L && selectedDate != null
+    // Keep the visible action and the click handler in sync. A background date lookup
+    // may populate both fields, but that alone must never turn a Query tap into Reset.
+    var resetReady by remember(wallet, preferences, savedRestoreHeight) {
+        mutableStateOf(
+            savedRestoreHeight?.takeIf { it >= 0L }?.let { restoredHeight ->
+                parseDate(preferences.getString(dateCacheKey(restoredHeight), null).orEmpty()) != null
+            } == true
+        )
+    }
+    var queryByHeight by remember(wallet) { mutableStateOf(true) }
 
     // Resolve the saved height's date in the background. Initialization must not
     // drive the button spinner or disable either input field.
@@ -183,7 +193,7 @@ fun ResetSyncPage(
                                 heightValue >= 0L &&
                                 dateValue != null
 
-                            if (readyToReset) {
+                            if (resetReady && readyToReset) {
                                 val requestId = actionGeneration + 1L
                                 actionGeneration = requestId
                                 querying = false
@@ -212,11 +222,6 @@ fun ResetSyncPage(
                                 error = "请输入高度或日期后查询"
                                 return@AnonOutlineButton
                             }
-                            if (hasHeightInput && hasDateInput) {
-                                error = "请输入有效高度和日期"
-                                return@AnonOutlineButton
-                            }
-
                             val activeWallet = wallet
                             if (activeWallet == null) {
                                 error = "钱包尚未就绪，无法查询"
@@ -225,10 +230,17 @@ fun ResetSyncPage(
 
                             val requestedHeight = height
                             val requestedDate = date
+                            // If an initialization lookup filled the second field in the
+                            // background, retain Query mode and query the selected source.
+                            val queryHeightMode = when {
+                                hasHeightInput && hasDateInput -> queryByHeight
+                                hasHeightInput -> true
+                                else -> false
+                            }
 
                             // Cached lookups are local and safe during refresh. A
                             // cache miss must wait for wallet2 to leave refresh/scan.
-                            val cacheHit = if (hasHeightInput) {
+                            val cacheHit = if (queryHeightMode) {
                                 val h = requestedHeight.toLongOrNull()
                                 h != null && (
                                     heightToDateCache.containsKey(h) ||
@@ -241,11 +253,12 @@ fun ResetSyncPage(
                             val requestId = actionGeneration + 1L
                             actionGeneration = requestId
                             resetting = false
+                            resetReady = false
                             querying = true
                             error = null
                             coroutineScope.launch {
                                 try {
-                                    if (hasHeightInput) {
+                                    if (queryHeightMode) {
                                         val queryHeight = requestedHeight.toLongOrNull()
                                         if (queryHeight == null || queryHeight < 0L) {
                                             error = "请输入有效区块高度"
@@ -279,6 +292,7 @@ fun ResetSyncPage(
                                             .putString(dateCacheKey(queryHeight), resolvedDate)
                                             .apply()
                                         date = resolvedDate
+                                        resetReady = true
                                         error = null
                                     } else {
                                         val parsedDate = parseDate(requestedDate)
@@ -329,6 +343,7 @@ fun ResetSyncPage(
                                             .putLong(heightCacheKey(requestedDate), resolvedHeight)
                                             .apply()
                                         height = resolvedHeight.toString()
+                                        resetReady = true
                                         error = null
                                     }
                                 } catch (e: Exception) {
@@ -352,7 +367,7 @@ fun ResetSyncPage(
                                     strokeWidth = 2.dp
                                 )
                             } else {
-                                Text(if (canReset) "重置" else "查询")
+                                Text(if (resetReady && canReset) "重置" else "查询")
                             }
                         }
                     }
@@ -374,6 +389,8 @@ fun ResetSyncPage(
                 onValueChange = {
                     error = null
                     height = it.filter(Char::isDigit)
+                    resetReady = false
+                    queryByHeight = true
                     // A changed height invalidates the old date until the user runs Query.
                     date = ""
                 },
@@ -392,6 +409,8 @@ fun ResetSyncPage(
                 onValueChange = {
                     error = null
                     date = it
+                    resetReady = false
+                    queryByHeight = false
                     // A changed date invalidates the old height until the user runs Query.
                     height = ""
                 },
