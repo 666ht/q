@@ -848,12 +848,18 @@ class WalletState {
                     return Result.failure(IllegalStateException("重置已被更新操作取代"))
                 }
                 val result = resetSyncFromHeightInternal(height, dayEndHeight, operationId)
-                if (result.isFailure && operationId == userOperationGeneration.get() &&
-                    wallet.fullStatus.connectionStatus == Wallet.ConnectionStatus.ConnectionStatus_Connected
-                ) {
-                    // Invalid end heights and other pre-scan failures may happen before
-                    // the internal method marks the pause as owned; never strand refresh.
-                    runCatching { wallet.startRefresh() }
+                if (result.isFailure && operationId == userOperationGeneration.get()) {
+                    // Failures before the scan begins must also clear stale scan UI
+                    // state and release the paused refresh loop.
+                    cancelScanUiStateForLatestOperation()
+                    if (operationId == userOperationGeneration.get() &&
+                        wallet.fullStatus.connectionStatus == Wallet.ConnectionStatus.ConnectionStatus_Connected
+                    ) {
+                        runCatching {
+                            setLoading(true)
+                            wallet.startRefresh()
+                        }.onFailure { Timber.tag(TAG).w(it, "Could not resume refresh after reset failure") }
+                    }
                 }
                 result
             } finally {
