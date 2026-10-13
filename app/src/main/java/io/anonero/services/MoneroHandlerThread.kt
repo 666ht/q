@@ -246,6 +246,20 @@ class MoneroHandlerThread(
             updateSyncProgress(chainHeight)
             return
         }
+
+        // A manual refresh requested during ordinary synchronization is safe now:
+        // doRefresh() has reached its listener callback boundary, so no second JNI
+        // history read races the block-processing loop. Final-sync paths below
+        // already refresh the complete history and therefore need no extra read.
+        if (walletState.consumeDeferredManualRefresh() && !wallet.isSynchronized) {
+            runCatching {
+                wallet.refreshHistory()
+                walletState.update()
+            }.onFailure {
+                Timber.tag(name).e(it, "Deferred manual refresh failed")
+            }
+        }
+
         if (status === Wallet.ConnectionStatus.ConnectionStatus_Disconnected || status == null) {
             tryRestartConnection()
         } else {

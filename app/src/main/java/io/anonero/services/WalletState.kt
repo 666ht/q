@@ -72,6 +72,9 @@ class WalletState {
     private var customRescanJob: Job? = null
     private val customRescanFinishStarted = AtomicBoolean(false)
     private val customRescanRequesting = AtomicBoolean(false)
+    // A manual refresh pressed during sync is replayed at the next safe native
+    // refresh callback, or coalesced into the scan's final history refresh.
+    private val deferredManualRefresh = AtomicBoolean(false)
 
 
     // During mnemonic restore, expose discovered wallet data while the native
@@ -557,6 +560,9 @@ class WalletState {
     }
 
     fun finishSync() {
+        // Normal synchronization/custom-rescan completion has already refreshed
+        // history and outputs. A deferred request is satisfied by that snapshot.
+        deferredManualRefresh.set(false)
         _syncProgress.value = null
         _isSyncing.set(false)
         _isLoading.value = false
@@ -614,6 +620,23 @@ class WalletState {
         }
     }
 
+    /**
+     * Consume a manual refresh queued while a native scan owned mutable wallet
+     * state. Custom rescans and mnemonic restores perform their own final refresh,
+     * so those paths keep the request until finishSync() clears it.
+     */
+    fun consumeDeferredManualRefresh(): Boolean {
+        if (customRescanPreparing ||
+            customRescanInProgress ||
+            customRescanFinalizing ||
+            customRescanFinished ||
+            restoreProgressInProgress ||
+            restoreProgressFinalizing ||
+            restoreProgressCompleted
+        ) return false
+        return deferredManualRefresh.compareAndSet(true, false)
+    }
+
     fun refresh() {
         val wallet = getWallet
         if (wallet?.isInitialized != true) {
@@ -633,7 +656,8 @@ class WalletState {
             isSyncing ||
             _isLoading.value
         if (scanOwnsWallet) {
-            Timber.tag(TAG).i("Manual refresh coalesced with active wallet scan")
+            deferredManualRefresh.set(true)
+            Timber.tag(TAG).i("Manual refresh deferred until the active wallet scan reaches a safe callback")
             return
         }
 
