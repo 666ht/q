@@ -106,6 +106,10 @@ class WalletState {
     private var customRescanFinishJob: Job? = null
     private val customRescanFinishStarted = AtomicBoolean(false)
     private val customRescanRequesting = AtomicBoolean(false)
+    // Mnemonic recovery reuses the same custom-height scan engine as in-wallet reset.
+    // Consume the one-shot recovery request only after the shared final refresh succeeds.
+    @Volatile
+    private var customRescanCompletionCallback: (() -> Unit)? = null
     // A manual refresh pressed during sync is replayed at the next safe native
     // refresh callback, or coalesced into the scan's final history refresh.
     private val deferredManualRefresh = AtomicBoolean(false)
@@ -886,7 +890,11 @@ class WalletState {
         customRescanPreparing = false
     }
 
-    suspend fun resetSyncFromHeight(height: Long, dayEndHeight: Long? = null): Result<Boolean> {
+    suspend fun resetSyncFromHeight(
+        height: Long,
+        dayEndHeight: Long? = null,
+        onCompleted: (() -> Unit)? = null
+    ): Result<Boolean> {
         val wallet = getWallet
             ?: return Result.failure(IllegalStateException("Wallet not initialized"))
         if (wallet.fullStatus.connectionStatus != Wallet.ConnectionStatus.ConnectionStatus_Connected) {
@@ -915,7 +923,7 @@ class WalletState {
                     return Result.failure(IllegalStateException("重置已被更新操作取代"))
                 }
 
-                val result = resetSyncFromHeightInternal(height, dayEndHeight, operationId)
+                val result = resetSyncFromHeightInternal(height, dayEndHeight, operationId, onCompleted)
                 if (result.isFailure && operationId == userOperationGeneration.get()) {
                     // A failure before scan start must clear stale state and resume
                     // refresh; a superseded reset must not touch the newer operation.
@@ -950,7 +958,8 @@ class WalletState {
     private suspend fun resetSyncFromHeightInternal(
         height: Long,
         dayEndHeight: Long?,
-        operationId: Long
+        operationId: Long,
+        onCompleted: (() -> Unit)?
     ): Result<Boolean> {
         if (operationId != userOperationGeneration.get()) {
             return Result.failure(IllegalStateException("重置已被更新操作取代"))
@@ -983,6 +992,7 @@ class WalletState {
             // so callbacks from the old operation cannot publish progress or finish it.
             customRescanPreparing = true
             preparationStarted = true
+            customRescanCompletionCallback = null
             customRescanInProgress = false
             customRescanJob?.cancelAndJoin()
             if (operationId != userOperationGeneration.get()) {
@@ -1052,6 +1062,7 @@ class WalletState {
             // The native request has been accepted and the old scan cursor cleared.
             customRescanStartHeight = height
             customRescanDayEndHeight = effectiveEnd
+            customRescanCompletionCallback = onCompleted
             customRescanInProgress = true
             startCustomRescanProgressPolling(wallet, height, effectiveEnd, initialWalletHeight)
             customRescanPreparing = false
@@ -1074,6 +1085,7 @@ class WalletState {
                 customRescanInProgress = false
                 customRescanFinalizing = false
                 customRescanFinished = false
+                customRescanCompletionCallback = null
                 _syncProgress.value = null
                 _isSyncing.set(false)
                 setLoading(false)
@@ -1219,9 +1231,14 @@ class WalletState {
                 "Custom rescan reached end height=%d; final wallet refresh complete",
                 endHeight
             )
+            val onCompleted = customRescanCompletionCallback
+            customRescanCompletionCallback = null
+            runCatching { onCompleted?.invoke() }
+                .onFailure { Timber.tag(TAG).e(it, "Post-rescan completion callback failed") }
         } catch (e: Exception) {
             customRescanFinalizing = false
             customRescanFinished = true
+            customRescanCompletionCallback = null
             Timber.tag(TAG).e(e, "Failed to finalize custom rescan wallet data")
             finishSync()
         }
