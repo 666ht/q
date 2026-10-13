@@ -660,6 +660,26 @@ class WalletState {
         return deferredManualRefresh.compareAndSet(true, false)
     }
 
+    /**
+     * Date/height lookups call the native wallet directly. Do not start these
+     * lookups while another refresh or scan owns wallet2's mutable state.
+     * Cached values can still be returned by ResetSync without calling JNI.
+     */
+    fun canQueryBlockDate(): Boolean {
+        val wallet = getWallet ?: return false
+        return wallet.isInitialized &&
+            !_isLoading.value &&
+            !_isSyncing.get() &&
+            _syncProgress.value == null &&
+            !_backgroundSync.value &&
+            !nativeBackgroundSyncActive.get() &&
+            !customRescanPreparing &&
+            !customRescanInProgress &&
+            !customRescanFinalizing &&
+            !restoreProgressInProgress &&
+            !restoreProgressFinalizing
+    }
+
     fun refresh() {
         val wallet = getWallet
         if (wallet?.isInitialized != true) {
