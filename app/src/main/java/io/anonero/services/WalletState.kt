@@ -696,11 +696,14 @@ class WalletState {
         // other user actions to leave their critical section before taking over.
         val operationId = userOperationGeneration.incrementAndGet()
         userOperationScope.launch {
+            if (operationId != userOperationGeneration.get()) return@launch
             runCatching { wallet.pauseRefresh() }
                 .onFailure { Timber.tag(TAG).w(it, "Could not signal cancellation before manual refresh") }
+            if (operationId != userOperationGeneration.get()) return@launch
 
             userOperationMutex.lock()
             try {
+                if (operationId != userOperationGeneration.get()) return@launch
                 runCatching { wallet.pauseRefresh() }
                 if (operationId != userOperationGeneration.get()) return@launch
 
@@ -733,12 +736,16 @@ class WalletState {
             ?: return Result.failure(IllegalStateException("Wallet not initialized"))
         val operationId = userOperationGeneration.incrementAndGet()
         val stopJob = userOperationScope.launch {
+            if (operationId != userOperationGeneration.get()) return@launch
             runCatching { wallet.pauseRefresh() }
                 .onFailure { Timber.tag(TAG).w(it, "Could not signal cancellation before block-date query") }
         }
 
         return try {
             stopJob.join()
+            if (operationId != userOperationGeneration.get()) {
+                return Result.failure(IllegalStateException("查询已被更新操作取代"))
+            }
             userOperationMutex.lock()
             try {
                 if (operationId != userOperationGeneration.get()) {
@@ -819,12 +826,16 @@ class WalletState {
         }
         val operationId = userOperationGeneration.incrementAndGet()
         val stopJob = userOperationScope.launch {
+            if (operationId != userOperationGeneration.get()) return@launch
             runCatching { wallet.pauseRefresh() }
                 .onFailure { Timber.tag(TAG).w(it, "Could not signal cancellation before reset") }
         }
 
         return try {
             stopJob.join()
+            if (operationId != userOperationGeneration.get()) {
+                return Result.failure(IllegalStateException("重置已被更新操作取代"))
+            }
             userOperationMutex.lock()
             try {
                 if (operationId != userOperationGeneration.get()) {
