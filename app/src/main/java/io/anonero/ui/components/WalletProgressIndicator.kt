@@ -29,8 +29,8 @@ import androidx.lifecycle.asLiveData
 import io.anonero.R
 import io.anonero.model.Wallet
 import io.anonero.services.WalletState
-import io.anonero.util.Formats
 import org.koin.java.KoinJavaComponent.inject
+import java.text.NumberFormat
 import java.util.Locale
 
 @Composable
@@ -97,10 +97,10 @@ fun WalletProgressIndicator(modifier: Modifier = Modifier, refreshIndicatorProgr
                         .padding(horizontal = 16.dp),
                 )
                 if (progress.left > 50) {
-                    val blocksLeft = Formats.convertNumber(
-                        progress.left,
-                        Locale.getDefault()
-                    ) ?: ""
+                    // Block counts are integers: never abbreviate or round them
+                    // to compact values such as "3.8M" or "10万".
+                    val blocksLeft = NumberFormat.getIntegerInstance(Locale.getDefault())
+                        .format(progress.left)
                     Text(
                         stringResource(
                             R.string.blocks_left,
