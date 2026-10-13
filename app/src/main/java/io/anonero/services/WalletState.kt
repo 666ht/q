@@ -39,6 +39,27 @@ import java.util.concurrent.atomic.AtomicReference
 
 data class SyncProgress(val progress: Float, val left: Long)
 
+/**
+ * Shared progress calculation for mnemonic recovery and in-wallet custom rescans.
+ * Both paths use the same start/current/target arithmetic so the percentage and
+ * remaining-block counter cannot drift apart.
+ */
+fun calculateSyncProgress(startHeight: Long, currentHeight: Long, targetHeight: Long): SyncProgress {
+    val safeStart = startHeight.coerceAtLeast(0L)
+    val safeTarget = targetHeight.coerceAtLeast(safeStart)
+    val safeCurrent = currentHeight.coerceIn(safeStart, safeTarget)
+    val total = (safeTarget - safeStart).coerceAtLeast(1L)
+    val left = (safeTarget - safeCurrent).coerceAtLeast(0L)
+    val progress = if (safeCurrent >= safeTarget) {
+        1f
+    } else {
+        ((safeCurrent - safeStart).toDouble() / total.toDouble())
+            .coerceIn(0.0, 1.0)
+            .toFloat()
+    }
+    return SyncProgress(progress, left)
+}
+
 private const val TAG = "WalletState"
 
 class WalletState {
@@ -833,13 +854,9 @@ class WalletState {
                     break
                 }
 
-                val total = (endHeight - startHeight).coerceAtLeast(1L)
-                val left = (endHeight - currentHeight).coerceAtLeast(0L)
-                val progress = ((currentHeight - startHeight).toDouble() / total.toDouble())
-                    .coerceIn(0.0, 0.999999)
-                    .toFloat()
-
-                syncUpdate(SyncProgress(progress, left))
+                val progress = calculateSyncProgress(startHeight, currentHeight, endHeight)
+                // Keep 100% reserved for the shared completion/final-refresh path.
+                syncUpdate(progress.copy(progress = progress.progress.coerceAtMost(0.999999f)))
                 // Update on the next native block callback, or at least every 400ms.
                 withTimeoutOrNull(400L) { customRescanProgressSignals.receive() }
             }
