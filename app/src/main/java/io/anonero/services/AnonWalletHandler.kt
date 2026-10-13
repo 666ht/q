@@ -82,6 +82,10 @@ class AnonWalletHandler(
         }
         if (savedRestoreHeight > 0L && !wallet.nativeSynchronized) {
             walletState.beginRestoreProgress(savedRestoreHeight)
+            // Arm the same preparation gate used by the in-wallet reset before the
+            // listener is attached, so startup callbacks cannot publish the daemon's
+            // full-chain estimate or switch through a separate restore progress phase.
+            walletState.customRescanPreparing = true
         }
 
         handler = MoneroHandlerThread(
@@ -143,14 +147,8 @@ class AnonWalletHandler(
 
             wallet.init(0)
 
-            if (walletState.restoreProgressInProgress) {
-                runCatching {
-                    walletState.initializeRestoreProgress(wallet.getBlockChainHeight())
-                }.onFailure {
-                    Timber.tag(TAG).w(it, "Unable to initialize restore progress")
-                }
-            }
-
+            // Restore mode is only a guard against normal-sync estimates until the
+            // shared custom-height reset engine takes ownership of scan progress.
             if (savedRestoreHeight > 0L && savedRestoreHeight != wallet.getRestoreHeight()) {
                 wallet.setRestoreHeight(savedRestoreHeight)
                 wallet.store()
@@ -180,35 +178,64 @@ class AnonWalletHandler(
                         putBoolean(RESTORE_NEEDS_RESCAN, false)
                         remove(RESTORE_HEIGHT)
                     }
+                    walletState.customRescanPreparing = false
                     walletState.finishRestoreProgress()
                 } else if (!needsRestoreRescan && prefs.contains(RESTORE_HEIGHT)) {
                     // Backward-compatible cleanup for stale one-shot height values.
                     prefs.edit { remove(RESTORE_HEIGHT) }
                 }
-                var restoreRescanStarted = false
                 if (effectiveRestoreHeight != null && !wallet.nativeSynchronized) {
-                    // Re-arm a recovery wallet from the exact user-selected height.
-                    // This removes any stale/older local scan cursor left by a prior
-                    // wallet generation and guarantees the displayed remaining range
-                    // matches the actual recovery start.
+                    // Mnemonic recovery and in-wallet "重置同步区块" share the same
+                    // native reset, real cursor polling, remaining-block calculation,
+                    // and final history/output refresh. The selected height is the exact
+                    // start; the live daemon height is the scan end.
                     wallet.setRestoreHeight(effectiveRestoreHeight)
-                    val initialWalletHeight = runCatching {
-                        wallet.getBlockChainHeight()
-                    }.getOrNull()
-                    restoreRescanStarted =
-                        wallet.rescanBlockchainAsyncFromHeight(effectiveRestoreHeight)
-                    if (restoreRescanStarted) {
-                        walletState.markRestoreProgressRescanStarted(initialWalletHeight)
+                    wallet.store()
+
+                    // resetSyncFromHeight requires a connected daemon. Start the refresh
+                    // worker only if necessary, then wait for connection state rather
+                    // than falling back to a normal full-chain sync estimate.
+                    if (wallet.fullStatus.connectionStatus !=
+                        io.anonero.model.Wallet.ConnectionStatus.ConnectionStatus_Connected
+                    ) {
+                        wallet.startRefresh()
                     }
-                    if (!restoreRescanStarted) {
-                        Timber.tag(TAG).w(
-                            "Exact restore-height rescan could not be queued: %d",
-                            effectiveRestoreHeight
+                    val connectDeadline = System.currentTimeMillis() + 120_000L
+                    while (
+                        wallet.isInitialized &&
+                        wallet.fullStatus.connectionStatus !=
+                            io.anonero.model.Wallet.ConnectionStatus.ConnectionStatus_Connected &&
+                        System.currentTimeMillis() < connectDeadline
+                    ) {
+                        delay(200)
+                    }
+
+                    if (wallet.fullStatus.connectionStatus ==
+                        io.anonero.model.Wallet.ConnectionStatus.ConnectionStatus_Connected
+                    ) {
+                        val result = walletState.resetSyncFromHeight(effectiveRestoreHeight) {
+                            prefs.edit(commit = true) {
+                                putBoolean(RESTORE_NEEDS_RESCAN, false)
+                                remove(RESTORE_HEIGHT)
+                            }
+                        }
+                        if (result.isFailure) {
+                            walletState.customRescanPreparing = false
+                            Timber.tag(TAG).e(
+                                result.exceptionOrNull(),
+                                "Shared selected-height restore scan failed: %d",
+                                effectiveRestoreHeight
+                            )
+                            // Keep the one-shot restore request and suppress fake
+                            // full-chain progress; do not mark this restore complete.
+                        }
+                    } else {
+                        walletState.customRescanPreparing = false
+                        Timber.tag(TAG).e(
+                            "Selected-height restore scan not started: daemon did not connect"
                         )
+                        // Retain RESTORE_NEEDS_RESCAN so startup can retry this height.
                     }
-                }
-                if (!restoreRescanStarted) {
-                    wallet.startRefresh()
                 }
                 walletState.update()
             }
