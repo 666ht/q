@@ -728,10 +728,7 @@ class WalletState {
         val wallet = getWallet
             ?: return Result.failure(IllegalStateException("Wallet not initialized"))
         if (wallet.fullStatus.connectionStatus != Wallet.ConnectionStatus.ConnectionStatus_Connected) {
-            return Result.failure(IllegalStateException("Please connect to daemon for resync"))
-        }
-        if (height < 0L) {
-            return Result.failure(IllegalArgumentException("Invalid restore height"))
+            return Result.failure(IllegalStateException("Please connect to daemon for query"))
         }
         val operationId = userOperationGeneration.incrementAndGet()
         val stopJob = userOperationScope.launch {
@@ -810,6 +807,12 @@ class WalletState {
     suspend fun resetSyncFromHeight(height: Long, dayEndHeight: Long? = null): Result<Boolean> {
         val wallet = getWallet
             ?: return Result.failure(IllegalStateException("Wallet not initialized"))
+        if (wallet.fullStatus.connectionStatus != Wallet.ConnectionStatus.ConnectionStatus_Connected) {
+            return Result.failure(IllegalStateException("Please connect to daemon for resync"))
+        }
+        if (height < 0L) {
+            return Result.failure(IllegalArgumentException("Invalid restore height"))
+        }
         val operationId = userOperationGeneration.incrementAndGet()
         val stopJob = userOperationScope.launch {
             runCatching { wallet.pauseRefresh() }
