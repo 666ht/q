@@ -254,21 +254,19 @@ fun ResetSyncPage(
 
                                         val cachedDate = heightToDateCache[queryHeight]
                                             ?: preferences.getString(dateCacheKey(queryHeight), null)
-                                        val resolvedDate = if (cachedDate != null) {
-                                            cachedDate
-                                        } else {
-                                            val queryResult = walletState.executeLatestWalletQuery {
-                                                it.getBlockTimestamp(queryHeight)
+                                        val queryResult = walletState.executeLatestWalletQuery { queryWallet ->
+                                            cachedDate ?: run {
+                                                val timestamp = queryWallet.getBlockTimestamp(queryHeight)
+                                                if (timestamp > 0L) dateForTimestamp(timestamp) else null
                                             }
-                                            if (requestId != actionGeneration) return@launch
-                                            if (queryResult.isFailure) {
-                                                error = queryResult.exceptionOrNull()?.message
-                                                    ?: "查询失败，请检查节点连接后重试"
-                                                return@launch
-                                            }
-                                            val timestamp = queryResult.getOrThrow()
-                                            if (timestamp > 0L) dateForTimestamp(timestamp) else null
                                         }
+                                        if (requestId != actionGeneration) return@launch
+                                        if (queryResult.isFailure) {
+                                            error = queryResult.exceptionOrNull()?.message
+                                                ?: "查询失败，请检查节点连接后重试"
+                                            return@launch
+                                        }
+                                        val resolvedDate = queryResult.getOrThrow()
 
                                         if (height != requestedHeight || date.isNotBlank()) return@launch
                                         if (resolvedDate == null) {
@@ -294,10 +292,10 @@ fun ResetSyncPage(
                                                 heightCacheKey(requestedDate),
                                                 Long.MIN_VALUE
                                             ).takeIf { it != Long.MIN_VALUE }
-                                        val resolvedHeight = if (cachedHeight != null) {
-                                            cachedHeight
-                                        } else {
-                                            val queryResult = walletState.executeLatestWalletQuery { queryWallet ->
+                                        val queryResult = walletState.executeLatestWalletQuery { queryWallet ->
+                                            if (cachedHeight != null) {
+                                                cachedHeight
+                                            } else {
                                                 val calendar = java.util.Calendar.getInstance().apply {
                                                     time = parsedDate
                                                     set(java.util.Calendar.HOUR_OF_DAY, 0)
@@ -311,14 +309,14 @@ fun ResetSyncPage(
                                                     calendar.get(java.util.Calendar.DAY_OF_MONTH)
                                                 )
                                             }
-                                            if (requestId != actionGeneration) return@launch
-                                            if (queryResult.isFailure) {
-                                                error = queryResult.exceptionOrNull()?.message
-                                                    ?: "查询失败，请检查节点连接后重试"
-                                                return@launch
-                                            }
-                                            queryResult.getOrThrow()
                                         }
+                                        if (requestId != actionGeneration) return@launch
+                                        if (queryResult.isFailure) {
+                                            error = queryResult.exceptionOrNull()?.message
+                                                ?: "查询失败，请检查节点连接后重试"
+                                            return@launch
+                                        }
+                                        val resolvedHeight = queryResult.getOrThrow()
 
                                         if (date != requestedDate || height.isNotBlank()) return@launch
                                         if (resolvedHeight == null || resolvedHeight < 0L) {
