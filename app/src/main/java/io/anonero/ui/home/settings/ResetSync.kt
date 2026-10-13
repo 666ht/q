@@ -85,16 +85,13 @@ fun ResetSyncPage(
     val selectedDate = parseDate(date)
     val canReset = selectedHeight != null && selectedHeight >= 0L && selectedDate != null
 
-    // On entry, resolve the saved restore height to its date so the two fields start in sync.
-    // This is an initialization lookup only; manual edits still require the Query button.
+    // Resolve the saved height's date in the background. Initialization must not
+    // drive the button spinner or disable either input field.
     LaunchedEffect(wallet) {
         val initialHeight = height.toLongOrNull()
         val activeWallet = wallet
         if (activeWallet != null && initialHeight != null && initialHeight >= 0L && date.isBlank()) {
-            querying = true
-            error = null
             try {
-                delay(80L)
                 val resolvedDate = heightToDateCache[initialHeight]
                     ?: withContext(Dispatchers.IO) {
                         val timestamp = runCatching {
@@ -111,9 +108,9 @@ fun ResetSyncPage(
                     }
                 }
             } catch (e: Exception) {
-                error = e.message ?: "查询失败，请检查节点连接后重试"
-            } finally {
-                querying = false
+                if (height.toLongOrNull() == initialHeight && date.isBlank()) {
+                    error = e.message ?: "查询失败，请检查节点连接后重试"
+                }
             }
         }
     }
@@ -268,7 +265,7 @@ fun ResetSyncPage(
                         ) {
                             if (querying || resetting) {
                                 CircularProgressIndicator(
-                                    modifier = Modifier.size(18.dp),
+                                    modifier = Modifier.size(20.dp),
                                     strokeWidth = 2.dp
                                 )
                             } else {
