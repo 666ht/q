@@ -92,7 +92,7 @@ private fun FixedSpinIndicator(
             color = color,
             startAngle = rotation - 90f,
             // Keep the familiar compact spinner arc, but hold its length constant.
-            sweepAngle = 135f,
+            sweepAngle = 270f,
             useCenter = false,
             topLeft = topLeft,
             size = arcSize,
