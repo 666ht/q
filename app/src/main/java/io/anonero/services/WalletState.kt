@@ -924,8 +924,10 @@ class WalletState {
         _manualRefreshInProgress.value = false
 
         // Signal cancellation synchronously without waiting for a native lock.
-        // The native operation ID rejects late cancellation requests from stale jobs.
+        // A newer manual refresh must also release a reset that is waiting for the
+        // ordinary-refresh height callback, rather than inherit its timeout.
         val operationId = userOperationGeneration.incrementAndGet()
+        finishOrdinaryHeightRefresh()
         runCatching { wallet.cancelCurrentOperation(operationId) }
             .onFailure { Timber.tag(TAG).w(it, "Could not signal cancellation before manual refresh") }
 
@@ -975,6 +977,7 @@ class WalletState {
         val wallet = getWallet
             ?: return Result.failure(IllegalStateException("Wallet not initialized"))
         val operationId = userOperationGeneration.incrementAndGet()
+        finishOrdinaryHeightRefresh()
 
         return try {
             // Non-blocking native signal immediately cancels an active refresh or
