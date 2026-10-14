@@ -81,12 +81,31 @@ class AnonWalletHandler(
             0L
         }
         val restoreScanPending = savedRestoreHeight > 0L && !wallet.nativeSynchronized
+        var restoreInitialProgressPublished = false
+
+        // Mnemonic restore and in-wallet reset use the same start/end-height snapshot.
+        // Query both daemon height fields with the same resolver as the reset engine;
+        // publish only a valid range and retry while the node is still coming online.
+        fun publishRestoreInitialProgressIfAvailable(startHeight: Long): Boolean {
+            val daemonHeight = runCatching {
+                wallet.getDaemonBlockChainHeight()
+            }.getOrDefault(0L)
+            val daemonTargetHeight = runCatching {
+                wallet.getDaemonBlockChainTargetHeight()
+            }.getOrDefault(0L)
+            val endHeight = maxOf(daemonHeight, daemonTargetHeight)
+            if (endHeight < startHeight) return false
+            return walletState.publishInitialHeightSyncProgress(startHeight, endHeight)
+        }
+
         if (restoreScanPending) {
             walletState.beginRestoreProgress(savedRestoreHeight)
             // Arm the same preparation gate used by the in-wallet reset before the
-            // listener is attached, so startup callbacks cannot publish the daemon's
-            // full-chain estimate or switch through a separate restore progress phase.
+            // listener is attached. If a usable daemon height is already cached,
+            // publish the real initial remaining-block count before proxy/connection waits.
             walletState.customRescanPreparing = true
+            restoreInitialProgressPublished =
+                publishRestoreInitialProgressIfAvailable(savedRestoreHeight)
         }
 
         handler = MoneroHandlerThread(
@@ -201,9 +220,16 @@ class AnonWalletHandler(
                     wallet.setRestoreHeight(effectiveRestoreHeight)
                     wallet.store()
 
-                    // resetSyncFromHeight requires a connected daemon. Start the refresh
-                    // worker only if necessary, then wait for connection state rather
-                    // than falling back to a normal full-chain sync estimate.
+                    // Start showing this exact restore range as soon as daemon height
+                    // data is available, before waiting for the Connected callback.
+                    if (!restoreInitialProgressPublished) {
+                        restoreInitialProgressPublished =
+                            publishRestoreInitialProgressIfAvailable(effectiveRestoreHeight)
+                    }
+
+                    // resetSyncFromHeight performs the native rescan only after the daemon
+                    // is connected. Keep the initial range visible while the connection
+                    // comes up, and retry the initial snapshot until a valid end is known.
                     if (wallet.fullStatus.connectionStatus !=
                         io.anonero.model.Wallet.ConnectionStatus.ConnectionStatus_Connected
                     ) {
@@ -216,6 +242,10 @@ class AnonWalletHandler(
                             io.anonero.model.Wallet.ConnectionStatus.ConnectionStatus_Connected &&
                         System.currentTimeMillis() < connectDeadline
                     ) {
+                        if (!restoreInitialProgressPublished) {
+                            restoreInitialProgressPublished =
+                                publishRestoreInitialProgressIfAvailable(effectiveRestoreHeight)
+                        }
                         delay(200)
                     }
 
@@ -239,7 +269,7 @@ class AnonWalletHandler(
                             // full-chain progress; do not mark this restore complete.
                         }
                     } else {
-                        walletState.customRescanPreparing = false
+                        walletState.abortRestoreProgressForRetry()
                         Timber.tag(TAG).e(
                             "Selected-height restore scan not started: daemon did not connect"
                         )
@@ -249,8 +279,12 @@ class AnonWalletHandler(
                 walletState.update()
             }
         } catch (e: Exception) {
-            e.printStackTrace()
-            walletState.setLoading(false)
+            Timber.tag(TAG).e(e, "Wallet service initialization failed")
+            if (restoreScanPending) {
+                walletState.abortRestoreProgressForRetry()
+            } else {
+                walletState.setLoading(false)
+            }
         }
     }
 
