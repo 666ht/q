@@ -229,18 +229,23 @@ fun ResetSyncPage(
                                 querying = false
                                 resetting = true
                                 error = null
-                                coroutineScope.launch {
-                                    val result = withContext(Dispatchers.IO) {
-                                        walletState.resetSyncFromHeight(heightValue!!)
+                                var returnedHome = false
+                                walletState.requestResetSyncFromHeight(
+                                    height = heightValue!!,
+                                    onPrepared = {
+                                        if (requestId == actionGeneration) {
+                                            returnedHome = true
+                                            resetting = false
+                                            onBackPress()
+                                        }
+                                    },
+                                    onFailure = { message ->
+                                        if (requestId == actionGeneration && !returnedHome) {
+                                            resetting = false
+                                            error = message
+                                        }
                                     }
-                                    if (requestId != actionGeneration) return@launch
-                                    resetting = false
-                                    if (result.isSuccess) {
-                                        onBackPress()
-                                    } else {
-                                        error = result.exceptionOrNull()?.message ?: "重置失败"
-                                    }
-                                }
+                                )
                                 return@AnonOutlineButton
                             }
 
