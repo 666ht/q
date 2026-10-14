@@ -920,7 +920,8 @@ class WalletState {
     suspend fun resetSyncFromHeight(
         height: Long,
         dayEndHeight: Long? = null,
-        onCompleted: (() -> Unit)? = null
+        onCompleted: (() -> Unit)? = null,
+        onPrepared: (suspend () -> Unit)? = null
     ): Result<Boolean> {
         val wallet = getWallet
             ?: return Result.failure(IllegalStateException("Wallet not initialized"))
@@ -945,12 +946,9 @@ class WalletState {
                 if (operationId != userOperationGeneration.get()) {
                     return Result.failure(IllegalStateException("重置已被更新操作取代"))
                 }
-                withContext(Dispatchers.IO) { wallet.pauseRefresh() }
-                if (operationId != userOperationGeneration.get()) {
-                    return Result.failure(IllegalStateException("重置已被更新操作取代"))
-                }
-
-                val result = resetSyncFromHeightInternal(height, dayEndHeight, operationId, onCompleted)
+                // The internal reset publishes its initial progress before the potentially
+                // slow native pause/refresh barrier. Do not block progress initialization here.
+                val result = resetSyncFromHeightInternal(height, dayEndHeight, operationId, onCompleted, onPrepared)
                 if (result.isFailure && operationId == userOperationGeneration.get()) {
                     // A failure before scan start must clear stale state and resume
                     // refresh; a superseded reset must not touch the newer operation.
@@ -982,11 +980,42 @@ class WalletState {
         }
     }
 
+    /**
+     * Start a reset from a service-owned scope so leaving ResetSyncPage does not
+     * cancel the native wallet operation. onPrepared fires after the initial
+     * remaining-block snapshot is published, before waiting on native refresh locks.
+     */
+    fun requestResetSyncFromHeight(
+        height: Long,
+        onPrepared: () -> Unit,
+        onFailure: (String) -> Unit
+    ) {
+        userOperationScope.launch {
+            var prepared = false
+            val result = resetSyncFromHeight(
+                height = height,
+                onPrepared = {
+                    prepared = true
+                    withContext(Dispatchers.Main.immediate) { onPrepared() }
+                }
+            )
+            if (result.isFailure) {
+                val message = result.exceptionOrNull()?.message ?: "重置失败"
+                withContext(Dispatchers.Main.immediate) {
+                    // Once the screen has returned home, its local error label is no
+                    // longer visible; the reset cleanup still clears failed progress.
+                    if (!prepared) onFailure(message)
+                }
+            }
+        }
+    }
+
     private suspend fun resetSyncFromHeightInternal(
         height: Long,
         dayEndHeight: Long?,
         operationId: Long,
-        onCompleted: (() -> Unit)?
+        onCompleted: (() -> Unit)?,
+        onPrepared: (suspend () -> Unit)?
     ): Result<Boolean> {
         if (operationId != userOperationGeneration.get()) {
             return Result.failure(IllegalStateException("重置已被更新操作取代"))
@@ -1059,20 +1088,31 @@ class WalletState {
             customRescanDayEndHeight = null
 
             // A manual reset supersedes mnemonic-restore progress but does not
-            // change the wallet's stored restore height. Wait for any in-flight
-            // incremental history refresh to leave JNI before clearing the chain.
+            // change the wallet's stored restore height. Capture the incremental
+            // refresh so the reset can publish its intent before waiting for it.
             val pendingRestoreRefresh = scanDataRefreshJob
             restoreProgressInProgress = false
+            restoreProgressFinalizing = false
+            restoreProgressCompleted = false
+            finishRestoreProgress()
+
+            // Publish the chosen range before any potentially slow native pause/JNI
+            // call. Home can show the initial remaining-block count while the service
+            // waits for old native work to leave the wallet safely.
+            customRescanStartHeight = height
+            customRescanDayEndHeight = effectiveEnd
+            customRescanInProgress = true
+            _syncProgress.value = null
+            _isSyncing.set(false)
+            setLoading(true)
+            val initialRemaining = (effectiveEnd - height).coerceAtLeast(0L)
+            syncUpdate(SyncProgress(0f, initialRemaining))
+            onPrepared?.invoke()
+
             pendingRestoreRefresh?.cancelAndJoin()
             if (operationId != userOperationGeneration.get()) {
                 return Result.failure(IllegalStateException("重置已被更新操作取代"))
             }
-            finishRestoreProgress()
-            restoreProgressCompleted = false
-            restoreProgressFinalizing = false
-            _syncProgress.value = null
-            _isSyncing.set(false)
-            setLoading(true)
 
             wallet.pauseRefresh()
             refreshPaused = true
