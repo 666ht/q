@@ -168,6 +168,11 @@ fun ResetSyncPage(
     fun cachedDateForHeight(heightValue: Long): String? {
         val cached = heightToDateCache[heightValue]
             ?: preferences.getString(dateCacheKey(heightValue), null)
+            // Support older caches that stored only date -> height.
+            ?: preferences.all.entries.firstOrNull { (key, value) ->
+                key.startsWith("reset_sync_date_height_${dateCacheNamespace}_") &&
+                    value is Long && value == heightValue
+            }?.key?.substringAfter("reset_sync_date_height_${dateCacheNamespace}_")
         return cached?.takeIf { parseDate(it) != null }
     }
 
@@ -175,6 +180,11 @@ fun ResetSyncPage(
         val cached = dateToHeightCache[dateValue]
             ?: preferences.getLong(heightCacheKey(dateValue), Long.MIN_VALUE)
                 .takeIf { it != Long.MIN_VALUE }
+            // Support older caches that stored only height -> date.
+            ?: preferences.all.entries.firstOrNull { (key, value) ->
+                key.startsWith("reset_sync_height_date_${dateCacheNamespace}_") &&
+                    value == dateValue
+            }?.key?.substringAfter("reset_sync_height_date_${dateCacheNamespace}_")?.toLongOrNull()
         return cached?.takeIf { it >= 0L }
     }
 
