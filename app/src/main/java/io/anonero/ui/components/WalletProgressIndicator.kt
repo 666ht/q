@@ -74,7 +74,8 @@ fun WalletProgressIndicator(modifier: Modifier = Modifier, refreshIndicatorProgr
     // for reliable node height/native cursor data. Once available, numeric progress
     // replaces this indeterminate state without changing layout.
     val showScanPreparationLoading = syncProgress == null && (
-        walletState.restoreProgressInProgress ||
+        walletState.heightRefreshInProgress ||
+            walletState.restoreProgressInProgress ||
             walletState.customRescanPreparing ||
             walletState.customRescanInProgress
         )
@@ -82,6 +83,7 @@ fun WalletProgressIndicator(modifier: Modifier = Modifier, refreshIndicatorProgr
     // A pending automatic load must not appear as an unrelated refresh bar.
     val isSyncing = syncProgress != null
     val activeScanOrSync = isSyncing ||
+        walletState.heightRefreshInProgress ||
         walletState.isSyncing ||
         walletState.customRescanPreparing ||
         walletState.customRescanInProgress ||

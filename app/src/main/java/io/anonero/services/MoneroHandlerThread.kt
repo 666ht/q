@@ -43,6 +43,15 @@ class MoneroHandlerThread(
     override fun unconfirmedMoneyReceived(txId: String?, amount: Long) {}
 
     override fun newBlock(height: Long) {
+        if (walletState.heightRefreshInProgress) {
+            val status = runCatching { wallet.fullStatus.connectionStatus }.getOrNull()
+            val daemonHeight = runCatching { wallet.getDaemonBlockChainHeight() }.getOrDefault(0L)
+            walletState.recordOrdinaryRefreshHeight(
+                daemonHeight,
+                status == Wallet.ConnectionStatus.ConnectionStatus_Connected
+            )
+            return
+        }
         if (walletState.customRescanPreparing) {
             Timber.tag(name).d("Ignoring block callback while custom rescan is being prepared")
             return
@@ -186,12 +195,27 @@ class MoneroHandlerThread(
     }
 
     override fun refreshed() {
+        val status = runCatching { wallet.fullStatus.connectionStatus }.getOrNull()
+        val daemonHeight = runCatching { wallet.getDaemonBlockChainHeight() }.getOrDefault(0L)
+        if (walletState.heightRefreshInProgress) {
+            walletState.recordOrdinaryRefreshHeight(
+                daemonHeight,
+                status == Wallet.ConnectionStatus.ConnectionStatus_Connected
+            )
+            Timber.tag(name).i(
+                "Ordinary refresh height callback: status=%s daemonHeight=%d",
+                status, daemonHeight
+            )
+            // Preserve connection recovery while waiting for the live daemon height.
+            if (status == Wallet.ConnectionStatus.ConnectionStatus_Disconnected || status == null) {
+                tryRestartConnection()
+            }
+            return
+        }
         if (walletState.customRescanPreparing) {
             Timber.tag(name).d("Ignoring refreshed callback while custom rescan is being prepared")
             return
         }
-        val status = wallet.fullStatus.connectionStatus
-        val daemonHeight = wallet.getDaemonBlockChainHeight()
         val chainHeight = wallet.getBlockChainHeight()
         /// height
         Timber.tag(name)

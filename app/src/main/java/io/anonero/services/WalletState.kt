@@ -13,6 +13,7 @@ import io.anonero.model.node.DaemonInfo
 import io.anonero.ui.util.getAllUsedSubAddresses
 import io.anonero.ui.util.getLatestSubAddress
 import io.anonero.ui.home.LockScreenShortCut
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -201,6 +202,20 @@ class WalletState {
     @Volatile
     var restoreProgressFinalizing: Boolean = false
 
+    // Both mnemonic recovery and in-wallet reset first run the ordinary refresh.
+    // A fresh listener callback supplies the current daemon height before countdown math.
+    @Volatile
+    var heightRefreshInProgress: Boolean = false
+
+    @Volatile
+    private var heightRefreshStartHeight: Long? = null
+
+    @Volatile
+    private var ordinaryRefreshRequested: Boolean = false
+
+    @Volatile
+    private var ordinaryRefreshHeightWaiter: CompletableDeferred<Long>? = null
+
     /**
      * Publish the initial height-based progress as soon as a restore/rescan request
      * has a usable end height. This is intentionally called before waiting for the
@@ -220,11 +235,60 @@ class WalletState {
 
         val remaining = (endHeight - startHeight).coerceAtLeast(0L)
         syncUpdate(SyncProgress(0f, remaining))
+        finishOrdinaryHeightRefresh()
         Timber.tag(TAG).i(
             "Published initial height progress: start=%d end=%d left=%d",
             startHeight, endHeight, remaining
         )
         return true
+    }
+
+    fun beginOrdinaryHeightRefresh(startHeight: Long) {
+        ordinaryRefreshHeightWaiter?.cancel()
+        heightRefreshStartHeight = startHeight
+        ordinaryRefreshRequested = false
+        ordinaryRefreshHeightWaiter = CompletableDeferred()
+        heightRefreshInProgress = true
+        _syncProgress.value = null
+        _isSyncing.set(false)
+        _isLoading.value = false
+        updateScanPreparationIndicator()
+        Timber.tag(TAG).i("Starting ordinary refresh before height scan: start=%d", startHeight)
+    }
+
+    fun armOrdinaryHeightRefresh() {
+        if (heightRefreshInProgress) ordinaryRefreshRequested = true
+    }
+
+    /** Accept only a fresh, connected ordinary-refresh callback with a usable live tip. */
+    fun recordOrdinaryRefreshHeight(daemonHeight: Long, connected: Boolean) {
+        if (!heightRefreshInProgress || !ordinaryRefreshRequested || !connected) return
+        val startHeight = heightRefreshStartHeight ?: return
+        if (daemonHeight <= 0L || daemonHeight < startHeight) return
+        val waiter = ordinaryRefreshHeightWaiter ?: return
+        if (waiter.complete(daemonHeight)) {
+            Timber.tag(TAG).i(
+                "Ordinary refresh obtained live daemon height: start=%d latest=%d left=%d",
+                startHeight, daemonHeight, daemonHeight - startHeight
+            )
+        }
+    }
+
+    suspend fun awaitOrdinaryRefreshHeight(timeoutMs: Long = 120_000L): Long {
+        val waiter = ordinaryRefreshHeightWaiter
+            ?: throw IllegalStateException("普通刷新尚未启动")
+        return withTimeoutOrNull(timeoutMs) {
+            waiter.await()
+        } ?: throw IllegalStateException("普通刷新未能获取节点最新高度，请检查节点连接后重试")
+    }
+
+    fun finishOrdinaryHeightRefresh() {
+        heightRefreshInProgress = false
+        ordinaryRefreshRequested = false
+        heightRefreshStartHeight = null
+        ordinaryRefreshHeightWaiter?.cancel()
+        ordinaryRefreshHeightWaiter = null
+        updateScanPreparationIndicator()
     }
 
     fun beginRestoreProgress(startHeight: Long) {
@@ -412,7 +476,8 @@ class WalletState {
 
     private fun updateScanPreparationIndicator() {
         _suppressConnectionWaitIndicator.value =
-            (customRescanRequesting.get() || customRescanPreparing || customRescanInProgress) &&
+            (heightRefreshInProgress || customRescanRequesting.get() ||
+                customRescanPreparing || customRescanInProgress) &&
                 _syncProgress.value == null
     }
     val isSyncing get():Boolean = _isSyncing.get()
@@ -959,6 +1024,7 @@ class WalletState {
     }
 
     private suspend fun cancelScanUiStateForLatestOperation() {
+        finishOrdinaryHeightRefresh()
         customRescanPreparing = true
         customRescanJob?.cancelAndJoin()
         customRescanJob = null
@@ -998,67 +1064,60 @@ class WalletState {
         _manualRefreshInProgress.value = false
         val wallet = getWallet
             ?: return Result.failure(IllegalStateException("Wallet not initialized"))
-        if (wallet.fullStatus.connectionStatus != Wallet.ConnectionStatus.ConnectionStatus_Connected) {
-            return Result.failure(IllegalStateException("Please connect to daemon for resync"))
+        if (!wallet.isInitialized) {
+            return Result.failure(IllegalStateException("Wallet not initialized"))
         }
         if (height < 0L) {
             return Result.failure(IllegalArgumentException("Invalid restore height"))
         }
 
         val operationId = userOperationGeneration.incrementAndGet()
-        var preparedCallbackInvoked = false
         return try {
-            // Resolve and publish the initial count before waiting for the operation
-            // mutex. A previously running refresh/rescan must not delay the UI update.
-            val initialEndHeight = if (dayEndHeight != null) {
-                dayEndHeight
-            } else {
-                val daemonHeight = runCatching {
-                    wallet.getDaemonBlockChainHeight()
-                }.getOrDefault(0L)
-                val daemonTargetHeight = runCatching {
-                    wallet.getDaemonBlockChainTargetHeight()
-                }.getOrDefault(0L)
-                // Prefer the actual current daemon height whenever it already covers
-                // the selected start. The target estimate can be ~100k blocks ahead.
-                if (daemonHeight >= height) daemonHeight else maxOf(daemonHeight, daemonTargetHeight)
-            }
-            if (initialEndHeight >= height) {
-                publishInitialHeightSyncProgress(height, initialEndHeight)
-            }
-
-            // Request cancellation immediately, without blocking on the native scan.
-            // The native layer discards this request if its ID is stale.
+            // The newest request cancels older native work first. Keep a preparation
+            // indicator visible while the ordinary refresh retrieves the live daemon tip.
             wallet.cancelCurrentOperation(operationId)
             if (operationId != userOperationGeneration.get()) {
                 return Result.failure(IllegalStateException("重置已被更新操作取代"))
             }
-
-            // Returning home is a UI transition, not a native-scan milestone. Once
-            // the initial range is visible, navigate immediately instead of waiting
-            // for an older operation to release the wallet mutex.
-            if (initialEndHeight >= height && onPrepared != null) {
-                onPrepared.invoke()
-                preparedCallbackInvoked = true
-            }
+            beginOrdinaryHeightRefresh(height)
 
             userOperationMutex.lock()
             try {
                 if (operationId != userOperationGeneration.get()) {
                     return Result.failure(IllegalStateException("重置已被更新操作取代"))
                 }
-                // The internal reset keeps the same progress visible while it waits
-                // for native refresh work to exit; avoid firing the navigation callback twice.
+
+                // First run the normal wallet refresh loop. Only a connected callback
+                // from this request may satisfy the wait; target-height estimates are
+                // deliberately excluded from the remaining-block calculation.
+                armOrdinaryHeightRefresh()
+                wallet.startRefresh()
+                val refreshedDaemonHeight = awaitOrdinaryRefreshHeight()
+                if (operationId != userOperationGeneration.get()) {
+                    return Result.failure(IllegalStateException("重置已被更新操作取代"))
+                }
+
+                val effectiveEndHeight = dayEndHeight ?: refreshedDaemonHeight
+                if (effectiveEndHeight < height) {
+                    throw IllegalArgumentException(
+                        "节点最新高度 $effectiveEndHeight 低于所选起始高度 $height"
+                    )
+                }
+                if (!publishInitialHeightSyncProgress(height, effectiveEndHeight)) {
+                    throw IllegalStateException("无法发布所选高度的同步进度")
+                }
+
+                // The counter is now grounded in the selected start and a live tip.
+                // Return home after publishing it, then hand off to the native rescan.
+                onPrepared?.invoke()
                 val result = resetSyncFromHeightInternal(
                     height,
-                    dayEndHeight,
+                    effectiveEndHeight,
                     operationId,
                     onCompleted,
-                    if (preparedCallbackInvoked) null else onPrepared
+                    null
                 )
                 if (result.isFailure && operationId == userOperationGeneration.get()) {
-                    // A failure before scan start must clear stale state and resume
-                    // refresh; a superseded reset must not touch the newer operation.
                     cancelScanUiStateForLatestOperation()
                     if (operationId == userOperationGeneration.get() &&
                         wallet.fullStatus.connectionStatus == Wallet.ConnectionStatus.ConnectionStatus_Connected
@@ -1066,23 +1125,31 @@ class WalletState {
                         runCatching {
                             setLoading(true)
                             wallet.startRefresh()
-                        }.onFailure { Timber.tag(TAG).w(it, "Could not resume refresh after reset failure") }
+                        }.onFailure {
+                            Timber.tag(TAG).w(it, "Could not resume refresh after reset failure")
+                        }
                     }
                 }
                 result
             } finally {
+                if (operationId == userOperationGeneration.get() && heightRefreshInProgress) {
+                    finishOrdinaryHeightRefresh()
+                }
                 userOperationMutex.unlock()
             }
         } catch (e: Exception) {
-            if (operationId == userOperationGeneration.get() &&
-                wallet.fullStatus.connectionStatus == Wallet.ConnectionStatus.ConnectionStatus_Connected
-            ) {
+            if (operationId == userOperationGeneration.get()) {
                 runCatching {
                     cancelScanUiStateForLatestOperation()
-                    setLoading(true)
-                    wallet.startRefresh()
-                }.onFailure { Timber.tag(TAG).w(it, "Could not resume refresh after reset exception") }
+                    if (wallet.fullStatus.connectionStatus == Wallet.ConnectionStatus.ConnectionStatus_Connected) {
+                        setLoading(true)
+                        wallet.startRefresh()
+                    }
+                }.onFailure {
+                    Timber.tag(TAG).w(it, "Could not recover wallet refresh after height lookup failure")
+                }
             }
+            Timber.tag(TAG).e(e, "Could not obtain a live daemon height before rescan")
             Result.failure(e)
         }
     }
@@ -1212,12 +1279,9 @@ class WalletState {
             customRescanStartHeight = height
             customRescanDayEndHeight = effectiveEnd
             customRescanInProgress = true
-            _syncProgress.value = null
-            _isSyncing.set(false)
+            // The shared caller already published this exact initial snapshot.
+            // Preserve it while native refresh work exits and the rescan is queued.
             setLoading(true)
-            val initialRemaining = (effectiveEnd - height).coerceAtLeast(0L)
-            syncUpdate(SyncProgress(0f, initialRemaining))
-            onPrepared?.invoke()
 
             pendingRestoreRefresh?.cancelAndJoin()
             if (operationId != userOperationGeneration.get()) {
