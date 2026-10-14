@@ -70,6 +70,14 @@ fun WalletProgressIndicator(modifier: Modifier = Modifier, refreshIndicatorProgr
     val isConnected = connectionStatus == Wallet.ConnectionStatus.ConnectionStatus_Connected
     val isNetworkConnected by networkConnected()
     val showConnectionWaitIndicator = (!isConnected || !isNetworkConnected) && !suppressConnectionWaitIndicator
+    // Keep the existing progress-bar area visible while a height scan is waiting
+    // for reliable node height/native cursor data. Once available, numeric progress
+    // replaces this indeterminate state without changing layout.
+    val showScanPreparationLoading = syncProgress == null && (
+        walletState.restoreProgressInProgress ||
+            walletState.customRescanPreparing ||
+            walletState.customRescanInProgress
+        )
     // Numeric sync progress owns the progress bar while the wallet is synchronizing.
     // A pending automatic load must not appear as an unrelated refresh bar.
     val isSyncing = syncProgress != null
@@ -90,7 +98,7 @@ fun WalletProgressIndicator(modifier: Modifier = Modifier, refreshIndicatorProgr
         isConnected &&
         isNetworkConnected
     AnimatedVisibility(
-        (showManualRefreshLoading || syncProgress != null || showConnectionWaitIndicator || showManualPullProgress),
+        (showManualRefreshLoading || syncProgress != null || showConnectionWaitIndicator || showManualPullProgress || showScanPreparationLoading),
         modifier = modifier
             .animateContentSize()
     ) {
