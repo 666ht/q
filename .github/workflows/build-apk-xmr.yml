@@ -28,11 +28,11 @@ jobs:
           submodules: recursive
           fetch-depth: 1
 
-      - name: Pin XMR refresh-cancellation fix
+      - name: Pin XMR refresh-cancellation and stale-rescan fix
         working-directory: external-libs/monero
         run: |
-          git fetch --depth=1 origin a7d2211194f6dc9dcd05242cc30a104d50157beb
-          git checkout a7d2211194f6dc9dcd05242cc30a104d50157beb
+          git fetch --depth=1 origin e1584a43bf3b3d1aa041f82e10a01bca78e45363
+          git checkout e1584a43bf3b3d1aa041f82e10a01bca78e45363
 
       - name: Read XMR revision
         id: xmr
