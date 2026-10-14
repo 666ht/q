@@ -1006,9 +1006,23 @@ class WalletState {
                 throw IllegalArgumentException("Invalid restore height")
             }
 
-            val effectiveEnd = (dayEndHeight ?: wallet.getDaemonBlockChainHeight())
-                .takeIf { it >= height }
-                ?: throw IllegalArgumentException("Invalid custom end height")
+            // The daemon's reported current height can be temporarily 0/stale while
+            // the target height already has a valid value. Use both reports to avoid
+            // rejecting a cached height/date selection before the reset even starts.
+            val effectiveEnd = if (dayEndHeight != null) {
+                dayEndHeight
+            } else {
+                val daemonHeight = runCatching {
+                    wallet.getDaemonBlockChainHeight()
+                }.getOrDefault(0L)
+                val daemonTargetHeight = runCatching {
+                    wallet.getDaemonBlockChainTargetHeight()
+                }.getOrDefault(0L)
+                maxOf(daemonHeight, daemonTargetHeight)
+            }.takeIf { it >= height }
+                ?: throw IllegalArgumentException(
+                    "Invalid custom end height: node height is below selected start height $height"
+                )
 
             // This is an in-wallet rescan, not wallet creation/recovery. The height
             // entered here belongs only to this rescan operation. The wallet's
