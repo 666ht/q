@@ -1178,7 +1178,6 @@ class WalletState {
             // Publish the exact selected scan range as soon as the native rescan
             // request is accepted. The cursor poller below still validates the new
             // cursor before replacing this initial 0% / full-range snapshot.
-            val initialRemaining = (effectiveEnd - height).coerceAtLeast(0L)
             syncUpdate(SyncProgress(0f, initialRemaining))
 
             startCustomRescanProgressPolling(wallet, height, effectiveEnd, initialWalletHeight)
