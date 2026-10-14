@@ -201,6 +201,32 @@ class WalletState {
     @Volatile
     var restoreProgressFinalizing: Boolean = false
 
+    /**
+     * Publish the initial height-based progress as soon as a restore/rescan request
+     * has a usable end height. This is intentionally called before waiting for the
+     * native refresh mutex or for the first rescan cursor callback.
+     */
+    fun publishInitialHeightSyncProgress(startHeight: Long, endHeight: Long): Boolean {
+        if (startHeight < 0L || endHeight < startHeight) return false
+
+        // Gate callbacks from the previous scan before replacing its progress.
+        // The native rescan is not marked active until its request is accepted.
+        customRescanPreparing = true
+        customRescanInProgress = false
+        customRescanFinalizing = false
+        customRescanFinished = false
+        customRescanStartHeight = startHeight
+        customRescanDayEndHeight = endHeight
+
+        val remaining = (endHeight - startHeight).coerceAtLeast(0L)
+        syncUpdate(SyncProgress(0f, remaining))
+        Timber.tag(TAG).i(
+            "Published initial height progress: start=%d end=%d left=%d",
+            startHeight, endHeight, remaining
+        )
+        return true
+    }
+
     fun beginRestoreProgress(startHeight: Long) {
         lastScanDataRefreshAt = 0L
         scanDataRefreshRunning.set(false)
@@ -211,13 +237,11 @@ class WalletState {
         restoreProgressCursorObserved = false
         restoreProgressCompleted = false
         restoreProgressInProgress = true
-        // Drop any stale normal-sync "blocks left" value immediately. Until the
-        // daemon reaches the restore height, recovery has no active scan cursor.
-        // Restore progress owns the sync indicator. Do not leave the generic
-        // loading indicator active, otherwise the UI can show a progress bar
-        // while there is no restore SyncProgress/remaining-block value yet.
+        // Never carry a stale count from the previous wallet. Until a reliable
+        // daemon height is available, the UI shows an indeterminate sync bar;
+        // publish the real remaining count immediately when that height is known.
         _syncProgress.value = null
-        _isSyncing.set(true)
+        _isSyncing.set(false)
         _isLoading.value = false
     }
 
@@ -963,6 +987,23 @@ class WalletState {
 
         val operationId = userOperationGeneration.incrementAndGet()
         return try {
+            // Resolve and publish the initial count before waiting for the operation
+            // mutex. A previously running refresh/rescan must not delay the UI update.
+            val initialEndHeight = if (dayEndHeight != null) {
+                dayEndHeight
+            } else {
+                val daemonHeight = runCatching {
+                    wallet.getDaemonBlockChainHeight()
+                }.getOrDefault(0L)
+                val daemonTargetHeight = runCatching {
+                    wallet.getDaemonBlockChainTargetHeight()
+                }.getOrDefault(0L)
+                maxOf(daemonHeight, daemonTargetHeight)
+            }
+            if (initialEndHeight >= height) {
+                publishInitialHeightSyncProgress(height, initialEndHeight)
+            }
+
             // Request cancellation immediately, without blocking on the native scan.
             // The native layer discards this request if its ID is stale.
             wallet.cancelCurrentOperation(operationId)
