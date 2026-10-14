@@ -1009,7 +1009,7 @@ class WalletState {
             // The daemon's reported current height can be temporarily 0/stale while
             // the target height already has a valid value. Use both reports to avoid
             // rejecting a cached height/date selection before the reset even starts.
-            val effectiveEnd = if (dayEndHeight != null) {
+            val endHeightCandidate = if (dayEndHeight != null) {
                 dayEndHeight
             } else {
                 val daemonHeight = runCatching {
@@ -1019,7 +1019,8 @@ class WalletState {
                     wallet.getDaemonBlockChainTargetHeight()
                 }.getOrDefault(0L)
                 maxOf(daemonHeight, daemonTargetHeight)
-            }.takeIf { it >= height }
+            }
+            val effectiveEnd = endHeightCandidate.takeIf { it >= height }
                 ?: throw IllegalArgumentException(
                     "Invalid custom end height: node height is below selected start height $height"
                 )
