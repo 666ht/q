@@ -68,6 +68,10 @@ class WalletState {
     private var _blockUpdates = AtomicBoolean(false)
     val hideAmountsFlow = MutableStateFlow(false)
     private val _isLoading = MutableStateFlow(false)
+    // Only an explicit user-triggered pull-to-refresh may show the generic refresh spinner.
+    // Automatic sync/connect callbacks must not recreate that spinner.
+    private val _manualRefreshInProgress = MutableStateFlow(false)
+    val manualRefreshInProgress: Flow<Boolean> = _manualRefreshInProgress
     // Hide the connection-wait spinner while a selected-height scan is being prepared.
     // The real remaining-block counter becomes visible as soon as the native cursor is valid.
     private val _suppressConnectionWaitIndicator = MutableStateFlow(false)
@@ -675,6 +679,8 @@ class WalletState {
     }
 
     fun syncUpdate(syncProgress: SyncProgress) {
+        // A real synchronization cursor owns the progress UI from this point.
+        _manualRefreshInProgress.value = false
         // Keep the terminal 100% / zero-remaining state visible until the final
         // history/output snapshot is ready for both recovery and custom rescans.
         val done = syncProgress.progress >= 1f
@@ -696,6 +702,7 @@ class WalletState {
     }
 
     fun finishSync() {
+        _manualRefreshInProgress.value = false
         // Normal synchronization/custom-rescan completion has already refreshed
         // history and outputs. A deferred request is satisfied by that snapshot.
         deferredManualRefresh.set(false)
@@ -797,6 +804,10 @@ class WalletState {
         val wallet = getWallet
         if (wallet?.isInitialized != true) return
 
+        // This entry point is called by the explicit home pull gesture.
+        // Do not let background refresh callbacks masquerade as a manual refresh.
+        _manualRefreshInProgress.value = true
+
         // Signal cancellation synchronously without waiting for a native lock.
         // The native operation ID rejects late cancellation requests from stale jobs.
         val operationId = userOperationGeneration.incrementAndGet()
@@ -818,10 +829,16 @@ class WalletState {
                 if (wallet.fullStatus.connectionStatus == Wallet.ConnectionStatus.ConnectionStatus_Connected) {
                     setLoading(true)
                     wallet.startRefresh()
+                } else {
+                    // No native refresh will be started while disconnected.
+                    _manualRefreshInProgress.value = false
                 }
                 if (operationId == userOperationGeneration.get()) {
                     runCatching { wallet.refreshHistory() }
-                        .onFailure { Timber.tag(TAG).e(it, "Manual refresh history update failed") }
+                        .onFailure {
+                            _manualRefreshInProgress.value = false
+                            Timber.tag(TAG).e(it, "Manual refresh history update failed")
+                        }
                 }
             } finally {
                 userOperationMutex.unlock()
@@ -835,6 +852,7 @@ class WalletState {
      * generation check prevents an older query from publishing after a newer action.
      */
     suspend fun <T> executeLatestWalletQuery(query: (Wallet) -> T): Result<T> {
+        _manualRefreshInProgress.value = false
         val wallet = getWallet
             ?: return Result.failure(IllegalStateException("Wallet not initialized"))
         val operationId = userOperationGeneration.incrementAndGet()
@@ -923,6 +941,7 @@ class WalletState {
         onCompleted: (() -> Unit)? = null,
         onPrepared: (suspend () -> Unit)? = null
     ): Result<Boolean> {
+        _manualRefreshInProgress.value = false
         val wallet = getWallet
             ?: return Result.failure(IllegalStateException("Wallet not initialized"))
         if (wallet.fullStatus.connectionStatus != Wallet.ConnectionStatus.ConnectionStatus_Connected) {
