@@ -63,18 +63,34 @@ fun WalletProgressIndicator(modifier: Modifier = Modifier, refreshIndicatorProgr
     val walletState: WalletState by inject(WalletState::class.java)
 
     val showIndefiniteLoading by walletState.isLoading.asLiveData().observeAsState(false)
+    val manualRefreshInProgress by walletState.manualRefreshInProgress.asLiveData().observeAsState(false)
     val syncProgress by walletState.syncProgress.asLiveData().observeAsState(null)
     val connectionStatus by walletState.connectionStatus.asLiveData().observeAsState(null)
     val suppressConnectionWaitIndicator by walletState.suppressConnectionWaitIndicator.asLiveData().observeAsState(false)
     val isConnected = connectionStatus == Wallet.ConnectionStatus.ConnectionStatus_Connected
     val isNetworkConnected by networkConnected()
     val showConnectionWaitIndicator = (!isConnected || !isNetworkConnected) && !suppressConnectionWaitIndicator
-    // A custom date-scoped rescan may legitimately have left == 0 while the
-    // native rescan is still running. The presence of syncProgress is the
-    // authoritative UI signal; completion clears it explicitly.
+    // Numeric sync progress owns the progress bar while the wallet is synchronizing.
+    // A pending automatic load must not appear as an unrelated refresh bar.
     val isSyncing = syncProgress != null
+    val activeScanOrSync = isSyncing ||
+        walletState.isSyncing ||
+        walletState.customRescanPreparing ||
+        walletState.customRescanInProgress ||
+        walletState.customRescanFinalizing ||
+        walletState.restoreProgressInProgress ||
+        walletState.restoreProgressFinalizing ||
+        suppressConnectionWaitIndicator
+    val showManualRefreshLoading = showIndefiniteLoading &&
+        manualRefreshInProgress &&
+        !activeScanOrSync
+    val showManualPullProgress = refreshIndicatorProgress != 0.0f &&
+        !activeScanOrSync &&
+        !showIndefiniteLoading &&
+        isConnected &&
+        isNetworkConnected
     AnimatedVisibility(
-        (showIndefiniteLoading || syncProgress != null || showConnectionWaitIndicator || refreshIndicatorProgress != 0.0f),
+        (showManualRefreshLoading || syncProgress != null || showConnectionWaitIndicator || showManualPullProgress),
         modifier = modifier
             .animateContentSize()
     ) {
@@ -112,7 +128,7 @@ fun WalletProgressIndicator(modifier: Modifier = Modifier, refreshIndicatorProgr
                     color = MaterialTheme.colorScheme.primary
                 )
             }
-        } else if (refreshIndicatorProgress != 0.0f && !showIndefiniteLoading && isConnected && isNetworkConnected) {
+        } else if (showManualPullProgress) {
             LinearProgressIndicator(
                 modifier = Modifier
                     .fillMaxWidth()
