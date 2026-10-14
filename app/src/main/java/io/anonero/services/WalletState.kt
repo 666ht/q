@@ -1018,7 +1018,9 @@ class WalletState {
                 val daemonTargetHeight = runCatching {
                     wallet.getDaemonBlockChainTargetHeight()
                 }.getOrDefault(0L)
-                maxOf(daemonHeight, daemonTargetHeight)
+                // Prefer the actual current daemon height whenever it already covers
+                // the selected start. The target estimate can be ~100k blocks ahead.
+                if (daemonHeight >= height) daemonHeight else maxOf(daemonHeight, daemonTargetHeight)
             }
             if (initialEndHeight >= height) {
                 publishInitialHeightSyncProgress(height, initialEndHeight)
@@ -1137,7 +1139,10 @@ class WalletState {
                 val daemonTargetHeight = runCatching {
                     wallet.getDaemonBlockChainTargetHeight()
                 }.getOrDefault(0L)
-                maxOf(daemonHeight, daemonTargetHeight)
+                // Use the current chain tip for remaining-block arithmetic whenever
+                // it is a valid end. The target estimate is only a fallback when the
+                // current height has not yet reached the selected start.
+                if (daemonHeight >= height) daemonHeight else maxOf(daemonHeight, daemonTargetHeight)
             }
             val effectiveEnd = endHeightCandidate.takeIf { it >= height }
                 ?: throw IllegalArgumentException(
