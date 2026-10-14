@@ -93,7 +93,13 @@ class AnonWalletHandler(
             val daemonTargetHeight = runCatching {
                 wallet.getDaemonBlockChainTargetHeight()
             }.getOrDefault(0L)
-            val endHeight = maxOf(daemonHeight, daemonTargetHeight)
+            // Use the actual live chain tip when it covers the selected start;
+            // only fall back to the target estimate while the live height is not usable.
+            val endHeight = if (daemonHeight >= startHeight) {
+                daemonHeight
+            } else {
+                maxOf(daemonHeight, daemonTargetHeight)
+            }
             if (endHeight < startHeight) return false
             return walletState.publishInitialHeightSyncProgress(startHeight, endHeight)
         }
