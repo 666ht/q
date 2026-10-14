@@ -340,6 +340,8 @@ class MoneroHandlerThread(
 
 
     private fun tryRestartConnection() {
+        // This callback is a reconnect/sync transition, not an active manual refresh.
+        walletState.finishManualRefreshIndicator()
         wallet.init(0)
         wallet.startRefresh()
         walletState.update()
