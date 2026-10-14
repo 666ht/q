@@ -1497,7 +1497,7 @@ class WalletState {
 
                 val currentHeight = rawHeight.coerceAtLeast(startHeight)
                 if (currentHeight >= endHeight) {
-                    requestCustomRescanCompletion(wallet, endHeight)
+                    requestCustomRescanCompletion(wallet, endHeight, operationId)
                     break
                 }
 
@@ -1527,8 +1527,12 @@ class WalletState {
         }
     }
 
-    private fun requestCustomRescanCompletion(wallet: Wallet, endHeight: Long) {
-        if (!customRescanInProgress) return
+    private fun requestCustomRescanCompletion(
+        wallet: Wallet,
+        endHeight: Long,
+        operationId: Long
+    ) {
+        if (operationId != userOperationGeneration.get() || !customRescanInProgress) return
         if (!customRescanFinishStarted.compareAndSet(false, true)) return
 
         // Stop the native refresh from the IO coroutine, never on a JNI callback
@@ -1536,12 +1540,19 @@ class WalletState {
         customRescanFinishJob = customRescanScope.launch {
             runCatching { wallet.pauseRefresh() }
                 .onFailure { Timber.tag(TAG).e(it, "Failed to stop custom rescan at %d", endHeight) }
-            completeCustomRescan(wallet, endHeight)
+
+            // pauseRefresh() is a blocking native barrier. A new user action may
+            // supersede this coroutine while it waits, so check ownership again
+            // before the old completion path touches history or publishes progress.
+            if (operationId != userOperationGeneration.get() || !customRescanInProgress) {
+                return@launch
+            }
+            completeCustomRescan(wallet, endHeight, operationId)
         }
     }
 
-    private fun completeCustomRescan(wallet: Wallet, endHeight: Long) {
-        if (!customRescanInProgress) return
+    private fun completeCustomRescan(wallet: Wallet, endHeight: Long, operationId: Long) {
+        if (operationId != userOperationGeneration.get() || !customRescanInProgress) return
 
         customRescanInProgress = false
         customRescanFinalizing = true
@@ -1558,11 +1569,15 @@ class WalletState {
             // Refresh wallet data directly, then finish this custom operation.
             setLoading(true)
             wallet.refreshHistory()
+            if (operationId != userOperationGeneration.get()) return
             wallet.refreshCoins(force = true)
+            if (operationId != userOperationGeneration.get()) return
             wallet.store()
+            if (operationId != userOperationGeneration.get()) return
             update()
 
-            // Publish the terminal state before clearing the progress indicator.
+            // Only the operation that still owns the wallet may publish completion.
+            if (operationId != userOperationGeneration.get()) return
             syncUpdate(SyncProgress(1f, 0L))
             customRescanFinalizing = false
             customRescanFinished = true
@@ -1577,6 +1592,7 @@ class WalletState {
             runCatching { onCompleted?.invoke() }
                 .onFailure { Timber.tag(TAG).e(it, "Post-rescan completion callback failed") }
         } catch (e: Exception) {
+            if (operationId != userOperationGeneration.get()) return
             customRescanFinalizing = false
             customRescanFinished = true
             customRescanCompletionCallback = null
