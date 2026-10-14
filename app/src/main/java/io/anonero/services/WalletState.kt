@@ -1006,6 +1006,7 @@ class WalletState {
         }
 
         val operationId = userOperationGeneration.incrementAndGet()
+        var preparedCallbackInvoked = false
         return try {
             // Resolve and publish the initial count before waiting for the operation
             // mutex. A previously running refresh/rescan must not delay the UI update.
@@ -1033,14 +1034,28 @@ class WalletState {
                 return Result.failure(IllegalStateException("重置已被更新操作取代"))
             }
 
+            // Returning home is a UI transition, not a native-scan milestone. Once
+            // the initial range is visible, navigate immediately instead of waiting
+            // for an older operation to release the wallet mutex.
+            if (initialEndHeight >= height && onPrepared != null) {
+                onPrepared.invoke()
+                preparedCallbackInvoked = true
+            }
+
             userOperationMutex.lock()
             try {
                 if (operationId != userOperationGeneration.get()) {
                     return Result.failure(IllegalStateException("重置已被更新操作取代"))
                 }
-                // The internal reset publishes its initial progress before the potentially
-                // slow native pause/refresh barrier. Do not block progress initialization here.
-                val result = resetSyncFromHeightInternal(height, dayEndHeight, operationId, onCompleted, onPrepared)
+                // The internal reset keeps the same progress visible while it waits
+                // for native refresh work to exit; avoid firing the navigation callback twice.
+                val result = resetSyncFromHeightInternal(
+                    height,
+                    dayEndHeight,
+                    operationId,
+                    onCompleted,
+                    if (preparedCallbackInvoked) null else onPrepared
+                )
                 if (result.isFailure && operationId == userOperationGeneration.get()) {
                     // A failure before scan start must clear stale state and resume
                     // refresh; a superseded reset must not touch the newer operation.
