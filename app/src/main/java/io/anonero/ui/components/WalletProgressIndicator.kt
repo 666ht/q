@@ -67,12 +67,14 @@ fun WalletProgressIndicator(modifier: Modifier = Modifier, refreshIndicatorProgr
     val syncProgress by walletState.syncProgress.asLiveData().observeAsState(null)
     val connectionStatus by walletState.connectionStatus.asLiveData().observeAsState(null)
     val suppressConnectionWaitIndicator by walletState.suppressConnectionWaitIndicator.asLiveData().observeAsState(false)
+    val operationTransitionInProgress by walletState.userOperationTransition.asLiveData().observeAsState(false)
     val isConnected = connectionStatus == Wallet.ConnectionStatus.ConnectionStatus_Connected
     val isNetworkConnected by networkConnected()
     val showConnectionWaitIndicator = (!isConnected || !isNetworkConnected) && !suppressConnectionWaitIndicator
     // Keep the existing progress-bar area visible while a height scan is waiting
     // for reliable node height/native cursor data. Once available, numeric progress
     // replaces this indeterminate state without changing layout.
+    val showOperationTransitionLoading = syncProgress == null && operationTransitionInProgress
     val showScanPreparationLoading = syncProgress == null && (
         walletState.heightRefreshInProgress ||
             walletState.restoreProgressInProgress ||
@@ -90,6 +92,7 @@ fun WalletProgressIndicator(modifier: Modifier = Modifier, refreshIndicatorProgr
         walletState.customRescanFinalizing ||
         walletState.restoreProgressInProgress ||
         walletState.restoreProgressFinalizing ||
+        operationTransitionInProgress ||
         suppressConnectionWaitIndicator
     val showManualRefreshLoading = showIndefiniteLoading &&
         manualRefreshInProgress &&
@@ -100,7 +103,7 @@ fun WalletProgressIndicator(modifier: Modifier = Modifier, refreshIndicatorProgr
         isConnected &&
         isNetworkConnected
     AnimatedVisibility(
-        (showManualRefreshLoading || syncProgress != null || showConnectionWaitIndicator || showManualPullProgress || showScanPreparationLoading),
+        (showManualRefreshLoading || syncProgress != null || showConnectionWaitIndicator || showManualPullProgress || showScanPreparationLoading || showOperationTransitionLoading),
         modifier = modifier
             .animateContentSize()
     ) {
