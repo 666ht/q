@@ -302,6 +302,12 @@ class WalletState {
         if (heightRefreshInProgress) ordinaryRefreshRequested = true
     }
 
+    /** Avoid extra JNI height reads from callbacks while the request is only draining old work. */
+    fun isAwaitingOrdinaryHeightCallback(): Boolean =
+        heightRefreshInProgress &&
+            ordinaryRefreshRequested &&
+            ordinaryRefreshHeightWaiter?.isActive == true
+
     /** Accept only a fresh, connected ordinary-refresh callback with a usable live tip. */
     fun recordOrdinaryRefreshHeight(daemonHeight: Long, connected: Boolean) {
         if (!heightRefreshInProgress || !ordinaryRefreshRequested || !connected) return
