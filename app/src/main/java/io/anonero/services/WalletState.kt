@@ -111,6 +111,46 @@ class WalletState {
     private val userOperationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val userOperationMutex = Mutex()
     private val userOperationGeneration = AtomicLong(0L)
+    private val userOperationTransitionLock = Any()
+    private var userOperationTransitionOwner = 0L
+
+    @Volatile
+    var userOperationTransitionInProgress: Boolean = false
+        private set
+
+    private val _userOperationTransition = MutableStateFlow(false)
+    val userOperationTransition: Flow<Boolean> = _userOperationTransition
+
+    /**
+     * Give a newly requested user action immediate ownership of the progress UI.
+     * Old native callbacks are ignored until the new operation either publishes
+     * its own scan progress or finishes starting its refresh/query.
+     */
+    private fun beginUserOperationTransition(): Long = synchronized(userOperationTransitionLock) {
+        val operationId = userOperationGeneration.incrementAndGet()
+        userOperationTransitionOwner = operationId
+        userOperationTransitionInProgress = true
+        _userOperationTransition.value = true
+        _syncProgress.value = null
+        _isSyncing.set(false)
+        _isLoading.value = true
+        updateScanPreparationIndicator()
+        operationId
+    }
+
+    private fun finishUserOperationTransition(operationId: Long) {
+        synchronized(userOperationTransitionLock) {
+            if (userOperationTransitionOwner == operationId &&
+                userOperationGeneration.get() == operationId
+            ) {
+                userOperationTransitionOwner = 0L
+                userOperationTransitionInProgress = false
+                _userOperationTransition.value = false
+                updateScanPreparationIndicator()
+            }
+        }
+    }
+
     // A native block callback wakes the progress reader immediately; the timeout is a fallback.
     private val customRescanProgressSignals = Channel<Unit>(capacity = Channel.CONFLATED)
     private var customRescanJob: Job? = null
@@ -251,7 +291,9 @@ class WalletState {
         heightRefreshInProgress = true
         _syncProgress.value = null
         _isSyncing.set(false)
-        _isLoading.value = false
+        // Keep the existing home progress area alive while we wait for the live
+        // daemon tip; plain flags alone do not trigger Compose recomposition.
+        _isLoading.value = true
         updateScanPreparationIndicator()
         Timber.tag(TAG).i("Starting ordinary refresh before height scan: start=%d", startHeight)
     }
@@ -926,7 +968,7 @@ class WalletState {
         // Signal cancellation synchronously without waiting for a native lock.
         // A newer manual refresh must also release a reset that is waiting for the
         // ordinary-refresh height callback, rather than inherit its timeout.
-        val operationId = userOperationGeneration.incrementAndGet()
+        val operationId = beginUserOperationTransition()
         finishOrdinaryHeightRefresh()
         runCatching { wallet.cancelCurrentOperation(operationId) }
             .onFailure { Timber.tag(TAG).w(it, "Could not signal cancellation before manual refresh") }
@@ -962,6 +1004,7 @@ class WalletState {
                 _manualRefreshInProgress.value = false
                 Timber.tag(TAG).e(e, "Manual refresh operation failed")
             } finally {
+                finishUserOperationTransition(operationId)
                 userOperationMutex.unlock()
             }
         }
@@ -976,7 +1019,7 @@ class WalletState {
         _manualRefreshInProgress.value = false
         val wallet = getWallet
             ?: return Result.failure(IllegalStateException("Wallet not initialized"))
-        val operationId = userOperationGeneration.incrementAndGet()
+        val operationId = beginUserOperationTransition()
         finishOrdinaryHeightRefresh()
 
         return try {
@@ -1023,6 +1066,8 @@ class WalletState {
                 }.onFailure { Timber.tag(TAG).w(it, "Could not resume refresh after query failure") }
             }
             Result.failure(e)
+        } finally {
+            finishUserOperationTransition(operationId)
         }
     }
 
@@ -1074,15 +1119,16 @@ class WalletState {
             return Result.failure(IllegalArgumentException("Invalid restore height"))
         }
 
-        val operationId = userOperationGeneration.incrementAndGet()
+        val operationId = beginUserOperationTransition()
+        // Turn on the shared home progress area and gate stale callbacks before
+        // signalling native cancellation. The reset button may still be spinning,
+        // but leaving this screen must not hide the operation state.
+        beginOrdinaryHeightRefresh(height)
         return try {
-            // The newest request cancels older native work first. Keep a preparation
-            // indicator visible while the ordinary refresh retrieves the live daemon tip.
             wallet.cancelCurrentOperation(operationId)
             if (operationId != userOperationGeneration.get()) {
                 return Result.failure(IllegalStateException("重置已被更新操作取代"))
             }
-            beginOrdinaryHeightRefresh(height)
 
             userOperationMutex.lock()
             try {
@@ -1090,12 +1136,27 @@ class WalletState {
                     return Result.failure(IllegalStateException("重置已被更新操作取代"))
                 }
 
-                // First run the normal wallet refresh loop. Only a connected callback
-                // from this request may satisfy the wait; target-height estimates are
-                // deliberately excluded from the remaining-block calculation.
-                armOrdinaryHeightRefresh()
-                wallet.startRefresh()
-                val refreshedDaemonHeight = awaitOrdinaryRefreshHeight()
+                // Drain the previous native refresh/rescan before reading the tip.
+                // pauseRefresh() is a lock barrier; the native wrapper also discards any
+                // rescan request re-queued while that old operation was unwinding.
+                withContext(Dispatchers.IO) { wallet.pauseRefresh() }
+                if (operationId != userOperationGeneration.get()) {
+                    return Result.failure(IllegalStateException("重置已被更新操作取代"))
+                }
+
+                // A connected wallet can usually provide its actual current daemon
+                // height immediately. Do not run another full refresh merely to read it.
+                // Only fall back to the fresh listener callback when the native value is 0.
+                val liveDaemonHeight = withContext(Dispatchers.IO) {
+                    runCatching { wallet.getDaemonBlockChainHeight() }.getOrDefault(0L)
+                }
+                val refreshedDaemonHeight = if (liveDaemonHeight > 0L) {
+                    liveDaemonHeight
+                } else {
+                    armOrdinaryHeightRefresh()
+                    wallet.startRefresh()
+                    awaitOrdinaryRefreshHeight()
+                }
                 if (operationId != userOperationGeneration.get()) {
                     return Result.failure(IllegalStateException("重置已被更新操作取代"))
                 }
@@ -1109,6 +1170,7 @@ class WalletState {
                 if (!publishInitialHeightSyncProgress(height, effectiveEndHeight)) {
                     throw IllegalStateException("无法发布所选高度的同步进度")
                 }
+                finishUserOperationTransition(operationId)
 
                 // The counter is now grounded in the selected start and a live tip.
                 // Return home after publishing it, then hand off to the native rescan.
@@ -1154,6 +1216,8 @@ class WalletState {
             }
             Timber.tag(TAG).e(e, "Could not obtain a live daemon height before rescan")
             Result.failure(e)
+        } finally {
+            finishUserOperationTransition(operationId)
         }
     }
 
