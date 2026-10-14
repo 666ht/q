@@ -72,6 +72,11 @@ class WalletState {
     // Automatic sync/connect callbacks must not recreate that spinner.
     private val _manualRefreshInProgress = MutableStateFlow(false)
     val manualRefreshInProgress: Flow<Boolean> = _manualRefreshInProgress
+
+    fun finishManualRefreshIndicator() {
+        _manualRefreshInProgress.value = false
+    }
+
     // Hide the connection-wait spinner while a selected-height scan is being prepared.
     // The real remaining-block counter becomes visible as soon as the native cursor is valid.
     private val _suppressConnectionWaitIndicator = MutableStateFlow(false)
@@ -840,6 +845,9 @@ class WalletState {
                             Timber.tag(TAG).e(it, "Manual refresh history update failed")
                         }
                 }
+            } catch (e: Exception) {
+                _manualRefreshInProgress.value = false
+                Timber.tag(TAG).e(e, "Manual refresh operation failed")
             } finally {
                 userOperationMutex.unlock()
             }
