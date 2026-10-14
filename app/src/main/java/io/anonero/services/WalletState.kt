@@ -809,9 +809,10 @@ class WalletState {
         val wallet = getWallet
         if (wallet?.isInitialized != true) return
 
-        // This entry point is called by the explicit home pull gesture.
-        // Do not let background refresh callbacks masquerade as a manual refresh.
-        _manualRefreshInProgress.value = true
+        // Reset the indicator as soon as a new pull request supersedes the old one.
+        // Mark it active only after prior native work has been paused and this manual
+        // refresh is actually about to start, so stale callbacks cannot clear it.
+        _manualRefreshInProgress.value = false
 
         // Signal cancellation synchronously without waiting for a native lock.
         // The native operation ID rejects late cancellation requests from stale jobs.
@@ -832,6 +833,7 @@ class WalletState {
                 restoreProgressCompleted = false
 
                 if (wallet.fullStatus.connectionStatus == Wallet.ConnectionStatus.ConnectionStatus_Connected) {
+                    _manualRefreshInProgress.value = true
                     setLoading(true)
                     wallet.startRefresh()
                 } else {
