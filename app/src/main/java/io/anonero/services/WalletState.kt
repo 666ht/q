@@ -336,6 +336,26 @@ class WalletState {
     }
 
     /**
+     * Clear only the in-memory progress window when a mnemonic restore cannot
+     * reach the daemon. Keep the one-shot restore preference so startup can retry.
+     */
+    fun abortRestoreProgressForRetry() {
+        customRescanPreparing = false
+        customRescanInProgress = false
+        customRescanFinalizing = false
+        customRescanFinished = false
+        customRescanStartHeight = null
+        customRescanDayEndHeight = null
+        customRescanRequesting.set(false)
+        _syncProgress.value = null
+        _isSyncing.set(false)
+        _isLoading.value = false
+        finishRestoreProgress()
+        updateScanPreparationIndicator()
+        update()
+    }
+
+    /**
      * Refresh visible history while mnemonic recovery or a custom-height rescan
      * is running. Calls are throttled to about 400ms and run off the native
      * block callback thread, without starting a second synchronization.
@@ -1223,7 +1243,7 @@ class WalletState {
             // cursor before replacing this initial 0% / full-range snapshot.
             syncUpdate(SyncProgress(0f, initialRemaining))
 
-            startCustomRescanProgressPolling(wallet, height, effectiveEnd, initialWalletHeight)
+            startCustomRescanProgressPolling(wallet, height, effectiveEnd, initialWalletHeight, operationId)
             customRescanPreparing = false
 
             Timber.tag(TAG).i(
@@ -1273,21 +1293,29 @@ class WalletState {
         wallet: Wallet,
         startHeight: Long,
         endHeight: Long,
-        initialWalletHeight: Long?
+        initialWalletHeight: Long?,
+        operationId: Long
     ) {
         customRescanJob?.cancel()
         customRescanJob = customRescanScope.launch {
-            while (isActive && customRescanInProgress) {
+            while (
+                isActive &&
+                customRescanInProgress &&
+                operationId == userOperationGeneration.get()
+            ) {
                 val rawHeight = runCatching {
                     wallet.getBlockChainHeight()
                 }.getOrNull()
+                // A superseding user operation owns progress immediately. Do not let
+                // a stale JNI height read overwrite that operation's initial snapshot.
+                if (operationId != userOperationGeneration.get() || !customRescanInProgress) {
+                    break
+                }
                 if (rawHeight == null || rawHeight < 0L) {
-                    // A failed cursor read is not evidence that the scan reached its
-                    // start height. Clear stale numbers and keep waiting.
-                    _syncProgress.value = null
-                    _isSyncing.set(false)
-                    // Waiting for the native scan cursor is not a manual refresh.
-                    // Keep the generic refresh spinner off until real scan progress exists.
+                    // Preserve the accurate initial (0%, end-start) snapshot while
+                    // wallet2's cursor is temporarily unavailable. Never erase the
+                    // progress bar during the native rescan hand-off.
+                    _isSyncing.set(_syncProgress.value != null)
                     _isLoading.value = false
                     withTimeoutOrNull(400L) { customRescanProgressSignals.receive() }
                     continue
@@ -1306,12 +1334,10 @@ class WalletState {
                     if (cursorReachedSelectedRange) {
                         customRescanScanStarted.set(true)
                     } else {
-                        // The native request is queued, but this cursor still belongs
-                        // to the pre-reset wallet. Do not publish a fabricated total.
-                        _syncProgress.value = null
-                        _isSyncing.set(false)
-                        // The old wallet tip is not scan progress and must not show
-                        // the generic refresh spinner while native rescan is queued.
+                        // The cursor still belongs to the pre-reset wallet. Keep the
+                        // already-published selected-height total visible at 0%; it is
+                        // derived from end-start, not from this stale cursor.
+                        _isSyncing.set(_syncProgress.value != null)
                         _isLoading.value = false
                         withTimeoutOrNull(400L) { customRescanProgressSignals.receive() }
                         continue
