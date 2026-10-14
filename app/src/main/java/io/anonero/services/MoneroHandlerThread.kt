@@ -52,6 +52,10 @@ class MoneroHandlerThread(
             )
             return
         }
+        if (walletState.userOperationTransitionInProgress) {
+            Timber.tag(name).d("Ignoring stale block callback during latest-operation handoff")
+            return
+        }
         if (walletState.customRescanPreparing) {
             Timber.tag(name).d("Ignoring block callback while custom rescan is being prepared")
             return
@@ -179,6 +183,10 @@ class MoneroHandlerThread(
     }
 
     override fun updated() {
+        if (walletState.userOperationTransitionInProgress) {
+            Timber.tag(name).d("updated() ignored during latest-operation handoff")
+            return
+        }
         // During either finalization phase, wallet2 can emit an intermediate
         // callback while history/coins are temporarily incomplete. Do not
         // publish a transient snapshot or start another refresh loop.
@@ -210,6 +218,10 @@ class MoneroHandlerThread(
             if (status == Wallet.ConnectionStatus.ConnectionStatus_Disconnected || status == null) {
                 tryRestartConnection()
             }
+            return
+        }
+        if (walletState.userOperationTransitionInProgress) {
+            Timber.tag(name).d("refreshed() ignored during latest-operation handoff")
             return
         }
         if (walletState.customRescanPreparing) {
