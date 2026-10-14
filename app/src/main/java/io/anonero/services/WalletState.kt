@@ -1328,7 +1328,7 @@ class WalletState {
             // Publish the exact selected scan range as soon as the native rescan
             // request is accepted. The cursor poller below still validates the new
             // cursor before replacing this initial 0% / full-range snapshot.
-            syncUpdate(SyncProgress(0f, initialRemaining))
+            syncUpdate(SyncProgress(0f, (effectiveEnd - height).coerceAtLeast(0L)))
 
             startCustomRescanProgressPolling(wallet, height, effectiveEnd, initialWalletHeight, operationId)
             customRescanPreparing = false
