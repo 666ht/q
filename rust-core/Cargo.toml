@@ -10,5 +10,5 @@ name = "anonero_rust_core"
 crate-type = ["cdylib"]
 
 [dependencies]
-# Protocol/wallet primitives are supplied by the maintained Rust Monero implementation.
+# Use Monfluo's cross-platform Rust wallet core, not the upstream GitHub workspace.
 monfluo-oxide = { git = "https://codeberg.org/Monfluo/monero-oxide", branch = "main" }
