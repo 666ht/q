@@ -1,0 +1,38 @@
+[package]
+name = "monfluo-oxide"
+version = "0.1.0"
+license = "GPL-3.0-only"
+edition = "2024"
+
+[workspace.dependencies]
+tokio = "1.49.0"
+
+[dependencies]
+monero-wallet-util = { git = "https://codeberg.org/Monfluo/monero-wallet-util.git", branch = "monfluo", features = ["strum"] }
+monero-wallet = { git = "https://codeberg.org/Monfluo/monero-oxide.git", branch = "monfluo", features = ["strum"] }
+monero-interface = { git = "https://codeberg.org/Monfluo/monero-oxide.git", branch = "monfluo", features = ["strum"] }
+monero-daemon-rpc = { git = "https://codeberg.org/Monfluo/monero-oxide.git", branch = "monfluo", features = ["skip-transaction-hash-validation"] }
+# monero-wallet-util = { path = "../monero-wallet-util/util", features = ["strum"] }
+# monero-wallet = { path = "../monero-oxide/monero-oxide/wallet", features = ["strum"] }
+# monero-interface = { path = "../monero-oxide/monero-oxide/interface", features = ["strum"] }
+# monero-daemon-rpc = { path = "../monero-oxide/monero-oxide/interface/daemon", features = ["skip-transaction-hash-validation"] }
+tokio = { workspace = true, features = ["fs", "io-util", "sync", "time"] }
+thiserror = "2.0.18"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.149"
+rand = "0.8.5"
+rand_chacha = "0.3.1"
+rand_core = "0.6.4"
+zeroize = "1.8.2"
+curve25519-dalek = "4.1.3"
+url = "2.5.8"
+strum = { version = "0.27.2", features = ["derive"] }
+reqwest = { version = "0.11", default-features = false, features = ["json", "rustls-tls", "socks"] }
+digest_auth = "0.3"
+tracing = "0.1.44"
+bigdecimal = "0.4.10"
+chrono = "0.4.44"
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["fs", "io-util", "macros"] }
+tempfile = "3.27.0"

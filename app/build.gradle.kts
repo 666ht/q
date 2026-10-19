@@ -208,6 +208,9 @@ val buildMonfluoOxideJni = tasks.register<Exec>("buildMonfluoOxideJni") {
     inputs.file(oxideJniDir.resolve("Cargo.toml"))
     inputs.file(oxideJniDir.resolve("Cargo.lock"))
     inputs.dir(oxideJniDir.resolve("src"))
+    inputs.file(rootProject.file("monfluo-oxide/Cargo.toml"))
+    inputs.file(rootProject.file("monfluo-oxide/Cargo.lock"))
+    inputs.dir(rootProject.file("monfluo-oxide/src"))
     outputs.file(oxideJniOutput)
 
     doFirst {

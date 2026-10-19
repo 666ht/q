@@ -5,8 +5,7 @@ license = "GPL-3.0-only"
 edition = "2024"
 
 [dependencies]
-monfluo-oxide = { git = "https://codeberg.org/Monfluo/monfluo-oxide" }
-# monfluo-oxide = { path = "../../monfluo-oxide" }
+monfluo-oxide = { path = "../monfluo-oxide" }
 jni = "0.22.4"
 const_format = "0.2.35"
 jni-macros = "0.22.4"
