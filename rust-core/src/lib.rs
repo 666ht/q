@@ -10,6 +10,7 @@ use jni::{
     JNIEnv,
 };
 use monero_seed::{Language, Seed};
+use monero_address::{MoneroAddress, Network};
 use zeroize::Zeroizing;
 
 const ABI_VERSION: u32 = 1;
@@ -72,6 +73,34 @@ pub extern "system" fn Java_io_anonero_model_WalletManager_validateSeedWithRust(
         JNI_TRUE
     } else {
         JNI_FALSE
+    }
+}
+
+
+/// Validate an address for the selected network using the Rust Monero address parser.
+/// Network IDs follow the Android enum: 0=mainnet, 1=testnet, 2=stagenet.
+#[no_mangle]
+pub extern "system" fn Java_io_anonero_model_WalletManager_validateAddressWithRust(
+    mut env: JNIEnv,
+    _class: JClass,
+    address: JString,
+    network_type: jni::sys::jint,
+) -> jboolean {
+    let address: String = match env.get_string(&address) {
+        Ok(value) => value.into(),
+        Err(_) => return JNI_FALSE,
+    };
+
+    let network = match network_type {
+        0 => Network::Mainnet,
+        1 => Network::Testnet,
+        2 => Network::Stagenet,
+        _ => return JNI_FALSE,
+    };
+
+    match MoneroAddress::from_str(network, &address) {
+        Ok(_) => JNI_TRUE,
+        Err(_) => JNI_FALSE,
     }
 }
 
