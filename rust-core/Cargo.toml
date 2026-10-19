@@ -10,9 +10,7 @@ name = "anonero_rust_core"
 crate-type = ["cdylib"]
 
 [dependencies]
-# Monfluo's cross-platform wallet core remains the long-term backend.
-monfluo-oxide = { git = "https://codeberg.org/Monfluo/monero-oxide", branch = "main" }
-# Reuse the upstream Monero seed parser for a real, independently testable Rust operation.
+# Use the upstream Rust Monero seed parser for the first migrated wallet primitive.
 monero-seed = { git = "https://github.com/monero-oxide/monero-wallet-util", package = "monero-seed" }
 jni = "0.21.1"
 zeroize = { version = "1", features = ["std"] }
