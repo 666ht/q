@@ -99,6 +99,9 @@ jobs:
             rust-core/target
           key: rust-android-arm64-${{ runner.os }}-${{ hashFiles('rust-core/Cargo.toml', 'rust-core/src/**/*.rs') }}
 
+      - name: Test Rust core
+        run: cargo test --manifest-path rust-core/Cargo.toml
+
       - name: Build APK
         run: ./gradlew --no-daemon assembleAnonRelease -PbuildNumber="${{ github.run_number }}"
 
