@@ -15,8 +15,12 @@
  */
 
 #include <inttypes.h>
+#include <cstdint>
 #include <cstring>
 #include <mutex>
+#if defined(__ANDROID__) && defined(__aarch64__)
+#include <dlfcn.h>
+#endif
 #include "anonero.h"
 #include "wallet2_api.h"
 
@@ -65,6 +69,41 @@ extern "C"
 #define ANON_PAIR_CLASS "io/anonero/model/Pair"
 #endif
 
+#if defined(__ANDROID__) && defined(__aarch64__)
+// Keep the Rust module loaded for the lifetime of this JNI library.
+static void *anoneroRustCoreHandle = nullptr;
+
+static bool verifyRustCore() {
+    anoneroRustCoreHandle = dlopen("libanonero_rust_core.so", RTLD_NOW | RTLD_LOCAL);
+    if (anoneroRustCoreHandle == nullptr) {
+        const char *reason = dlerror();
+        LOGE("Rust core dlopen failed: %s", reason == nullptr ? "unknown error" : reason);
+        return false;
+    }
+
+    using AbiVersionFn = std::uint32_t (*)();
+    using SubaddressIndexFn = std::uint8_t (*)(std::uint32_t, std::uint32_t);
+    auto abiVersion = reinterpret_cast<AbiVersionFn>(
+        dlsym(anoneroRustCoreHandle, "anonero_rust_core_abi_version"));
+    auto isValidSubaddressIndex = reinterpret_cast<SubaddressIndexFn>(
+        dlsym(anoneroRustCoreHandle, "anonero_rust_core_subaddress_index_is_valid"));
+
+    if (abiVersion == nullptr || isValidSubaddressIndex == nullptr) {
+        LOGE("Rust core ABI symbols are missing");
+        return false;
+    }
+    if (abiVersion() != 1 ||
+        isValidSubaddressIndex(0, 0) != 0 ||
+        isValidSubaddressIndex(1, 0) != 1) {
+        LOGE("Rust core ABI smoke check failed");
+        return false;
+    }
+
+    LOGI("Rust Monero core loaded; ABI version=%u", abiVersion());
+    return true;
+}
+#endif
+
 static JavaVM *cachedJVM;
 static jclass class_ArrayList;
 static jclass class_WalletListener;
@@ -84,6 +123,11 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *jvm, void *reserved) {
     if (jvm->GetEnv(reinterpret_cast<void **>(&jenv), JNI_VERSION_1_6) != JNI_OK) {
         return -1;
     }
+#if defined(__ANDROID__) && defined(__aarch64__)
+    if (!verifyRustCore()) {
+        return JNI_ERR;
+    }
+#endif
     //LOGI("JNI_OnLoad ok");
 
     class_ArrayList = static_cast<jclass>(jenv->NewGlobalRef(
