@@ -103,7 +103,7 @@ jobs:
         run: cargo test --manifest-path rust-core/Cargo.toml
 
       - name: Build APK
-        run: ./gradlew --no-daemon assembleAnonRelease -PbuildNumber="${{ github.run_number }}"
+        run: ./gradlew --no-daemon --no-configuration-cache assembleAnonRelease -PbuildNumber="${{ github.run_number }}"
 
       - name: Verify the Rust core is packaged for ARM64
         shell: bash
