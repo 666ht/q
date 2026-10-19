@@ -91,17 +91,22 @@ pub extern "system" fn Java_io_anonero_model_WalletManager_validateAddressWithRu
         Err(_) => return JNI_FALSE,
     };
 
+    if is_valid_monero_address(&address, network_type) {
+        JNI_TRUE
+    } else {
+        JNI_FALSE
+    }
+}
+
+/// Validate a Monero address and ensure it belongs to the requested network.
+fn is_valid_monero_address(address: &str, network_type: i32) -> bool {
     let network = match network_type {
         0 => Network::Mainnet,
         1 => Network::Testnet,
         2 => Network::Stagenet,
-        _ => return JNI_FALSE,
+        _ => return false,
     };
-
-    match MoneroAddress::from_str(network, &address) {
-        Ok(_) => JNI_TRUE,
-        Err(_) => JNI_FALSE,
-    }
+    MoneroAddress::from_str(network, address).is_ok()
 }
 
 #[cfg(test)]
@@ -129,5 +134,15 @@ mod tests {
     #[test]
     fn rejects_a_phrase_that_is_not_a_monero_seed() {
         assert!(!is_valid_monero_seed("this is not a valid monero seed"));
+    }
+
+    #[test]
+    fn validates_addresses_and_network() {
+        const MAINNET_ADDRESS: &str = "4B33mFPMq6mKi7Eiyd5XuyKRVMGVZz1Rqb9ZTyGApXW5d1aT7UBDZ89ewmnWFkzJ5wPd2SFbn313vCT8a4E2Qf4KQH4pNey";
+        assert!(is_valid_monero_address(MAINNET_ADDRESS, 0));
+        assert!(!is_valid_monero_address(MAINNET_ADDRESS, 1));
+        assert!(!is_valid_monero_address(MAINNET_ADDRESS, 2));
+        assert!(!is_valid_monero_address("not-an-address", 0));
+        assert!(!is_valid_monero_address(MAINNET_ADDRESS, 99));
     }
 }
