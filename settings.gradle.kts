@@ -20,5 +20,5 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "anonero"
-include(":app")
+include(":app", ":monfluo-oxide-kotlin")
  

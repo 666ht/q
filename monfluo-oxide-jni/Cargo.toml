@@ -1,0 +1,29 @@
+[package]
+name = "monfluo-oxide-jni"
+version = "0.1.0"
+license = "GPL-3.0-only"
+edition = "2024"
+
+[dependencies]
+monfluo-oxide = { git = "https://codeberg.org/Monfluo/monfluo-oxide" }
+# monfluo-oxide = { path = "../../monfluo-oxide" }
+jni = "0.22.4"
+const_format = "0.2.35"
+jni-macros = "0.22.4"
+tokio = { version = "1.52.3", features = ["full"] }
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
+zeroize = "1.9.0"
+strum = "0.27.2"
+
+[target.'cfg(target_os = "android")'.dependencies]
+tracing-android = "0.2.0"
+
+[lib]
+name = "monfluo_oxide_jni"
+crate-type = ["cdylib"]
+
+[profile.release]
+strip = true
+lto = true
+codegen-units = 1

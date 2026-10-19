@@ -193,7 +193,76 @@ tasks.matching {
     dependsOn(buildRustCore)
 }
 
+// Build the actual Monfluo Oxide Rust JNI wallet backend from the mirrored source.
+val oxideJniDir = rootProject.file("monfluo-oxide-jni")
+val generatedOxideJniLibs = layout.buildDirectory.dir("generated/monfluo-oxide-jni-libs")
+val oxideJniOutput = generatedOxideJniLibs.map {
+    it.file("arm64-v8a/libmonfluo_oxide_jni.so")
+}
+android.sourceSets.getByName("main").jniLibs.srcDir(generatedOxideJniLibs)
+
+val buildMonfluoOxideJni = tasks.register<Exec>("buildMonfluoOxideJni") {
+    group = "build"
+    description = "Build Monfluo Oxide's Rust wallet JNI backend for Android arm64-v8a."
+    dependsOn(installRustAndroidTarget)
+    inputs.file(oxideJniDir.resolve("Cargo.toml"))
+    inputs.file(oxideJniDir.resolve("Cargo.lock"))
+    inputs.dir(oxideJniDir.resolve("src"))
+    outputs.file(oxideJniOutput)
+
+    doFirst {
+        val osName = System.getProperty("os.name").lowercase()
+        val arch = System.getProperty("os.arch").lowercase()
+        val hostTag = when {
+            osName.contains("mac") && (arch == "aarch64" || arch == "arm64") -> "darwin-arm64"
+            osName.contains("mac") -> "darwin-x86_64"
+            osName.contains("win") -> "windows-x86_64"
+            else -> "linux-x86_64"
+        }
+        val ndkBin = file(
+            "${android.sdkDirectory}/ndk/${android.ndkVersion}/toolchains/llvm/prebuilt/$hostTag/bin"
+        )
+        val linker = ndkBin.resolve("aarch64-linux-android26-clang")
+        val ar = ndkBin.resolve("llvm-ar")
+        require(linker.isFile && ar.isFile) {
+            "Rust Android linker/binutils not found under ${ndkBin.absolutePath}"
+        }
+        environment("CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER", linker.absolutePath)
+        environment("TARGET_CC", linker.absolutePath)
+        environment("TARGET_AR", ar.absolutePath)
+        commandLine(
+            "cargo", "build", "--release", "--locked",
+            "--target", "aarch64-linux-android",
+            "--manifest-path", oxideJniDir.resolve("Cargo.toml").absolutePath
+        )
+    }
+
+    doLast {
+        val rustLibrary = oxideJniDir.resolve(
+            "target/aarch64-linux-android/release/libmonfluo_oxide_jni.so"
+        )
+        require(rustLibrary.isFile) {
+            "Monfluo Oxide JNI build completed without producing ${rustLibrary.absolutePath}"
+        }
+        copy {
+            from(rustLibrary)
+            into(generatedOxideJniLibs.get().dir("arm64-v8a"))
+        }
+    }
+}
+
+tasks.matching {
+    it.name.startsWith("configureCMake") ||
+        it.name.startsWith("buildCMake") ||
+        it.name.startsWith("externalNativeBuild") ||
+        (it.name.startsWith("merge") && it.name.endsWith("JniLibFolders"))
+}.configureEach {
+    dependsOn(buildMonfluoOxideJni)
+}
+
 dependencies {
+
+    implementation(project(":monfluo-oxide-kotlin"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.core.splashscreen)

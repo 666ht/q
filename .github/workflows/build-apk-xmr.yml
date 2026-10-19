@@ -97,10 +97,13 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             rust-core/target
-          key: rust-android-arm64-${{ runner.os }}-${{ hashFiles('rust-core/Cargo.toml', 'rust-core/src/**/*.rs') }}
+            monfluo-oxide-jni/target
+          key: rust-android-arm64-${{ runner.os }}-${{ hashFiles('rust-core/Cargo.toml', 'rust-core/src/**/*.rs', 'monfluo-oxide-jni/Cargo.toml', 'monfluo-oxide-jni/Cargo.lock', 'monfluo-oxide-jni/src/**/*.rs') }}
 
-      - name: Test Rust core
-        run: cargo test --manifest-path rust-core/Cargo.toml
+      - name: Test Rust bridge crates
+        run: |
+          cargo test --manifest-path rust-core/Cargo.toml
+          cargo test --locked --manifest-path monfluo-oxide-jni/Cargo.toml
 
       - name: Build APK
         run: ./gradlew --no-daemon --no-configuration-cache assembleAnonRelease -PbuildNumber="${{ github.run_number }}"
@@ -112,6 +115,7 @@ jobs:
           apk="$(find app/build/outputs/apk/anon/release -maxdepth 1 -name '*.apk' -print -quit)"
           test -n "$apk"
           unzip -l "$apk" | grep -F 'lib/arm64-v8a/libanonero_rust_core.so'
+          unzip -l "$apk" | grep -F 'lib/arm64-v8a/libmonfluo_oxide_jni.so'
 
       - name: Upload APK for download
         uses: actions/upload-artifact@v4

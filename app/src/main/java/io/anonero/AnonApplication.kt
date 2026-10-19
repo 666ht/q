@@ -4,6 +4,7 @@ import android.app.Application
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.SharedPreferences
+import org.monfluo.wallet.lib.OxideNative
 import io.anonero.di.appModule
 import io.anonero.model.WalletManager
 import io.anonero.model.node.NodeFields
@@ -40,6 +41,7 @@ class AnonApplication : Application(), Thread.UncaughtExceptionHandler {
         }
         initConfigs()
         plantLog()
+        Timber.tag(TAG).i("Monfluo Oxide Rust JNI available: %s", OxideNative.isAvailable)
         Thread.setDefaultUncaughtExceptionHandler(this)
         val torService: TorService = get()
         val prefs: SharedPreferences = get(named(WALLET_PREFERENCES))
@@ -69,6 +71,7 @@ class AnonApplication : Application(), Thread.UncaughtExceptionHandler {
     }
 
     private fun initConfigs() {
+        OxideNative.load()
         //initialize wallet manager
         WalletManager.instance?.init()
         initNotificationChannels()

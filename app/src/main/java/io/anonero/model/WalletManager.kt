@@ -16,6 +16,9 @@
 package io.anonero.model
 
 import io.anonero.AnonConfig
+import org.monfluo.wallet.lib.OxideNative
+import org.monfluo.wallet.lib.seed.MoneroSeed
+import org.monfluo.wallet.lib.seed.Polyseed
 import io.anonero.model.node.Node
 import timber.log.Timber
 import java.io.File
@@ -111,19 +114,15 @@ class WalletManager {
         offset: String,
         restoreHeight: Long
     ): Wallet {
-        // First Rust-backed operation in the Android migration. Do not reject on a
-        // negative result yet: legacy wallet2 remains the compatibility authority
-        // until seed and wallet restoration are fully ported.
-        if (rustCoreLoaded) {
-            try {
-                val acceptedByRust = validateSeedWithRust(mnemonic)
-                Timber.tag(TAG).d(
-                    "Rust Monero seed parser accepted phrase: %s; legacy recovery remains enabled",
-                    acceptedByRust
-                )
-            } catch (_: UnsatisfiedLinkError) {
-                Timber.tag(TAG).w("Rust seed validator unavailable; using legacy recovery")
-            }
+        // Validate with the actual Monfluo Rust seed implementation first.
+        // Keep wallet2 restoration as compatibility path while wallet files and
+        // synchronization state are being adapted.
+        if (OxideNative.isAvailable) {
+            val acceptedByRust = runCatching { MoneroSeed.fromMnemonic(mnemonic) != null }.getOrDefault(false)
+            Timber.tag(TAG).d(
+                "Monfluo Oxide accepted Monero seed: %s; continuing compatible restore path",
+                acceptedByRust
+            )
         }
 
         val walletHandle = recoveryWalletJ(
@@ -147,6 +146,13 @@ class WalletManager {
         mnemonic: String, offset: String,
         restoreHeight: Long
     ): Wallet {
+        if (OxideNative.isAvailable) {
+            val acceptedByRust = runCatching { Polyseed.fromMnemonic(mnemonic) != null }.getOrDefault(false)
+            Timber.tag(TAG).d(
+                "Monfluo Oxide accepted Polyseed: %s; continuing compatible restore path",
+                acceptedByRust
+            )
+        }
         val walletHandle = recoveryWalletPolyseedJ(
             aFile.absolutePath, password,
             mnemonic, offset,
@@ -312,28 +318,6 @@ class WalletManager {
                 return field
             }
             private set
-
-        // Rust is packaged for arm64-v8a first. Keep 32-bit installs compatible
-        // while the native wallet2 backend is being ported operation-by-operation.
-        private val rustCoreLoaded: Boolean = try {
-            System.loadLibrary("anonero_rust_core")
-            true
-        } catch (_: UnsatisfiedLinkError) {
-            false
-        }
-
-        init {
-            System.loadLibrary("anonero")
-        }
-
-        @JvmStatic
-        external fun validateSeedWithRust(mnemonic: String): Boolean
-
-        @JvmStatic
-        external fun validateAddressWithRust(address: String?, networkType: Int): Boolean
-
-        @JvmStatic
-        fun isRustCoreAvailable(): Boolean = rustCoreLoaded
 
         fun addressPrefix(networkType: NetworkType): String {
             return when (networkType) {

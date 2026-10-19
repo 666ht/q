@@ -16,6 +16,9 @@
 package io.anonero.model
 
 import timber.log.Timber
+import org.monfluo.wallet.lib.OxideNative
+import org.monfluo.wallet.lib.data.Address as OxideAddress
+import org.monfluo.wallet.lib.data.Network as OxideNetwork
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -520,17 +523,21 @@ class Wallet {
     private external fun getDeviceTypeJ(): Int
 
     fun validateAddress(addressField: String): Boolean {
-        val networkType = WalletManager.instance?.networkType?.value ?: return false
-        // Use the Rust implementation when packaged. Keep the old JNI validator as a
-        // compatibility fallback for 32-bit builds or an unavailable Rust library.
-        if (WalletManager.isRustCoreAvailable()) {
+        val networkType = WalletManager.instance?.networkType ?: return false
+        if (OxideNative.isAvailable) {
             try {
-                return WalletManager.validateAddressWithRust(addressField, networkType)
+                val parsed = OxideAddress.fromString(addressField) ?: return false
+                val expectedNetwork = when (networkType) {
+                    NetworkType.NetworkType_Mainnet -> OxideNetwork.Mainnet
+                    NetworkType.NetworkType_Testnet -> OxideNetwork.Testnet
+                    NetworkType.NetworkType_Stagenet -> OxideNetwork.Stagenet
+                }
+                return parsed.network == expectedNetwork
             } catch (_: UnsatisfiedLinkError) {
-                // Fall back below without changing the user-facing validation flow.
+                // Retain the existing validator when Rust is unavailable.
             }
         }
-        return isAddressValid(addressField, networkType)
+        return isAddressValid(addressField, networkType.value)
     }
 
     enum class Device(val accountLookahead: Int, val subaddressLookahead: Int) {
