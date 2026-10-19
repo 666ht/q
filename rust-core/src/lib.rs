@@ -1,8 +1,11 @@
 //! Rust wallet-core ABI smoke layer for the Android migration.
 //!
 //! This crate deliberately does not claim to replace wallet2 yet. It proves that
-//! the Rust Monero wallet crate can be built for Android arm64 and loaded by the
+//! the Monfluo Rust crate can be built for Android arm64 and loaded by the
 //! existing native library without changing the Android UI or Java/Kotlin API.
+
+// Deliberately compile the Monfluo crate while the app-facing wallet API is still being ported.
+use monfluo_oxide as _;
 
 const ABI_VERSION: u32 = 1;
 
