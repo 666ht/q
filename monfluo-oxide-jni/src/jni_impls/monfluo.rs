@@ -7,7 +7,7 @@ use jni::{
     jni_mangle,
     objects::{JClass, JObject, JString},
 };
-use monfluo_oxide::{monero_wallet::address::Network, transport::MonfluoTransport};
+use monfluo_oxide::transport::MonfluoTransport;
 
 #[jni_mangle("org.monfluo.wallet.lib.Monfluo", "monfluoVersion")]
 pub fn monfluo_version<'local>(
@@ -81,7 +81,7 @@ pub fn create_wallet<'local>(
     mut env: EnvUnowned<'local>,
     _class: JClass<'local>,
     java_monfluo_directory: JString,
-    java_network: JObject,
+    java_network: JObject<'local>,
     java_name: JString,
     java_password: JString,
     java_seed_language: JObject<'local>,
