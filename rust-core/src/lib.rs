@@ -12,9 +12,6 @@ use jni::{
 use monero_seed::{Language, Seed};
 use zeroize::Zeroizing;
 
-// Keep the Monfluo crate in the Android build while its wallet-facing API is ported.
-use monfluo_oxide as _;
-
 const ABI_VERSION: u32 = 1;
 
 /// ABI version checked by the existing native library when it loads this module.
