@@ -3,6 +3,7 @@ package io.anonero.services
 import android.content.SharedPreferences
 import io.anonero.AnonConfig
 import io.anonero.model.WalletManager
+import io.anonero.model.OxideWalletRepository
 import io.anonero.model.node.Node
 import io.anonero.model.node.NodeFields
 import org.json.JSONObject
@@ -314,6 +315,9 @@ class AnonWalletHandler(
         WalletManager.resetInstance()
 
         val appContext = AnonConfig.context?.applicationContext
+        if (appContext != null) {
+            OxideWalletRepository.deleteAllMirrors(appContext)
+        }
         var deleted = true
         if (appContext != null) {
             val walletDir = File(appContext.filesDir, "wallets")

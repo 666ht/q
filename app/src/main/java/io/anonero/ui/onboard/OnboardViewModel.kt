@@ -6,6 +6,8 @@ import androidx.lifecycle.ViewModel
 import io.anonero.AnonConfig
 import io.anonero.R
 import io.anonero.model.NeroKeyPayload
+import io.anonero.model.OxideWalletRepository
+import io.anonero.model.NetworkType
 import io.anonero.model.Wallet
 import io.anonero.model.WalletManager
 import io.anonero.util.CrazyPassEncoder
@@ -48,6 +50,7 @@ class OnboardViewModel(private val prefs: SharedPreferences) : ViewModel() {
         withContext(Dispatchers.IO) {
             val context = AnonConfig.context!!.applicationContext
             val walletFile = AnonConfig.getDefaultWalletFile(context)
+            OxideWalletRepository.clearMirror(context, walletFile.name)
             AnonConfig.getDefaultWalletDir(context).deleteRecursively()
             AnonConfig.getDefaultWalletDir(context).mkdirs()
             val anonWallet = WalletManager.instance?.createWallet(
@@ -62,6 +65,18 @@ class OnboardViewModel(private val prefs: SharedPreferences) : ViewModel() {
             if (anonWallet?.status?.isOk != true) {
                 walletFile.delete()
                 throw CancellationException(context.getString(R.string.unable_to_create_wallet))
+            }
+            if (anonWallet != null) {
+                OxideWalletRepository.mirrorFromMnemonic(
+                    context = context,
+                    walletName = walletFile.name,
+                    password = pin,
+                    mnemonic = anonWallet.getSeed("").orEmpty(),
+                    expectedAddress = anonWallet.address,
+                    offsetPassphrase = passPhrase,
+                    networkType = anonWallet.networkType ?: WalletManager.instance?.networkType ?: NetworkType.NetworkType_Mainnet,
+                    restoreHeight = anonWallet.getRestoreHeight()
+                )
             }
             val crazyPass: String = KeyStoreHelper.getCrazyPass(AnonConfig.context, passPhrase)
             prefs.edit {
@@ -92,6 +107,7 @@ class OnboardViewModel(private val prefs: SharedPreferences) : ViewModel() {
         withContext(Dispatchers.IO) {
             val context = AnonConfig.context!!.applicationContext
             val walletFile = AnonConfig.getDefaultWalletFile(context)
+            OxideWalletRepository.clearMirror(context, walletFile.name)
             AnonConfig.getDefaultWalletDir(context).deleteRecursively()
             AnonConfig.getDefaultWalletDir(context).mkdirs()
             val anonWallet = WalletManager.instance?.createWalletWithKeys(
@@ -143,6 +159,7 @@ class OnboardViewModel(private val prefs: SharedPreferences) : ViewModel() {
 
         val context = AnonConfig.context!!.applicationContext
         val walletFile = AnonConfig.getDefaultWalletFile(context)
+        OxideWalletRepository.clearMirror(context, walletFile.name)
         AnonConfig.getDefaultWalletDir(context).deleteRecursively()
         AnonConfig.getDefaultWalletDir(context).mkdirs()
         delay(100)
@@ -179,6 +196,16 @@ class OnboardViewModel(private val prefs: SharedPreferences) : ViewModel() {
             walletFile.delete()
             throw CancellationException("unable to create wallet ${anonWallet?.status?.errorString}")
         }
+        OxideWalletRepository.mirrorFromMnemonic(
+            context = context,
+            walletName = walletFile.name,
+            password = pin,
+            mnemonic = restorePayload!!.seed.joinToString(" "),
+            expectedAddress = anonWallet.address,
+            offsetPassphrase = passPhrase,
+            networkType = anonWallet.networkType ?: WalletManager.instance?.networkType ?: NetworkType.NetworkType_Mainnet,
+            restoreHeight = restorePayload!!.restoreHeight ?: anonWallet.getRestoreHeight()
+        )
         val crazyPass: String = KeyStoreHelper.getCrazyPass(AnonConfig.context, passPhrase)
         prefs.edit(commit = true) {
             putString(PREFS_PASSPHRASE_HASH, crazyPass)

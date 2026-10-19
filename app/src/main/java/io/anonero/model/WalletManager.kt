@@ -97,7 +97,21 @@ class WalletManager {
         if (walletHandle == 0L) {
             throw IllegalStateException("Native wallet open failed")
         }
-        return Wallet(walletHandle).also { manageWallet(it) }
+        val openedWallet = Wallet(walletHandle).also { manageWallet(it) }
+        // If a compatible Monfluo sidecar exists, keep its real Rust wallet open
+        // alongside wallet2 during the staged migration. Mismatched seeds/networks
+        // are rejected by address comparison, not exposed to the UI.
+        val context = AnonConfig.context?.applicationContext
+        if (context != null) {
+            OxideWalletRepository.openIfCompatible(
+                context,
+                File(path).name,
+                password,
+                openedWallet.address,
+                openedWallet.networkType ?: networkType
+            )
+        }
+        return openedWallet
     }
 
     private external fun openWalletJ(
@@ -218,6 +232,7 @@ class WalletManager {
     external fun closeJ(wallet: Wallet?): Boolean
     fun close(wallet: Wallet): Boolean {
         unmanageWallet(wallet)
+        OxideWalletRepository.closeActiveWallet(wallet.name)
         val closed = closeJ(wallet)
         if (!closed) {
             // in case we could not close it
@@ -328,6 +343,7 @@ class WalletManager {
         }
 
         fun resetInstance() {
+            OxideWalletRepository.closeActiveWallet()
             instance = null
         }
 
