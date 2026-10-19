@@ -14,3 +14,6 @@ crate-type = ["cdylib"]
 monero-seed = { git = "https://github.com/monero-oxide/monero-wallet-util", package = "monero-seed" }
 jni = "0.21.1"
 zeroize = { version = "1", features = ["std"] }
+
+# Rust address decoding and network validation.
+monero-address = { git = "https://github.com/monero-oxide/monero-oxide", package = "monero-address" }
