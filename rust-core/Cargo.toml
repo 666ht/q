@@ -11,4 +11,4 @@ crate-type = ["cdylib"]
 
 [dependencies]
 # Protocol/wallet primitives are supplied by the maintained Rust Monero implementation.
-monero-wallet = { git = "https://codeberg.org/Monfluo/monero-oxide", branch = "main" }
+monfluo-oxide = { git = "https://codeberg.org/Monfluo/monero-oxide", branch = "main" }
