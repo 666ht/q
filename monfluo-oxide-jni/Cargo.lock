@@ -1315,11 +1315,13 @@ dependencies = [
  "jni",
  "jni-macros",
  "monfluo-oxide",
+ "reqwest",
  "strum",
  "tokio",
  "tracing",
  "tracing-android",
  "tracing-subscriber",
+ "url",
  "zeroize",
 ]
 

@@ -81,7 +81,7 @@ pub fn create_wallet<'local>(
     mut env: EnvUnowned<'local>,
     _class: JClass<'local>,
     java_monfluo_directory: JString,
-    _java_network: JObject,
+    java_network: JObject,
     java_name: JString,
     java_password: JString,
     java_seed_language: JObject<'local>,
@@ -98,6 +98,7 @@ pub fn create_wallet<'local>(
             .unwrap();
             let wallet_name = crate::java::JavaStringHelper::from_jstring(env, &java_name);
             let password = crate::java::JavaStringHelper::from_jstring(env, &java_password);
+            let network = crate::java::from_java_network(env, cache, &java_network);
 
             let seed_type = crate::java::from_java_seed_language(env, cache, &java_seed_language);
             let (seed, birthday) = match seed_type {
@@ -118,7 +119,7 @@ pub fn create_wallet<'local>(
 
             monfluo_oxide::wallet::Wallet::create(
                 monfluo_directory,
-                Network::Mainnet,
+                network,
                 &wallet_name.to_cow_str(),
                 &password.to_cow_str(),
                 seed,
@@ -139,7 +140,7 @@ pub fn restore_wallet<'local>(
     mut env: EnvUnowned<'local>,
     _class: JClass<'local>,
     java_monfluo_directory: JString,
-    _java_network: JObject,
+    java_network: JObject,
     java_name: JString,
     java_password: JString,
     java_seed: JObject<'local>,
@@ -157,6 +158,7 @@ pub fn restore_wallet<'local>(
             .unwrap();
             let wallet_name = crate::java::JavaStringHelper::from_jstring(env, &java_name);
             let password = crate::java::JavaStringHelper::from_jstring(env, &java_password);
+            let network = crate::java::from_java_network(env, cache, &java_network);
 
             let seed = crate::java::from_java_seed(env, cache, &java_seed);
             let height = crate::java::from_java_number_int_value(env, cache, &java_height);
@@ -171,7 +173,7 @@ pub fn restore_wallet<'local>(
 
             monfluo_oxide::wallet::Wallet::create(
                 monfluo_directory,
-                Network::Mainnet,
+                network,
                 &wallet_name.to_cow_str(),
                 &password.to_cow_str(),
                 seed,
@@ -246,7 +248,38 @@ pub fn create_daemon<'local>(
             let node_proxy =
                 crate::java::JavaStringHelper::from_nullable_jstring(env, &java_node_proxy);
 
-            let daemon = MonfluoTransport::new(node_address.to_cow_str().into_owned(), None)
+            let address_text = node_address.to_cow_str();
+            let address_url = if address_text.contains("://") {
+                address_text.into_owned()
+            } else {
+                format!("http://{address_text}")
+            };
+            let mut address_url = url::Url::parse(&address_url)
+                .expect("Invalid node RPC URL");
+
+            let username = node_username.as_ref().map(JavaStringHelper::to_cow_str);
+            let password = node_password.as_ref().map(JavaStringHelper::to_cow_str);
+            if let Some(username) = username.as_deref().filter(|value| !value.is_empty()) {
+                address_url.set_username(username)
+                    .expect("Invalid node RPC username");
+                address_url.set_password(Some(password.as_deref().unwrap_or("")))
+                    .expect("Invalid node RPC password");
+            }
+
+            let proxy_text = node_proxy.as_ref().map(JavaStringHelper::to_cow_str);
+            let proxy = proxy_text.as_deref()
+                .filter(|value| !value.trim().is_empty())
+                .map(|value| {
+                    let proxy_url = if value.contains("://") {
+                        value.to_owned()
+                    } else {
+                        format!("socks5h://{value}")
+                    };
+                    reqwest::Proxy::all(proxy_url)
+                        .expect("Invalid wallet proxy URL")
+                });
+
+            let daemon = MonfluoTransport::new(address_url.to_string(), proxy)
                 .await
                 .unwrap();
             let daemon_handle = crate::bridge::into_java_handle(Arc::new(daemon));
