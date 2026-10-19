@@ -199,7 +199,8 @@ set_target_properties(cryptonote_format_utils_basic PROPERTIES IMPORTED_LOCATION
 
 if(ANDROID)
     find_library( log-lib log )
-    set(PLATFORM_LIBS ${log-lib})
+    find_library( dl-lib dl )
+    set(PLATFORM_LIBS ${log-lib} ${dl-lib})
     set(PLATFORM_LINK_OPTS "")
 else()
     # jni.h comes from the JDK, not a sysroot; zlib comes from our prefix rather than
