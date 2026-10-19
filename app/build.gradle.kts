@@ -121,6 +121,78 @@ tasks.matching { it.name.contains("LintVital") || it.name.contains("lintVital") 
     dependsOn("prepareCustomFontAsset")
 }
 
+
+// Build the Rust protocol layer as a separate Android native library. It is kept
+// behind the existing JNI library so Java/Kotlin APIs and the UI remain unchanged.
+val rustCoreDir = rootProject.file("rust-core")
+val generatedRustJniLibs = layout.buildDirectory.dir("generated/rust-jni-libs")
+val rustCoreOutput = generatedRustJniLibs.map {
+    it.file("arm64-v8a/libanonero_rust_core.so")
+}
+
+android.sourceSets.getByName("main").jniLibs.srcDir(generatedRustJniLibs)
+
+val installRustAndroidTarget = tasks.register<Exec>("installRustAndroidTarget") {
+    group = "build setup"
+    description = "Install the Rust target used by the Android arm64 wallet core."
+    commandLine("rustup", "target", "add", "aarch64-linux-android")
+}
+
+val buildRustCore = tasks.register<Exec>("buildRustCore") {
+    group = "build"
+    description = "Build the Rust Monero wallet core for Android arm64-v8a."
+    dependsOn(installRustAndroidTarget)
+    inputs.file(rustCoreDir.resolve("Cargo.toml"))
+    inputs.dir(rustCoreDir.resolve("src"))
+    outputs.file(rustCoreOutput)
+
+    doFirst {
+        val osName = System.getProperty("os.name").lowercase()
+        val arch = System.getProperty("os.arch").lowercase()
+        val hostTag = when {
+            osName.contains("mac") && (arch == "aarch64" || arch == "arm64") -> "darwin-arm64"
+            osName.contains("mac") -> "darwin-x86_64"
+            osName.contains("win") -> "windows-x86_64"
+            else -> "linux-x86_64"
+        }
+        val suffix = if (hostTag.startsWith("windows")) ".cmd" else ""
+        val linker = file(
+            "${android.sdkDirectory}/ndk/${android.ndkVersion}/toolchains/llvm/prebuilt/$hostTag/bin/aarch64-linux-android26-clang$suffix"
+        )
+        require(linker.isFile) {
+            "Rust Android linker not found: ${linker.absolutePath}. Install NDK ${android.ndkVersion} and Rust 1.89+."
+        }
+        environment("CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER", linker.absolutePath)
+        commandLine(
+            "cargo", "build", "--release", "--target", "aarch64-linux-android",
+            "--manifest-path", rustCoreDir.resolve("Cargo.toml").absolutePath
+        )
+    }
+
+    doLast {
+        val rustLibrary = rustCoreDir.resolve(
+            "target/aarch64-linux-android/release/libanonero_rust_core.so"
+        )
+        require(rustLibrary.isFile) {
+            "Rust core build completed without producing ${rustLibrary.absolutePath}"
+        }
+        copy {
+            from(rustLibrary)
+            into(generatedRustJniLibs.get().dir("arm64-v8a"))
+        }
+    }
+}
+
+// Ensure Rust exists before either native compilation or APK native-library packaging.
+tasks.matching {
+    it.name.startsWith("configureCMake") ||
+        it.name.startsWith("buildCMake") ||
+        it.name.startsWith("externalNativeBuild") ||
+        (it.name.startsWith("merge") && it.name.endsWith("JniLibFolders"))
+}.configureEach {
+    dependsOn(buildRustCore)
+}
+
 dependencies {
 
     implementation(libs.androidx.core.ktx)
