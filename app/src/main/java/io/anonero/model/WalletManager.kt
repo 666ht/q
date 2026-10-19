@@ -329,6 +329,12 @@ class WalletManager {
         @JvmStatic
         external fun validateSeedWithRust(mnemonic: String): Boolean
 
+        @JvmStatic
+        external fun validateAddressWithRust(address: String?, networkType: Int): Boolean
+
+        @JvmStatic
+        fun isRustCoreAvailable(): Boolean = rustCoreLoaded
+
         fun addressPrefix(networkType: NetworkType): String {
             return when (networkType) {
                 NetworkType.NetworkType_Testnet -> "9A-"
