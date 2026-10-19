@@ -111,6 +111,21 @@ class WalletManager {
         offset: String,
         restoreHeight: Long
     ): Wallet {
+        // First Rust-backed operation in the Android migration. Do not reject on a
+        // negative result yet: legacy wallet2 remains the compatibility authority
+        // until seed and wallet restoration are fully ported.
+        if (rustCoreLoaded) {
+            try {
+                val acceptedByRust = validateSeedWithRust(mnemonic)
+                Timber.tag(TAG).d(
+                    "Rust Monero seed parser accepted phrase: %s; legacy recovery remains enabled",
+                    acceptedByRust
+                )
+            } catch (_: UnsatisfiedLinkError) {
+                Timber.tag(TAG).w("Rust seed validator unavailable; using legacy recovery")
+            }
+        }
+
         val walletHandle = recoveryWalletJ(
             aFile.absolutePath, password,
             mnemonic, offset,
@@ -298,9 +313,21 @@ class WalletManager {
             }
             private set
 
+        // Rust is packaged for arm64-v8a first. Keep 32-bit installs compatible
+        // while the native wallet2 backend is being ported operation-by-operation.
+        private val rustCoreLoaded: Boolean = try {
+            System.loadLibrary("anonero_rust_core")
+            true
+        } catch (_: UnsatisfiedLinkError) {
+            false
+        }
+
         init {
             System.loadLibrary("anonero")
         }
+
+        @JvmStatic
+        external fun validateSeedWithRust(mnemonic: String): Boolean
 
         fun addressPrefix(networkType: NetworkType): String {
             return when (networkType) {
