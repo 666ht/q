@@ -4,8 +4,6 @@
 //! the Rust Monero wallet crate can be built for Android arm64 and loaded by the
 //! existing native library without changing the Android UI or Java/Kotlin API.
 
-use monero_wallet::address::SubaddressIndex;
-
 const ABI_VERSION: u32 = 1;
 
 /// ABI version checked by the existing JNI library when it loads this module.
@@ -14,14 +12,17 @@ pub extern "C" fn anonero_rust_core_abi_version() -> u32 {
     ABI_VERSION
 }
 
-/// Validate a Monero subaddress index using the Rust wallet library's own type.
+/// Validate the shape of a Monero subaddress index at the native ABI boundary.
 /// The primary address index (0, 0) is not a subaddress.
+///
+/// The protocol crate is compiled as a dependency in this smoke layer; wallet operations
+/// will be migrated to the Monfluo API in later commits.
 #[no_mangle]
 pub extern "C" fn anonero_rust_core_subaddress_index_is_valid(
     account: u32,
     address: u32,
 ) -> u8 {
-    u8::from(SubaddressIndex::new(account, address).is_some())
+    u8::from(account != 0 || address != 0)
 }
 
 #[cfg(test)]
