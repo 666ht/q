@@ -520,12 +520,17 @@ class Wallet {
     private external fun getDeviceTypeJ(): Int
 
     fun validateAddress(addressField: String): Boolean {
-        return WalletManager.instance?.networkType?.value?.let {
-            isAddressValid(
-                addressField,
-                it
-            )
-        } == true
+        val networkType = WalletManager.instance?.networkType?.value ?: return false
+        // Use the Rust implementation when packaged. Keep the old JNI validator as a
+        // compatibility fallback for 32-bit builds or an unavailable Rust library.
+        if (WalletManager.isRustCoreAvailable()) {
+            try {
+                return WalletManager.validateAddressWithRust(addressField, networkType)
+            } catch (_: UnsatisfiedLinkError) {
+                // Fall back below without changing the user-facing validation flow.
+            }
+        }
+        return isAddressValid(addressField, networkType)
     }
 
     enum class Device(val accountLookahead: Int, val subaddressLookahead: Int) {
