@@ -9,6 +9,8 @@ data class CoinsInfo(
     val pub_key: String,
     val frozen: Boolean,
     val creationTime: Long,
+    val accountIndex: Int = 0,
+    val subaddressIndex: Int = 0,
 ) : Comparable<CoinsInfo> {
 
     override fun compareTo(other: CoinsInfo): Int {
