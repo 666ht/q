@@ -149,6 +149,7 @@
     <string name="disconnect">Disconnect</string>
     <string name="remove">Remove</string>
     <string name="daemon_height">Daemon Height : %1$s</string>
+    <string name="wallet_height">Wallet Height : %1$s</string>
     <string name="error_prefix">Error : %1$s</string>
     <string name="error_connecting_server">Error connecting to server :%1$s</string>
     <string name="url_cannot_be_empty">URL cannot be empty</string>
