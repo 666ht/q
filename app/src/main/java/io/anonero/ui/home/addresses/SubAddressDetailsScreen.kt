@@ -173,28 +173,21 @@ fun SubAddressDetailScreen(
                                 vertical = 6.dp
                             ),
                         headlineContent = {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    displayAddressLabel,
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .clickable {
-                                            labelDialog = true
-                                        },
-                                    color = MaterialTheme.colorScheme.primary,
-                                )
-                                Text(
-                                    if (hideAmounts) Formats.maskAmount(currentBalance)
-                                    else Formats.getDisplayAmount(currentBalance),
-                                    modifier = Modifier.padding(start = 8.dp),
-                                    color = MaterialTheme.colorScheme.primary,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                            }
+                            Text(
+                                displayAddressLabel,
+                                modifier = Modifier.clickable {
+                                    labelDialog = true
+                                },
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                        },
+                        trailingContent = {
+                            Text(
+                                if (hideAmounts) Formats.maskAmount(currentBalance)
+                                else Formats.getDisplayAmount(currentBalance),
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.SemiBold
+                            )
                         },
                         supportingContent = {
                             SelectionContainer {
