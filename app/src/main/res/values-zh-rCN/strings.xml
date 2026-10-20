@@ -154,6 +154,7 @@
     <string name="disconnect">断开连接</string>
     <string name="remove">删除</string>
     <string name="daemon_height">区块高度：%1$s</string>
+    <string name="wallet_height">钱包高度：%1$s</string>
     <string name="error_prefix">错误：%1$s</string>
     <string name="error_connecting_server">连接服务器错误：%1$s</string>
     <string name="url_cannot_be_empty">URL不能为空</string>
