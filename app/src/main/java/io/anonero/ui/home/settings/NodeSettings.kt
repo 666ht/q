@@ -84,10 +84,14 @@ import io.anonero.ui.components.DaemonStatus
 import io.anonero.ui.components.WalletProgressIndicator
 import io.anonero.ui.theme.DangerColor
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -113,6 +117,26 @@ class NodeSettingsViewModel(
     private val _nodes = MutableStateFlow<List<Node>>(emptyList())
     private val daemonInfo = walletState.daemonInfo
     val nodes: StateFlow<List<Node>> = _nodes
+
+    // Read the wallet's local scan height off the UI thread and keep it live
+    // while the node page is visible. Daemon height is reported separately.
+    val walletHeight: StateFlow<Long?> = flow {
+        while (currentCoroutineContext().isActive) {
+            val height = withContext(Dispatchers.IO) {
+                runCatching {
+                    WalletManager.instance?.wallet
+                        ?.takeIf { it.isInitialized }
+                        ?.getBlockChainHeight()
+                }.getOrNull()
+            }
+            emit(height)
+            delay(1_000L)
+        }
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(1_000),
+        initialValue = null
+    )
 
 
     val activeNode: StateFlow<Node?> = combine(nodes, daemonInfo) { nodeList, daemonInfo ->
@@ -301,6 +325,7 @@ fun NodeSettings(onBackPress: () -> Unit = {}, navigateTo: (Any) -> Unit = {}) {
     var showMenu by remember { mutableStateOf(false) }
     val availableNodes by nodeSettingsVM.nodes.collectAsState(arrayListOf())
     val activeNode by nodeSettingsVM.activeNode.collectAsState(null)
+    val walletHeight by nodeSettingsVM.walletHeight.collectAsState(null)
     val connectionError by nodeSettingsVM.connectionError.observeAsState(null)
     val scope = rememberCoroutineScope()
     val toastState = rememberToasterState()
@@ -436,6 +461,7 @@ fun NodeSettings(onBackPress: () -> Unit = {}, navigateTo: (Any) -> Unit = {}) {
                         modifier = Modifier.animateItem(),
                         active = true,
                         nodeSettingsVM = nodeSettingsVM,
+                        walletHeight = walletHeight,
                         onDisconnect = {
                             nodeSettingsVM.disconnect()
                         },
@@ -508,6 +534,7 @@ fun NodeListItem(
     modifier: Modifier = Modifier,
     active: Boolean = false,
     nodeSettingsVM: NodeSettingsViewModel,
+    walletHeight: Long? = null,
     onDisconnect: (node: Node) -> Unit = {},
     onConnect: (node: Node) -> Unit = {},
     onRemove: (node: Node) -> Unit = {},
@@ -540,11 +567,20 @@ fun NodeListItem(
         },
         supportingContent = {
             if (active)
-                Text(
-                    stringResource(R.string.daemon_height, daemonStatus?.daemonHeight?.toString() ?: ""),
-                    style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier.padding(top = 4.dp)
-                )
+                Row(
+                    modifier = Modifier.padding(top = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text(
+                        stringResource(R.string.daemon_height, daemonStatus?.daemonHeight?.toString() ?: ""),
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    Text(
+                        stringResource(R.string.wallet_height, walletHeight?.toString() ?: "—"),
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
         },
         trailingContent = {
             Row(
