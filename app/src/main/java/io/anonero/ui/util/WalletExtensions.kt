@@ -40,9 +40,6 @@ fun Wallet.getAllUsedSubAddresses(): List<Subaddress> {
     }
 
     return subAddresses
-        .apply {
-            this.removeIf { it.addressIndex == 0 && it.totalAmount != 0L }
-        }
         .distinctBy { it.address }
         .sortedBy { it.addressIndex }
 }
