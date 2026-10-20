@@ -568,9 +568,11 @@ fun NodeListItem(
         supportingContent = {
             if (active)
                 Row(
-                    modifier = Modifier.padding(top = 4.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 4.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Text(
                         stringResource(R.string.daemon_height, daemonStatus?.daemonHeight?.toString() ?: ""),
@@ -578,7 +580,8 @@ fun NodeListItem(
                     )
                     Text(
                         stringResource(R.string.wallet_height, walletHeight?.toString() ?: "—"),
-                        style = MaterialTheme.typography.bodySmall
+                        style = MaterialTheme.typography.bodySmall,
+                        textAlign = TextAlign.End
                     )
                 }
         },
