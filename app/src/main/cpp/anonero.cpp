@@ -17,7 +17,6 @@
 #include <inttypes.h>
 #include <cstring>
 #include <mutex>
-#include <set>
 #include "anonero.h"
 #include "wallet2_api.h"
 
@@ -1041,15 +1040,6 @@ Java_io_anonero_model_Wallet_getBalance(JNIEnv *env, jobject instance,
                                         jint accountIndex) {
     Monero::Wallet *wallet = getHandle<Monero::Wallet>(env, instance);
     return wallet->balance((uint32_t) accountIndex);
-}
-
-JNIEXPORT jlong JNICALL
-Java_io_anonero_model_Wallet_getSubaddressBalance(JNIEnv *env, jobject instance,
-                                                  jint accountIndex, jint subAddressIndex) {
-    Monero::Wallet *wallet = getHandle<Monero::Wallet>(env, instance);
-    std::set<uint32_t> subaddressIndices;
-    subaddressIndices.insert(static_cast<uint32_t>(subAddressIndex));
-    return wallet->balance(static_cast<uint32_t>(accountIndex), subaddressIndices);
 }
 
 JNIEXPORT jlong JNICALL
