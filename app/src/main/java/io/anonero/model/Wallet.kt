@@ -122,7 +122,15 @@ class Wallet {
 
     fun getSubaddressObject(subAddressIndex: Int): Subaddress {
         val subaddress = getSubaddressObject(accountIndex, subAddressIndex)
-        subaddress.amount = getSubaddressBalance(accountIndex, subAddressIndex)
+        var amount: Long = 0
+        history?.let { history ->
+            for (info in history.all) {
+                if (info.addressIndex == subAddressIndex && info.direction == TransactionInfo.Direction.Direction_In) {
+                    amount += info.amount
+                }
+            }
+        }
+        subaddress.amount = amount
         return subaddress
     }
 
@@ -223,7 +231,6 @@ class Wallet {
         get() = getBalance(accountIndex)
 
     private external fun getBalance(accountIndex: Int): Long
-    private external fun getSubaddressBalance(accountIndex: Int, subAddressIndex: Int): Long
 
     external fun viewOnlyBalance(): Long
 
