@@ -126,7 +126,7 @@ fun SubAddressesScreen(
                                     color = MaterialTheme.colorScheme.primary,
                                 )
                                 val displayAmount = Formats.getDisplayAmount(address.totalAmount)
-                                // Hide zero balances even if a positive internal value formats to zero.
+                                // Decide visibility from the actual balance, not the formatted text.
                                 if (address.totalAmount > 0L) {
                                     Text(
                                         if (hideAmounts) Formats.maskAmount(address.totalAmount) else displayAmount,
