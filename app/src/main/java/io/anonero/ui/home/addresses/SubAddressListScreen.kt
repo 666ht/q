@@ -126,14 +126,11 @@ fun SubAddressesScreen(
                                     color = MaterialTheme.colorScheme.primary,
                                 )
                                 val displayAmount = Formats.getDisplayAmount(address.totalAmount)
-                                // Decide visibility from the actual balance, not the formatted text.
-                                if (address.totalAmount > 0L) {
-                                    Text(
-                                        if (hideAmounts) Formats.maskAmount(address.totalAmount) else displayAmount,
-                                        color = MaterialTheme.colorScheme.primary,
-                                        fontWeight = FontWeight.SemiBold
-                                    )
-                                }
+                                Text(
+                                    if (hideAmounts) Formats.maskAmount(address.totalAmount) else displayAmount,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.SemiBold
+                                )
                             }
                         },
                         supportingContent = {
