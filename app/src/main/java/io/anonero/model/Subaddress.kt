@@ -50,7 +50,7 @@ class Subaddress(
             } else {
                 label.replace(Regex("""\s*[#＃]?\s*\d+$"""), "")
             }
-            return "$baseLabel $addressIndex"
+            return if (addressIndex == 0) baseLabel else "$baseLabel $addressIndex"
         }
 
     companion object {
