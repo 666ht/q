@@ -62,8 +62,8 @@ class SubAddressDetail(subAddress: Subaddress) : ViewModel() {
     val transactions = walletState.transactions
         .map {
             it.filter { txInfo ->
-                return@filter txInfo.addressIndex == subAddress.addressIndex
-                        && txInfo.direction == TransactionInfo.Direction.Direction_In
+                // Show the full transaction history associated with this address index.
+                txInfo.addressIndex == subAddress.addressIndex
             }
         }.asLiveData()
 }
@@ -85,6 +85,12 @@ fun SubAddressDetailScreen(
     }
     val transactions by subAddressDetailVm.transactions.observeAsState(listOf())
     val hideAmounts by walletState.hideAmountsFlow.asLiveData().observeAsState(false)
+    val knownAddresses by walletState.subAddresses.asLiveData().observeAsState(emptyList())
+    // Nav serialization does not carry Subaddress.amount (it is not a constructor property).
+    // Resolve the current live balance from WalletState instead of showing a stale/default zero.
+    val currentBalance = knownAddresses.firstOrNull {
+        it.addressIndex == subAddress.addressIndex && it.address == subAddress.address
+    }?.totalAmount ?: subAddress.totalAmount
     var addressLabel by remember { mutableStateOf(subAddress.label) }
     val displayAddressLabel = remember(addressLabel, subAddress.addressIndex) {
         subAddress.withLabel(addressLabel).displayLabel
@@ -167,13 +173,28 @@ fun SubAddressDetailScreen(
                                 vertical = 6.dp
                             ),
                         headlineContent = {
-                            Text(
-                                displayAddressLabel,
-                                modifier = Modifier.clickable {
-                                    labelDialog = true
-                                },
-                                color = MaterialTheme.colorScheme.primary,
-                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    displayAddressLabel,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clickable {
+                                            labelDialog = true
+                                        },
+                                    color = MaterialTheme.colorScheme.primary,
+                                )
+                                Text(
+                                    if (hideAmounts) Formats.maskAmount(currentBalance)
+                                    else Formats.getDisplayAmount(currentBalance),
+                                    modifier = Modifier.padding(start = 8.dp),
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
                         },
                         supportingContent = {
                             SelectionContainer {
