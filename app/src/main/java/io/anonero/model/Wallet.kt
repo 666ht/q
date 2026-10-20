@@ -122,15 +122,21 @@ class Wallet {
 
     fun getSubaddressObject(subAddressIndex: Int): Subaddress {
         val subaddress = getSubaddressObject(accountIndex, subAddressIndex)
-        var amount: Long = 0
-        history?.let { history ->
-            for (info in history.all) {
-                if (info.addressIndex == subAddressIndex && info.direction == TransactionInfo.Direction.Direction_In) {
-                    amount += info.amount
-                }
+
+        // Derive the current address balance from unspent outputs assigned to
+        // this exact account/subaddress. Summing incoming transaction history
+        // incorrectly keeps spent amounts and can omit the primary address's
+        // current balance.
+        subaddress.amount = coins?.all
+            ?.asSequence()
+            ?.filter {
+                !it.spent &&
+                    it.accountIndex == accountIndex &&
+                    it.subaddressIndex == subAddressIndex
             }
-        }
-        subaddress.amount = amount
+            ?.sumOf { it.amount }
+            ?: 0L
+
         return subaddress
     }
 
