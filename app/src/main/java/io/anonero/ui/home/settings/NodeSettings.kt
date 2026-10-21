@@ -140,33 +140,42 @@ class NodeSettingsViewModel(
     )
 
 
-    // Read the current node height independently of wallet scan callbacks.
-    // Some native reads temporarily return 0 while a scan/reconnect is active;
-    // fall back to WalletManager's live daemon height and retain the last valid
-    // value for the same node so the displayed block height does not disappear.
+    // Poll daemon height independently from wallet scan callbacks. During a scan,
+    // wallet2 can temporarily return an invalid height; use the configured node as
+    // the identity fallback and retain the latest valid height for that same node.
     val daemonHeight: StateFlow<Long> = flow {
         var lastDaemonAddress: String? = null
         var lastValidHeight = 0L
         while (currentCoroutineContext().isActive) {
-            val daemonAddress = walletState.daemonInfo.first()?.daemon
-            if (daemonAddress != lastDaemonAddress) {
+            val info = walletState.daemonInfo.first()
+            val savedHost = prefs.getString(NodeFields.RPC_HOST.value, null)
+            val savedPort = prefs.getInt(NodeFields.RPC_PORT.value, 0)
+            val savedAddress = savedHost?.takeIf { it.isNotBlank() && savedPort > 0 }
+                ?.let { "$it:$savedPort" }
+            val daemonAddress = info?.daemon?.takeIf { it.isNotBlank() } ?: savedAddress
+
+            // Do not clear the cache when connection info blinks null during a
+            // reconnect. Reset it only when a different non-null node is selected.
+            if (daemonAddress != null && daemonAddress != lastDaemonAddress) {
                 lastDaemonAddress = daemonAddress
                 lastValidHeight = 0L
             }
 
+            val cachedInfoHeight = info?.takeIf { it.daemon == daemonAddress }
+                ?.daemonHeight?.takeIf { it > 0L } ?: 0L
             val liveHeight = if (daemonAddress == null) {
-                0L
+                cachedInfoHeight
             } else {
                 withContext(Dispatchers.IO) {
                     val manager = WalletManager.instance
                     val wallet = manager?.wallet?.takeIf { it.isInitialized }
                     runCatching {
-                        wallet?.getDaemonBlockChainHeight()
+                        manager?.getBlockchainHeight()
                     }.getOrNull()?.takeIf { it > 0L }
                         ?: runCatching {
-                            manager?.getBlockchainHeight()
+                            wallet?.getDaemonBlockChainHeight()
                         }.getOrNull()?.takeIf { it > 0L }
-                        ?: 0L
+                        ?: cachedInfoHeight
                 }
             }
             if (liveHeight > 0L) lastValidHeight = liveHeight
@@ -180,13 +189,23 @@ class NodeSettingsViewModel(
     )
 
     val activeNode: StateFlow<Node?> = combine(nodes, daemonInfo) { nodeList, daemonInfo ->
-        if (daemonInfo?.daemon == null) {
-            return@combine null
+        // Prefer the live connection when it maps to a saved node. If daemon info
+        // is briefly missing during sync/reconnect (or the live address is not in
+        // the saved list), keep the configured node row visible so its heights stay
+        // visible and the user can still manage that node.
+        val connectedNode = daemonInfo?.daemon?.let { address ->
+            runCatching { "http://$address".toUri() }.getOrNull()?.let { uri ->
+                nodeList.find { node ->
+                    node.host == uri.host && node.rpcPort == uri.port
+                }
+            }
         }
-        val uri = "http://${daemonInfo.daemon}".toUri()
-        nodeList.find { node ->
-            node.host == uri.host &&
-                    node.rpcPort == uri.port
+        val savedHost = prefs.getString(NodeFields.RPC_HOST.value, null)
+        val savedPort = prefs.getInt(NodeFields.RPC_PORT.value, 0)
+        connectedNode ?: nodeList.find { node ->
+            !savedHost.isNullOrBlank() &&
+                node.host == savedHost &&
+                node.rpcPort == savedPort
         }
     }.stateIn(
         scope = viewModelScope,
