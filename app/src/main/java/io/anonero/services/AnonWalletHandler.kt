@@ -22,6 +22,8 @@ import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 import timber.log.Timber
 import androidx.core.content.edit
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 
 
 class InvalidPin : Exception()
@@ -39,6 +41,46 @@ class AnonWalletHandler(
     private val _scope = CoroutineScope(Dispatchers.Default) + SupervisorJob()
 
     private var handler: MoneroHandlerThread? = null
+    private val wipeInProgress = AtomicBoolean(false)
+    private val secureWipeCleanupTasks = AtomicInteger(0)
+    private val secureWipeRequestStartedInProcess = AtomicBoolean(false)
+
+    /** True once a validated request exists; persisted requests also block wallet work. */
+    fun isSecureWipeInProgress(): Boolean =
+        wipeInProgress.get() || secureWipeCleanupTasks.get() > 0 ||
+            secureWipeRequestStartedInProcess.get()
+
+    fun isSecureWipeCleanupActive(): Boolean =
+        wipeInProgress.get() || secureWipeCleanupTasks.get() > 0
+
+    fun markSecureWipeRequestStartedInProcess() {
+        secureWipeRequestStartedInProcess.set(true)
+    }
+
+    fun markSecureWipeCleanupStarted() {
+        secureWipeCleanupTasks.incrementAndGet()
+    }
+
+    fun markSecureWipeCleanupFinished() {
+        secureWipeCleanupTasks.updateAndGet { current -> (current - 1).coerceAtLeast(0) }
+    }
+
+    private fun secureWipePriorityActive(): Boolean =
+        isSecureWipeInProgress() || walletState.isWiping() ||
+            (AnonConfig.context?.let { AnonConfig.isSecureWipePending(it) } == true)
+
+    /**
+     * Raise the sticky wipe gate before any destructive operation. A valid request
+     * must prevent wallet opening, refresh startup, proxy changes, and node work.
+     */
+    fun prepareForSecureWipeRequest() {
+        secureWipeRequestStartedInProcess.set(true)
+        walletState.prepareForWipe()
+        runCatching { WalletManager.instance?.wallet?.pauseRefresh() }
+            .onFailure { Timber.tag(TAG).e(it, "Unable to pause wallet refresh for secure deletion") }
+        runCatching { torService.stop() }
+            .onFailure { Timber.tag(TAG).e(it, "Unable to stop Tor for secure deletion") }
+    }
 
     val scope get() = _scope
 
@@ -55,6 +97,7 @@ class AnonWalletHandler(
     }
 
     fun openWallet(pin: String): Boolean {
+        if (secureWipePriorityActive()) return false
         val walletFile = AnonConfig.getDefaultWalletFile(AnonConfig.context!!)
         val anonWallet = WalletManager.instance?.openWallet(
             walletFile.path,
@@ -67,6 +110,7 @@ class AnonWalletHandler(
     }
 
     suspend fun startService() {
+        if (secureWipePriorityActive()) return
         val wallet = WalletManager.instance?.wallet ?: return
         // Read and arm mnemonic-restore progress before attaching the native
         // listener. Otherwise an early normal-sync callback can publish the old
@@ -263,7 +307,7 @@ class AnonWalletHandler(
     }
 
     fun setProxy(proxy: String?, port: Int?) {
-        if (walletState.isWiping()) return
+        if (secureWipePriorityActive()) return
         Timber.tag(TAG).d("setProxy %s%s", proxy, port.toString())
         if (proxy == null && port == null) {
             prefs.edit {
@@ -298,56 +342,52 @@ class AnonWalletHandler(
     }
 
     fun wipe(passPhrase: String): Boolean {
-        val walletManager = WalletManager.instance
-        val wallet = walletManager?.wallet
-
-        walletState.prepareForWipe()
-        _scope.coroutineContext.cancelChildren()
-        handler = null
-
-        runCatching { wallet?.setListener(null) }
-            .onFailure { Timber.tag(TAG).e(it, "Wallet listener detach failed; continuing secure wipe") }
-
-        runCatching { wallet?.pauseRefresh() }
-            .onFailure { Timber.tag(TAG).e(it, "Wallet pause failed; continuing secure wipe") }
-
-        runCatching { walletManager?.setDaemon(null) }
-            .onFailure { Timber.tag(TAG).e(it, "Daemon detach failed; continuing secure wipe") }
-
-        var closed = true
-        if (wallet != null) {
-            closed = runCatching { wallet.close() }
-                .onFailure { Timber.tag(TAG).e(it, "Wallet close failed") }
-                .getOrDefault(false)
-            if (!closed) {
-                Timber.tag(TAG).e("Wallet native close returned false; continuing file deletion")
-            }
+        check(wipeInProgress.compareAndSet(false, true)) {
+            "Secure deletion is already in progress"
         }
-        runCatching { torService.stop() }
-            .onFailure { Timber.tag(TAG).e(it, "Tor stop failed; continuing secure wipe") }
+        try {
+            // Keep the gate active and stop all ordinary wallet activity first.
+            prepareForSecureWipeRequest()
+            _scope.coroutineContext.cancelChildren()
+            handler = null
 
-        WalletManager.resetInstance()
+            val walletManager = WalletManager.instance
+            val wallet = walletManager?.wallet
+            if (wallet != null && wallet.isInitialized) {
+                runCatching { wallet.setListener(null) }
+                    .onFailure { Timber.tag(TAG).e(it, "Wallet listener detach failed; retrying close") }
+                runCatching { wallet.pauseRefresh() }
+                    .onFailure { Timber.tag(TAG).e(it, "Wallet pause failed; retrying close") }
 
-        val appContext = AnonConfig.context?.applicationContext
-        var deleted = true
-        if (appContext != null) {
+                val closed = runCatching { wallet.close() }
+                    .onFailure { Timber.tag(TAG).e(it, "Native wallet close failed; secure deletion will retry") }
+                    .getOrDefault(false)
+                check(closed || !wallet.isInitialized) {
+                    "Native wallet could not be closed; secure deletion must retry"
+                }
+            }
+
+            runCatching { walletManager?.setDaemon(null) }
+                .onFailure { Timber.tag(TAG).e(it, "Daemon detach failed; continuing cleanup") }
+            runCatching { torService.stop() }
+                .onFailure { Timber.tag(TAG).e(it, "Tor stop failed; continuing cleanup") }
+
+            // Reset the native singleton only after the wallet handle has closed.
+            WalletManager.resetInstance()
+
+            val appContext = AnonConfig.context?.applicationContext
+                ?: throw IllegalStateException("Application context unavailable")
             val walletDir = File(appContext.filesDir, "wallets")
             repeat(20) {
                 if (!walletDir.exists()) return@repeat
-                if (!walletDir.deleteRecursively()) {
-                    Thread.sleep(100)
-                }
+                if (!walletDir.deleteRecursively()) Thread.sleep(100)
             }
-            deleted = !walletDir.exists()
-
-            repeat(5) {
-                if (AnonConfig.clearAllAppData(appContext)) return@repeat
-                Thread.sleep(100)
+            check(!walletDir.exists()) {
+                "Wallet files remain after secure-delete attempt"
             }
-            deleted = deleted && AnonConfig.clearAllAppData(appContext)
+            return true
+        } finally {
+            wipeInProgress.set(false)
         }
-
-        return deleted
     }
-
 }
