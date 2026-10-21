@@ -140,31 +140,38 @@ class NodeSettingsViewModel(
     )
 
 
-    // Poll daemon height independently from wallet scan callbacks. During a scan,
-    // wallet2 can temporarily return an invalid height; use the configured node as
-    // the identity fallback and retain the latest valid height for that same node.
+    private fun configuredDaemonAddress(): String? {
+        val host = prefs.getString(NodeFields.RPC_HOST.value, null)
+        val port = prefs.getInt(NodeFields.RPC_PORT.value, 0)
+        return host?.takeIf { it.isNotBlank() && port > 0 }?.let { "$it:$port" }
+    }
+
+    // Keep the last known height in WalletState, which outlives this screen's
+    // ViewModel. Returning to the node page must not briefly replace a valid
+    // block height with the StateFlow's initial 0 while a fresh JNI read runs.
     val daemonHeight: StateFlow<Long> = flow {
-        var lastDaemonAddress: String? = null
-        var lastValidHeight = 0L
+        var lastDaemonAddress: String? = configuredDaemonAddress()
+        var lastValidHeight = walletState.cachedDaemonHeight(lastDaemonAddress)
         while (currentCoroutineContext().isActive) {
             val info = walletState.daemonInfo.first()
-            val savedHost = prefs.getString(NodeFields.RPC_HOST.value, null)
-            val savedPort = prefs.getInt(NodeFields.RPC_PORT.value, 0)
-            val savedAddress = savedHost?.takeIf { it.isNotBlank() && savedPort > 0 }
-                ?.let { "$it:$savedPort" }
-            val daemonAddress = info?.daemon?.takeIf { it.isNotBlank() } ?: savedAddress
+            val daemonAddress = info?.daemon?.takeIf { it.isNotBlank() }
+                ?: configuredDaemonAddress()
 
-            // Do not clear the cache when connection info blinks null during a
-            // reconnect. Reset it only when a different non-null node is selected.
+            // Preserve the cached value through transient null connection state.
+            // Switch to the destination node's own cache when its address changes.
             if (daemonAddress != null && daemonAddress != lastDaemonAddress) {
                 lastDaemonAddress = daemonAddress
-                lastValidHeight = 0L
+                lastValidHeight = walletState.cachedDaemonHeight(daemonAddress)
             }
 
             val cachedInfoHeight = info?.takeIf { it.daemon == daemonAddress }
                 ?.daemonHeight?.takeIf { it > 0L } ?: 0L
+            val retainedHeight = maxOf(
+                cachedInfoHeight,
+                walletState.cachedDaemonHeight(daemonAddress)
+            )
             val liveHeight = if (daemonAddress == null) {
-                cachedInfoHeight
+                retainedHeight
             } else {
                 withContext(Dispatchers.IO) {
                     val manager = WalletManager.instance
@@ -175,17 +182,23 @@ class NodeSettingsViewModel(
                         ?: runCatching {
                             wallet?.getDaemonBlockChainHeight()
                         }.getOrNull()?.takeIf { it > 0L }
-                        ?: cachedInfoHeight
+                        ?: retainedHeight
                 }
             }
-            if (liveHeight > 0L) lastValidHeight = liveHeight
+
+            val currentHeight = if (liveHeight > 0L) {
+                walletState.rememberDaemonHeight(daemonAddress, liveHeight)
+            } else {
+                retainedHeight
+            }
+            if (currentHeight > 0L) lastValidHeight = currentHeight
             emit(lastValidHeight)
             delay(1_000L)
         }
     }.stateIn(
         scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(1_000),
-        initialValue = 0L
+        started = SharingStarted.Lazily,
+        initialValue = walletState.cachedDaemonHeight(configuredDaemonAddress())
     )
 
     val activeNode: StateFlow<Node?> = combine(nodes, daemonInfo) { nodeList, daemonInfo ->
