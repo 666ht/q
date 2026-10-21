@@ -44,6 +44,7 @@ class AnonWalletHandler(
     private val wipeInProgress = AtomicBoolean(false)
     private val secureWipeCleanupTasks = AtomicInteger(0)
     private val secureWipeRequestStartedInProcess = AtomicBoolean(false)
+    private val secureWipeWasBackgroundSync = AtomicBoolean(false)
 
     /** True once a validated request exists; persisted requests also block wallet work. */
     fun isSecureWipeInProgress(): Boolean =
@@ -75,6 +76,9 @@ class AnonWalletHandler(
      */
     fun prepareForSecureWipeRequest() {
         secureWipeRequestStartedInProcess.set(true)
+        if (walletState.backgroundSync) {
+            secureWipeWasBackgroundSync.set(true)
+        }
         walletState.prepareForWipe()
         runCatching { WalletManager.instance?.wallet?.pauseRefresh() }
             .onFailure { Timber.tag(TAG).e(it, "Unable to pause wallet refresh for secure deletion") }
@@ -355,6 +359,14 @@ class AnonWalletHandler(
             val walletManager = WalletManager.instance
             val wallet = walletManager?.wallet
             if (wallet != null && wallet.isInitialized) {
+                if (secureWipeWasBackgroundSync.get()) {
+                    check(wallet.stopBackgroundSync(passPhrase)) {
+                        "Unable to stop background sync; secure deletion will retry"
+                    }
+                    secureWipeWasBackgroundSync.set(false)
+                    walletState.setBackGroundSync(false)
+                }
+
                 runCatching { wallet.setListener(null) }
                     .onFailure { Timber.tag(TAG).e(it, "Wallet listener detach failed; retrying close") }
                 runCatching { wallet.pauseRefresh() }
