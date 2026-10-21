@@ -139,6 +139,28 @@ class NodeSettingsViewModel(
     )
 
 
+    // Read the active daemon's height directly. daemonInfo is refreshed by wallet
+    // callbacks, so its height can stay stale or blank when opening/reconnecting
+    // the node page. Poll on IO while this page observes the flow.
+    val daemonHeight: StateFlow<Long> = flow {
+        while (currentCoroutineContext().isActive) {
+            val height = withContext(Dispatchers.IO) {
+                runCatching {
+                    WalletManager.instance?.wallet
+                        ?.takeIf { it.isInitialized }
+                        ?.getDaemonBlockChainHeight()
+                        ?.takeIf { it >= 0L }
+                }.getOrNull() ?: 0L
+            }
+            emit(height)
+            delay(1_000L)
+        }
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(1_000),
+        initialValue = 0L
+    )
+
     val activeNode: StateFlow<Node?> = combine(nodes, daemonInfo) { nodeList, daemonInfo ->
         if (daemonInfo?.daemon == null) {
             return@combine null
@@ -326,6 +348,7 @@ fun NodeSettings(onBackPress: () -> Unit = {}, navigateTo: (Any) -> Unit = {}) {
     val availableNodes by nodeSettingsVM.nodes.collectAsState(arrayListOf())
     val activeNode by nodeSettingsVM.activeNode.collectAsState(null)
     val walletHeight by nodeSettingsVM.walletHeight.collectAsState(null)
+    val daemonHeight by nodeSettingsVM.daemonHeight.collectAsState(0L)
     val connectionError by nodeSettingsVM.connectionError.observeAsState(null)
     val scope = rememberCoroutineScope()
     val toastState = rememberToasterState()
@@ -575,7 +598,7 @@ fun NodeListItem(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Text(
-                        stringResource(R.string.daemon_height, daemonStatus?.daemonHeight?.toString() ?: ""),
+                        stringResource(R.string.daemon_height, daemonHeight.toString()),
                         style = MaterialTheme.typography.bodySmall
                     )
                     Text(
