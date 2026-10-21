@@ -131,7 +131,9 @@ fun SubAddressesScreen(
                                     if (hideAmounts) Formats.maskAmount(address.totalAmount) else displayAmount,
                                     color = MaterialTheme.colorScheme.primary,
                                     fontWeight = FontWeight.SemiBold,
-                                    textAlign = TextAlign.End
+                                    textAlign = TextAlign.End,
+                                    maxLines = 1,
+                                    softWrap = false
                                 )
                             }
                         },
