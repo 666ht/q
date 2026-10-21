@@ -173,21 +173,24 @@ fun SubAddressDetailScreen(
                                 vertical = 6.dp
                             ),
                         headlineContent = {
-                            Text(
-                                displayAddressLabel,
-                                modifier = Modifier.clickable {
-                                    labelDialog = true
-                                },
-                                color = MaterialTheme.colorScheme.primary,
-                            )
-                        },
-                        trailingContent = {
-                            Text(
-                                if (hideAmounts) Formats.maskAmount(currentBalance)
-                                else Formats.getDisplayAmount(currentBalance),
-                                color = MaterialTheme.colorScheme.primary,
-                                fontWeight = FontWeight.SemiBold
-                            )
+                            Row(
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(
+                                    displayAddressLabel,
+                                    modifier = Modifier.clickable {
+                                        labelDialog = true
+                                    },
+                                    color = MaterialTheme.colorScheme.primary,
+                                )
+                                Text(
+                                    if (hideAmounts) Formats.maskAmount(currentBalance)
+                                    else Formats.getDisplayAmount(currentBalance),
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
                         },
                         supportingContent = {
                             SelectionContainer {
@@ -207,11 +210,10 @@ fun SubAddressDetailScreen(
                     val transaction = transactions[it]
                     TransactionItem(
                         tx = transaction,
-                        rightAlignAmount = false,
+                        amountCenter = true,
                         showTime = true,
                         timePattern = "HH:mm\nMM/dd",
                         timeZone = java.time.ZoneId.of("Asia/Shanghai"),
-                        upstreamLayout = true,
                         hideAmounts = hideAmounts,
                         modifier = Modifier
                             .clickable {
