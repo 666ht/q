@@ -144,6 +144,21 @@ class MoneroHandlerThread(
         // remaining counts, so never use getDaemonBlockChainTargetHeight() here.
         val effectiveTarget = daemonHeight
 
+        // Keep a small number of newly mined blocks on the normal refresh indicator.
+        // wallet2 still scans them; this only avoids reopening the full sync counter
+        // every time an already-synced wallet is reopened.
+        if (!restoreActive &&
+            effectiveTarget - syncHeight >= 2L &&
+            !walletState.shouldShowNormalSyncProgress(syncHeight, effectiveTarget)
+        ) {
+            walletState.showOrdinaryCatchUpRefresh()
+            Timber.tag(name).d(
+                "Small normal catch-up: wallet=%d daemon=%d left=%d; keeping refresh indicator",
+                syncHeight, effectiveTarget, effectiveTarget - syncHeight
+            )
+            return
+        }
+
         // Restore progress has two distinct phases. Before the daemon itself has
         // reached the user-selected restore height, there is no wallet scan cursor
         // to report yet. Keep the loading indicator alive without displaying a fake
@@ -318,6 +333,8 @@ class MoneroHandlerThread(
             return true
         }
         if (daemonHeight - scanHeight >= 2L) {
+            // Record the initial backlog size before the progress callback re-reads heights.
+            walletState.shouldShowNormalSyncProgress(scanHeight, daemonHeight)
             updateSyncProgress(scanHeight)
             return true
         }
