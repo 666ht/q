@@ -579,7 +579,7 @@ fun NodeListItem(
                         style = MaterialTheme.typography.bodySmall
                     )
                     Text(
-                        stringResource(R.string.wallet_height, walletHeight?.toString() ?: "—"),
+                        stringResource(R.string.wallet_height, walletHeight?.toString() ?: "0"),
                         style = MaterialTheme.typography.bodySmall,
                         textAlign = TextAlign.End
                     )
