@@ -123,13 +123,18 @@ fun SubAddressesScreen(
                             ) {
                                 Text(
                                     address.displayLabel,
+                                    modifier = Modifier.weight(1f),
                                     color = MaterialTheme.colorScheme.primary,
+                                    maxLines = 1
                                 )
                                 Text(
                                     if (hideAmounts) Formats.maskAmount(address.totalAmount)
                                     else Formats.getDisplayAmount(address.totalAmount),
                                     color = MaterialTheme.colorScheme.primary,
-                                    fontWeight = FontWeight.SemiBold
+                                    fontWeight = FontWeight.SemiBold,
+                                    textAlign = TextAlign.End,
+                                    maxLines = 1,
+                                    softWrap = false
                                 )
                             }
                         },
