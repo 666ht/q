@@ -1068,51 +1068,52 @@ class WalletState {
         val wallet = getWallet
         if (wallet?.isInitialized != true) return
 
-        // Reset the indicator as soon as a new pull request supersedes the old one.
-        // Mark it active only after prior native work has been paused and this manual
-        // refresh is actually about to start, so stale callbacks cannot clear it.
-        _manualRefreshInProgress.value = false
-
-        // Signal cancellation synchronously without waiting for a native lock.
-        // A newer manual refresh must also release a reset that is waiting for the
-        // ordinary-refresh height callback, rather than inherit its timeout.
-        val operationId = beginUserOperationTransition()
-        finishOrdinaryHeightRefresh()
-        runCatching { wallet.cancelCurrentOperation(operationId) }
-            .onFailure { Timber.tag(TAG).w(it, "Could not signal cancellation before manual refresh") }
-
+        // Ordinary pull-to-refresh must not cancel/reinitialize the current scan or
+        // clear its progress state. If the wallet is catching up, coalesce the request
+        // into that scan; its next safe callback will refresh the visible history.
         userOperationScope.launch {
             userOperationMutex.lock()
             try {
-                if (operationId != userOperationGeneration.get()) return@launch
-                withContext(Dispatchers.IO) { wallet.pauseRefresh() }
-                if (operationId != userOperationGeneration.get()) return@launch
+                if (!wallet.isInitialized) return@launch
 
-                cancelScanUiStateForLatestOperation()
-                deferredManualRefresh.set(false)
-                customRescanFinished = false
-                restoreProgressCompleted = false
+                val scanOwnsWallet = !wallet.isSynchronized ||
+                    _isLoading.value ||
+                    _isSyncing.get() ||
+                    _syncProgress.value != null ||
+                    customRescanPreparing ||
+                    customRescanInProgress ||
+                    customRescanFinalizing ||
+                    restoreProgressInProgress ||
+                    restoreProgressFinalizing ||
+                    restoreProgressCompleted
+
+                if (scanOwnsWallet || userOperationTransitionInProgress) {
+                    deferredManualRefresh.set(true)
+                    Timber.tag(TAG).i(
+                        "Manual refresh coalesced into current scan: synchronized=%s loading=%s syncing=%s",
+                        wallet.isSynchronized, _isLoading.value, _isSyncing.get()
+                    )
+                    return@launch
+                }
 
                 if (wallet.fullStatus.connectionStatus == Wallet.ConnectionStatus.ConnectionStatus_Connected) {
+                    // The current wallet instance is already synchronized. Keep the
+                    // native refresh worker intact and let refreshed() decide whether
+                    // there are genuinely new blocks to process.
+                    deferredManualRefresh.set(false)
                     _manualRefreshInProgress.value = true
                     setLoading(true)
                     wallet.startRefresh()
                 } else {
-                    // No native refresh will be started while disconnected.
                     _manualRefreshInProgress.value = false
-                }
-                if (operationId == userOperationGeneration.get()) {
-                    runCatching { wallet.refreshHistory() }
-                        .onFailure {
-                            _manualRefreshInProgress.value = false
-                            Timber.tag(TAG).e(it, "Manual refresh history update failed")
-                        }
+                    setLoading(false)
+                    Timber.tag(TAG).w("Manual refresh skipped because daemon is disconnected")
                 }
             } catch (e: Exception) {
                 _manualRefreshInProgress.value = false
-                Timber.tag(TAG).e(e, "Manual refresh operation failed")
+                setLoading(false)
+                Timber.tag(TAG).e(e, "Manual refresh failed")
             } finally {
-                finishUserOperationTransition(operationId)
                 userOperationMutex.unlock()
             }
         }
