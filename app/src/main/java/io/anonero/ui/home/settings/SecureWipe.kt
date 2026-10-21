@@ -126,7 +126,7 @@ class SecureWipeViewModel(
         anonWalletHandler.markSecureWipeCleanupStarted()
         anonWalletHandler.prepareForSecureWipeRequest()
 
-        return viewModelScope.launch(Dispatchers.IO) {
+        return anonWalletHandler.scope.launch(Dispatchers.IO) {
             try {
                 while (true) {
                     try {
@@ -195,7 +195,7 @@ class SecureWipeViewModel(
         anonWalletHandler.markSecureWipeRequestStartedInProcess()
         anonWalletHandler.markSecureWipeCleanupStarted()
 
-        return viewModelScope.launch(Dispatchers.IO) {
+        return anonWalletHandler.scope.launch(Dispatchers.IO) {
             var nativeWalletDeletionCompleted = false
             try {
                 // This loop is intentionally retry-based: after the deletion password
