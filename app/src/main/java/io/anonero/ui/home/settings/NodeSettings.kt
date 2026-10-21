@@ -348,7 +348,6 @@ fun NodeSettings(onBackPress: () -> Unit = {}, navigateTo: (Any) -> Unit = {}) {
     val availableNodes by nodeSettingsVM.nodes.collectAsState(arrayListOf())
     val activeNode by nodeSettingsVM.activeNode.collectAsState(null)
     val walletHeight by nodeSettingsVM.walletHeight.collectAsState(null)
-    val daemonHeight by nodeSettingsVM.daemonHeight.collectAsState(0L)
     val connectionError by nodeSettingsVM.connectionError.observeAsState(null)
     val scope = rememberCoroutineScope()
     val toastState = rememberToasterState()
@@ -565,6 +564,7 @@ fun NodeListItem(
 ) {
     var menu by remember { mutableStateOf(false) }
     val daemonStatus by nodeSettingsVM.getCurrentDaemonLive().observeAsState(null)
+    val daemonHeight by nodeSettingsVM.daemonHeight.collectAsState(0L)
 
     ListItem(
         modifier = modifier
