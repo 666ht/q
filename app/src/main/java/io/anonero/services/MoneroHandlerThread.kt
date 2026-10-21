@@ -333,9 +333,26 @@ class MoneroHandlerThread(
             return true
         }
         if (daemonHeight - scanHeight >= 2L) {
-            // Record the initial backlog size before the progress callback re-reads heights.
-            walletState.shouldShowNormalSyncProgress(scanHeight, daemonHeight)
-            updateSyncProgress(scanHeight)
+            // A wallet that has already completed its initial scan should not reopen
+            // the full block-sync UI just because an ordinary refresh found newer blocks.
+            // Continue the native scan and keep the ordinary refresh indicator; reserve
+            // numeric block progress for first sync, restore, and explicit reset scans.
+            if (walletState.hasCompletedSyncBefore() &&
+                (wallet.isSynchronized || wallet.nativeSynchronized) &&
+                !walletState.restoreProgressInProgress &&
+                !walletState.customRescanInProgress &&
+                !walletState.customRescanFinalizing
+            ) {
+                walletState.showOrdinaryCatchUpRefresh()
+                Timber.tag(name).d(
+                    "Previously-synced wallet catching up silently: wallet=%d daemon=%d left=%d",
+                    scanHeight, daemonHeight, daemonHeight - scanHeight
+                )
+            } else {
+                // Record the initial backlog size before the progress callback re-reads heights.
+                walletState.shouldShowNormalSyncProgress(scanHeight, daemonHeight)
+                updateSyncProgress(scanHeight)
+            }
             return true
         }
         return false
