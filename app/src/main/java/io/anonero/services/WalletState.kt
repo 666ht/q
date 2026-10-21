@@ -1097,13 +1097,13 @@ class WalletState {
                 }
 
                 if (wallet.fullStatus.connectionStatus == Wallet.ConnectionStatus.ConnectionStatus_Connected) {
-                    // The current wallet instance is already synchronized. Keep the
-                    // native refresh worker intact and let refreshed() decide whether
-                    // there are genuinely new blocks to process.
+                    // Run one explicit asynchronous refresh without pausing/restarting
+                    // the periodic worker or clearing synchronization state. wallet2
+                    // serializes async refresh against its background refresh thread.
                     deferredManualRefresh.set(false)
                     _manualRefreshInProgress.value = true
                     setLoading(true)
-                    wallet.startRefresh()
+                    wallet.refreshAsync()
                 } else {
                     _manualRefreshInProgress.value = false
                     setLoading(false)
