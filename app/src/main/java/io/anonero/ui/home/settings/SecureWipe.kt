@@ -1,11 +1,13 @@
 package io.anonero.ui.home.settings
 
 import AnonNeroTheme
-import android.app.ActivityManager
+import android.app.Activity
 import android.content.SharedPreferences
 import android.content.Intent
 import android.view.HapticFeedbackConstants
 import android.os.Process
+import android.os.Handler
+import android.os.Looper
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.LocalActivity
 import androidx.compose.animation.core.LinearOutSlowInEasing
@@ -47,6 +49,7 @@ import androidx.compose.ui.draw.blur
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -277,21 +280,31 @@ fun SecureWipe(
 ) {
 
     val prefs = koinInject<SharedPreferences>(named(WALLET_PREFERENCES))
+    val anonWalletHandler = koinInject<AnonWalletHandler>()
     val secureWipeViewModel = koinViewModel<SecureWipeViewModel>()
     val focusRequester = remember { FocusRequester() }
-    var passPhraseDialog by remember { mutableStateOf(true) }
+    val view = LocalView.current
+    val activity = LocalActivity.current
+    val context = LocalContext.current
+    val wipePending = AnonConfig.isSecureWipePending(context)
+
+    var passPhraseDialog by remember {
+        mutableStateOf(!anonWalletHandler.isSecureWipeInProgress() && !wipePending)
+    }
     var passPhrase by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
+    var wipeSubmitting by remember {
+        mutableStateOf(wipePending || anonWalletHandler.isSecureWipeInProgress())
+    }
     val errorShake = rememberShakeController()
     val scope = rememberCoroutineScope()
     val progressMessage by secureWipeViewModel.wipeProgressMessage.observeAsState(null)
     val wipeProgress by secureWipeViewModel.wipeProgress.observeAsState(.1f)
-    val wipeErrorMessage by secureWipeViewModel.wipeErrorMessage.observeAsState(null)
-    val view = LocalView.current
-    val activity = LocalActivity.current
 
-    BackHandler {
-        progressMessage != null
+    BackHandler(
+        enabled = wipeSubmitting || wipePending || anonWalletHandler.isSecureWipeInProgress()
+    ) {
+        // Once the deletion password is verified, the persisted request cannot be cancelled.
     }
 
 
@@ -309,25 +322,51 @@ fun SecureWipe(
         label = "blur-radius"
     )
 
-    LaunchedEffect(true) {
-        scope.launch {
+    LaunchedEffect(passPhraseDialog) {
+        if (passPhraseDialog) {
             delay(100)
             focusRequester.requestFocus()
         }
     }
-    LaunchedEffect(progressMessage, wipeErrorMessage) {
-        if (progressMessage != null || wipeErrorMessage != null)
-            requestClearScreen.invoke(false)
+
+    LaunchedEffect(progressMessage) {
+        if (progressMessage != null) requestClearScreen.invoke(false)
+
+        if (progressMessage == "钱包已成功安全删除") {
+            val completedActivity = activity
+            if (completedActivity != null &&
+                !completedActivity.isFinishing &&
+                !completedActivity.isDestroyed
+            ) {
+                completedActivity.startActivity(
+                    Intent(Intent.ACTION_MAIN).apply {
+                        addCategory(Intent.CATEGORY_HOME)
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                )
+                completedActivity.finishAndRemoveTask()
+                Handler(Looper.getMainLooper()).postDelayed({
+                    Process.killProcess(Process.myPid())
+                }, 350)
+            }
+        }
     }
 
-    LaunchedEffect(animatedProgress) {
-        if (wipeProgress >= 1f && animatedProgress >= 1f) {
-            view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
-            goToHome()
+    LaunchedEffect(wipePending) {
+        if (wipePending && activity != null &&
+            !anonWalletHandler.isSecureWipeCleanupActive()
+        ) {
+            wipeSubmitting = true
+            passPhraseDialog = false
+            requestClearScreen(false)
+            secureWipeViewModel.showWipeProgress("正在恢复安全删除钱包")
+            secureWipeViewModel.resumeInterruptedWipe(activity)
         }
     }
 
     fun clearWallet() {
+        if (wipeSubmitting || wipePending || anonWalletHandler.isSecureWipeInProgress()) return
+
         scope.launch {
             val result = withContext(Dispatchers.IO) {
                 runCatching {
@@ -336,11 +375,40 @@ fun SecureWipe(
                     hash == hashedPass
                 }.getOrDefault(false)
             }
+
             if (result) {
-                // Keep all Compose state changes on the main thread.
+                val currentActivity = activity
+                if (currentActivity == null) {
+                    errorShake.shake(ShakeConfig(6, translateX = 5f))
+                    return@launch
+                }
+
                 passPhraseDialog = false
+                wipeSubmitting = true
+                error = null
                 requestClearScreen(false)
-                secureWipeViewModel.wipe(passPhrase, activity as? MainActivity)
+                anonWalletHandler.markSecureWipeRequestStartedInProcess()
+                secureWipeViewModel.showWipeProgress("正在启动安全删除")
+
+                while (true) {
+                    try {
+                        withContext(Dispatchers.IO) {
+                            check(AnonConfig.markSecureWipePending(currentActivity)) {
+                                "Unable to persist secure-delete request"
+                            }
+                            anonWalletHandler.prepareForSecureWipeRequest()
+                            (currentActivity as? MainActivity)?.stopNotificationService()
+                        }
+                        secureWipeViewModel.wipe(passPhrase, currentActivity)
+                        break
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        Timber.tag(TAG).e(e, "Unable to start secure deletion; retrying")
+                        secureWipeViewModel.showWipeProgress("正在继续安全删除钱包")
+                        delay(1_000)
+                    }
+                }
             } else {
                 errorShake.shake(ShakeConfig(6, translateX = 5f))
                 repeat(6) {
@@ -417,7 +485,7 @@ fun SecureWipe(
                     )
             },
             onDismissRequest = {
-                passPhraseDialog = false
+                if (!wipeSubmitting && !wipePending) passPhraseDialog = false
             },
             confirmButton = {
                 Button(
@@ -431,36 +499,41 @@ fun SecureWipe(
                         containerColor = MaterialTheme.colorScheme.errorContainer,
 
                         ),
+                    enabled = !wipeSubmitting && !wipePending,
                     onClick = {
                         clearWallet()
                     }) { Text(stringResource(id = R.string.wipe)) }
             },
             dismissButton = {
-                Button(
-                    onClick = {
-                        scope.launch {
-                            passPhraseDialog = false
-                            delay(300)
-                            onBackPress.invoke()
-                        }
-                    },
-                    shape = MaterialTheme.shapes.small,
-                    border = BorderStroke(
-                        1.dp,
-                        color = MaterialTheme.colorScheme.onSecondary
-                    ),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.background,
-                    )
+                if (!wipeSubmitting && !wipePending &&
+                    !anonWalletHandler.isSecureWipeInProgress()
                 ) {
-                    Text(
-                        stringResource(id = R.string.cancel),
-                        style = MaterialTheme.typography.bodyMedium.copy(
-                            color = MaterialTheme.colorScheme.onSecondary.copy(
-                                alpha = 0.8f
+                    Button(
+                        onClick = {
+                            scope.launch {
+                                passPhraseDialog = false
+                                delay(300)
+                                onBackPress.invoke()
+                            }
+                        },
+                        shape = MaterialTheme.shapes.small,
+                        border = BorderStroke(
+                            1.dp,
+                            color = MaterialTheme.colorScheme.onSecondary
+                        ),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.background,
+                        )
+                    ) {
+                        Text(
+                            stringResource(id = R.string.cancel),
+                            style = MaterialTheme.typography.bodyMedium.copy(
+                                color = MaterialTheme.colorScheme.onSecondary.copy(
+                                    alpha = 0.8f
+                                )
                             )
                         )
-                    )
+                    }
                 }
             }
         )
@@ -479,7 +552,7 @@ fun SecureWipe(
             Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            if (progressMessage != null && wipeErrorMessage == null && error == null)
+            if (progressMessage != null && error == null)
                 Box(
                     contentAlignment = Alignment.Center
                 ) {
@@ -495,12 +568,12 @@ fun SecureWipe(
                         )
                     )
                 }
-            if (wipeErrorMessage != null || error != null) {
+            if (error != null) {
                 Box(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        wipeErrorMessage ?: error ?: "",
+                        error ?: "",
                         style = MaterialTheme.typography.labelSmall
                             .copy(
                                 color = MaterialTheme.colorScheme.error,
