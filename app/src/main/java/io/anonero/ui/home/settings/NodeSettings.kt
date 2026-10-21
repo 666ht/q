@@ -91,6 +91,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -139,20 +140,37 @@ class NodeSettingsViewModel(
     )
 
 
-    // Read the active daemon's height directly. daemonInfo is refreshed by wallet
-    // callbacks, so its height can stay stale or blank when opening/reconnecting
-    // the node page. Poll on IO while this page observes the flow.
+    // Read the current node height independently of wallet scan callbacks.
+    // Some native reads temporarily return 0 while a scan/reconnect is active;
+    // fall back to WalletManager's live daemon height and retain the last valid
+    // value for the same node so the displayed block height does not disappear.
     val daemonHeight: StateFlow<Long> = flow {
+        var lastDaemonAddress: String? = null
+        var lastValidHeight = 0L
         while (currentCoroutineContext().isActive) {
-            val height = withContext(Dispatchers.IO) {
-                runCatching {
-                    WalletManager.instance?.wallet
-                        ?.takeIf { it.isInitialized }
-                        ?.getDaemonBlockChainHeight()
-                        ?.takeIf { it >= 0L }
-                }.getOrNull() ?: 0L
+            val daemonAddress = walletState.daemonInfo.first()?.daemon
+            if (daemonAddress != lastDaemonAddress) {
+                lastDaemonAddress = daemonAddress
+                lastValidHeight = 0L
             }
-            emit(height)
+
+            val liveHeight = if (daemonAddress == null) {
+                0L
+            } else {
+                withContext(Dispatchers.IO) {
+                    val manager = WalletManager.instance
+                    val wallet = manager?.wallet?.takeIf { it.isInitialized }
+                    runCatching {
+                        wallet?.getDaemonBlockChainHeight()
+                    }.getOrNull()?.takeIf { it > 0L }
+                        ?: runCatching {
+                            manager?.getBlockchainHeight()
+                        }.getOrNull()?.takeIf { it > 0L }
+                        ?: 0L
+                }
+            }
+            if (liveHeight > 0L) lastValidHeight = liveHeight
+            emit(lastValidHeight)
             delay(1_000L)
         }
     }.stateIn(
