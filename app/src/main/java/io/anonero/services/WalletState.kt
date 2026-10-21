@@ -939,6 +939,21 @@ class WalletState(private val prefs: SharedPreferences) {
         prefs.getBoolean(PREF_WALLET_HAS_COMPLETED_SYNC, false)
 
     /**
+     * Migrate an existing wallet's persisted cursor when upgrading from builds that
+     * did not store a completed-sync marker. This is called before listener callbacks.
+     */
+    fun rememberKnownWalletCursor(height: Long) {
+        if (height <= 1L) return
+        val currentHeight = prefs.getLong(PREF_LAST_COMPLETED_SCAN_HEIGHT, 0L)
+        if (!hasCompletedSyncBefore() || height > currentHeight) {
+            prefs.edit()
+                .putBoolean(PREF_WALLET_HAS_COMPLETED_SYNC, true)
+                .putLong(PREF_LAST_COMPLETED_SCAN_HEIGHT, maxOf(height, currentHeight))
+                .apply()
+        }
+    }
+
+    /**
      * A wallet that already completed a scan persists a high local cursor. On app
      * startup, wallet2 can briefly return 0 or an older cursor while its database is
      * being restored. Do not misclassify that startup read as a brand-new full scan.
