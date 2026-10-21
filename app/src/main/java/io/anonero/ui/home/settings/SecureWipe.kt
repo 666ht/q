@@ -3,6 +3,7 @@ package io.anonero.ui.home.settings
 import AnonNeroTheme
 import android.app.ActivityManager
 import android.content.SharedPreferences
+import android.content.Intent
 import android.view.HapticFeedbackConstants
 import android.os.Process
 import androidx.activity.compose.BackHandler
@@ -83,6 +84,9 @@ import org.koin.core.qualifier.named
 import timber.log.Timber
 import androidx.core.content.edit
 import io.anonero.R
+import java.io.File
+import java.util.concurrent.atomic.AtomicBoolean
+import kotlinx.coroutines.CancellationException
 
 
 private const val TAG = "SecureWipe"
@@ -99,144 +103,168 @@ class SecureWipeViewModel(
 
     private val _wipeProgress = MutableLiveData(0.1f)
     val wipeProgress: LiveData<Float> = _wipeProgress
+    private val wipeTaskStarted = AtomicBoolean(false)
 
-    private val _wipeErrorMessage = MutableLiveData<String?>(null)
-    val wipeErrorMessage: LiveData<String?> = _wipeErrorMessage
+    fun showWipeProgress(message: String) {
+        _wipeProgressMessage.postValue(message)
+    }
 
-    fun wipe(passPhrase: String, activity: MainActivity?): Job {
+    /**
+     * Resume after process death without asking for either the deletion password
+     * or wallet PIN again. This path only removes files: the old native handle died
+     * with the previous process and AnonApplication skips wallet initialization.
+     */
+    fun resumeInterruptedWipe(activity: Activity): Job? {
+        if (anonWalletHandler.isSecureWipeCleanupActive() ||
+            !wipeTaskStarted.compareAndSet(false, true)
+        ) return null
+
+        anonWalletHandler.markSecureWipeRequestStartedInProcess()
+        anonWalletHandler.markSecureWipeCleanupStarted()
+        anonWalletHandler.prepareForSecureWipeRequest()
+
         return viewModelScope.launch(Dispatchers.IO) {
-            _wipeProgress.postValue(.1f)
-            _wipeProgressMessage.postValue(
-                "正在删除钱包"
-            )
-            _wipeProgress.postValue(.3f)
-            var wipeFailure: Throwable? = null
-            val walletWiped = runCatching { anonWalletHandler.wipe(passPhrase) }
-                .onFailure {
-                    wipeFailure = it
-                    Timber.tag(TAG).e(it, "Secure wipe wallet step failed")
-                }
-                .getOrDefault(false)
-            if (!walletWiped) {
-                Timber.tag(TAG).e("Wallet file deletion reported failure; continuing full wipe flow")
-            }
-            delay(1000)
-            _wipeProgress.postValue(.5f)
-            _wipeProgressMessage.postValue("钱包已清除")
-            delay(1200)
-            _wipeProgress.postValue(.6f)
-            _wipeProgressMessage.postValue("正在清除偏好设置")
-            runCatching { sharedPreferences.edit(commit = true) { clear() } }
-                .onFailure {
-                    wipeFailure = wipeFailure ?: it
-                    Timber.tag(TAG).e(it, "Secure wipe preferences step failed")
-                }
-            delay(800)
-            _wipeProgress.postValue(.7f)
-            _wipeProgressMessage.postValue("正在清除节点")
-            runCatching { nodesRepository.clearAll() }
-                .onFailure {
-                    wipeFailure = wipeFailure ?: it
-                    Timber.tag(TAG).e(it, "Secure wipe nodes step failed")
-                }
-            delay(1200)
-            _wipeProgressMessage.postValue("正在清除日志")
-            delay(1000)
-            runCatching { logRepository.clear() }
-                .onFailure {
-                    wipeFailure = wipeFailure ?: it
-                    Timber.tag(TAG).e(it, "Secure wipe logs step failed")
-                }
-            runCatching { AnonConfig.context?.let { AnonConfig.clearSpendCacheFiles(it) } }
-                .onFailure {
-                    wipeFailure = wipeFailure ?: it
-                    Timber.tag(TAG).e(it, "Secure wipe cache step failed")
-                }
+            try {
+                while (true) {
+                    try {
+                        check(AnonConfig.markSecureWipePending(activity)) {
+                            "Unable to persist secure-delete recovery state"
+                        }
+                        (activity as? MainActivity)?.stopNotificationService()
+                        _wipeProgress.postValue(.18f)
+                        _wipeProgressMessage.postValue("正在恢复安全删除钱包")
 
-            // Clear keystore credentials before the final filesystem pass.
-            _wipeProgressMessage.postValue("正在清除加密密钥")
-            runCatching {
-                KeyStoreHelper.clearWalletCredentials(
-                    AnonConfig.context?.applicationContext ?: return@runCatching,
-                    "anon"
-                )
-            }.onFailure {
-                wipeFailure = wipeFailure ?: it
-                Timber.tag(TAG).e(it, "Secure wipe keystore credentials failed")
-            }
+                        val walletDir = File(activity.filesDir, "wallets")
+                        check(!walletDir.exists() || walletDir.deleteRecursively()) {
+                            "Wallet files could not be deleted"
+                        }
+                        check(!walletDir.exists()) { "Wallet files remain after deletion" }
 
-            _wipeProgress.postValue(.85f)
-            _wipeProgressMessage.postValue("正在清除缓存")
-            runCatching {
-                // Clear every preference store first, including restore height
-                // and wallet password/passphrase state.
-                sharedPreferences.edit(commit = true) { clear() }
-                val context = AnonConfig.context?.applicationContext
-                if (context != null) {
-                    AnonConfig.clearSpendCacheFiles(context)
-                    if (!AnonConfig.clearAllAppData(context)) {
-                        throw IllegalStateException("app data remains after secure wipe")
+                        _wipeProgress.postValue(.42f)
+                        _wipeProgressMessage.postValue("正在清除钱包设置")
+                        check(sharedPreferences.edit().clear().commit()) {
+                            "Unable to clear wallet preferences"
+                        }
+
+                        _wipeProgress.postValue(.58f)
+                        _wipeProgressMessage.postValue("正在清除节点配置")
+                        nodesRepository.clearAll()
+
+                        _wipeProgress.postValue(.70f)
+                        _wipeProgressMessage.postValue("正在清除日志和密钥")
+                        logRepository.clear()
+                        KeyStoreHelper.clearWalletCredentials(activity.applicationContext, "anon")
+                        AnonConfig.clearSpendCacheFiles(activity.applicationContext)
+                        AnonConfig.disposeState()
+
+                        _wipeProgress.postValue(.86f)
+                        _wipeProgressMessage.postValue("正在清除应用全部数据")
+                        // clearAllAppData keeps the root-level recovery marker until
+                        // every other private/external app-data file has been removed.
+                        check(AnonConfig.clearAllAppData(activity.applicationContext)) {
+                            "Final application-data cleanup is incomplete"
+                        }
+
+                        _wipeProgress.postValue(1f)
+                        _wipeProgressMessage.postValue("钱包已成功安全删除")
+                        return@launch
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        Timber.tag(TAG).e(e, "Secure-delete recovery failed; retrying")
+                        runCatching { AnonConfig.markSecureWipePending(activity) }
+                        _wipeProgress.postValue(.28f)
+                        _wipeProgressMessage.postValue("正在继续安全删除钱包")
+                        delay(1_000)
                     }
                 }
-            }.onFailure {
-                wipeFailure = wipeFailure ?: it
-                Timber.tag(TAG).e(it, "Final app-data wipe failed")
+            } finally {
+                anonWalletHandler.markSecureWipeCleanupFinished()
+                wipeTaskStarted.set(false)
             }
-
-            // This is intentionally the last filesystem operation. Earlier
-            // cleanup can recreate preference files; this pass removes them again.
-            runCatching {
-                val context = AnonConfig.context?.applicationContext
-                if (context != null && !AnonConfig.clearAllAppData(context)) {
-                    throw IllegalStateException("final app-data cleanup incomplete")
-                }
-            }.onFailure {
-                wipeFailure = wipeFailure ?: it
-                Timber.tag(TAG).e(it, "Final cleanup pass failed")
-            }
-
-            runCatching { AnonConfig.disposeState() }
-                .onFailure {
-                    wipeFailure = wipeFailure ?: it
-                    Timber.tag(TAG).e(it, "Secure wipe state disposal step failed")
-                }
-
-            _wipeProgress.postValue(.95f)
-            _wipeProgressMessage.postValue(
-                "钱包删除成功"
-            )
-            delay(300)
-
-            // Secure wipe means the entire application data set is removed.
-            // Do not navigate back into the app after this point because that
-            // can recreate preferences or cache files.
-            val context = AnonConfig.context?.applicationContext
-            val allDataCleared = if (context != null) {
-                runCatching { AnonConfig.clearAllAppData(context) }
-                    .onFailure {
-                        wipeFailure = wipeFailure ?: it
-                        Timber.tag(TAG).e(it, "Complete application-data wipe failed")
-                    }
-                    .getOrDefault(false)
-            } else {
-                wipeFailure = wipeFailure ?: IllegalStateException("Application context unavailable")
-                false
-            }
-
-            if (wipeFailure != null || !walletWiped || !allDataCleared) {
-                _wipeErrorMessage.postValue(
-                    AnonConfig.context?.getString(R.string.wallet_wipe_failed) ?: "安全清理失败"
-                )
-                return@launch
-            }
-
-            // Exit immediately so the running process cannot recreate any
-            // application data after the final deletion pass.
-            _wipeProgress.postValue(1f)
-            Process.killProcess(Process.myPid())
         }
     }
 
+    fun wipe(passPhrase: String, activity: Activity): Job {
+        check(wipeTaskStarted.compareAndSet(false, true)) {
+            "Secure-delete task is already running"
+        }
+        anonWalletHandler.markSecureWipeRequestStartedInProcess()
+        anonWalletHandler.markSecureWipeCleanupStarted()
+
+        return viewModelScope.launch(Dispatchers.IO) {
+            var nativeWalletDeletionCompleted = false
+            try {
+                // This loop is intentionally retry-based: after the deletion password
+                // is accepted, no error dialog or password prompt can stop the flow.
+                while (true) {
+                    try {
+                        check(AnonConfig.markSecureWipePending(activity)) {
+                            "Unable to persist secure-delete request"
+                        }
+                        (activity as? MainActivity)?.stopNotificationService()
+
+                        if (!nativeWalletDeletionCompleted) {
+                            _wipeProgress.postValue(.28f)
+                            _wipeProgressMessage.postValue("正在安全删除钱包")
+                            check(anonWalletHandler.wipe(passPhrase)) {
+                                "Wallet deletion did not finish"
+                            }
+                            nativeWalletDeletionCompleted = true
+                            _wipeProgress.postValue(.48f)
+                            _wipeProgressMessage.postValue("钱包数据已清除")
+                        }
+
+                        _wipeProgress.postValue(.58f)
+                        _wipeProgressMessage.postValue("正在清除钱包设置")
+                        check(sharedPreferences.edit().clear().commit()) {
+                            "Unable to clear wallet preferences"
+                        }
+
+                        _wipeProgress.postValue(.68f)
+                        _wipeProgressMessage.postValue("正在清除节点配置")
+                        nodesRepository.clearAll()
+
+                        _wipeProgress.postValue(.76f)
+                        _wipeProgressMessage.postValue("正在清除日志和密钥")
+                        logRepository.clear()
+                        KeyStoreHelper.clearWalletCredentials(activity.applicationContext, "anon")
+                        AnonConfig.clearSpendCacheFiles(activity.applicationContext)
+                        AnonConfig.disposeState()
+
+                        _wipeProgress.postValue(.86f)
+                        _wipeProgressMessage.postValue("正在清除应用全部数据")
+                        // This is the final destructive phase. The marker is the last
+                        // item clearAllAppData removes, so an interrupted cleanup can resume.
+                        check(AnonConfig.clearAllAppData(activity.applicationContext)) {
+                            "Final application-data cleanup is incomplete"
+                        }
+
+                        _wipeProgress.postValue(1f)
+                        _wipeProgressMessage.postValue("钱包已成功安全删除")
+                        return@launch
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        Timber.tag(TAG).e(e, "Secure deletion failed; automatically retrying")
+                        runCatching { AnonConfig.markSecureWipePending(activity) }
+                        _wipeProgress.postValue(if (nativeWalletDeletionCompleted) .66f else .28f)
+                        _wipeProgressMessage.postValue(
+                            if (nativeWalletDeletionCompleted) {
+                                "正在继续清除钱包设置"
+                            } else {
+                                "正在继续安全删除钱包"
+                            }
+                        )
+                        delay(1_000)
+                    }
+                }
+            } finally {
+                anonWalletHandler.markSecureWipeCleanupFinished()
+                wipeTaskStarted.set(false)
+            }
+        }
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
