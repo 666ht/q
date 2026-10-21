@@ -80,16 +80,32 @@ class MainActivity : ComponentActivity() {
             navigationBarStyle = SystemBarStyle.dark(scrimColor),
         )
         setContent {
-            var walletExist by remember { mutableStateOf(AnonConfig.isWalletFileExist()) }
-            var useTor by remember { mutableStateOf(true) }
-            val onboardViewModel = koinViewModel<OnboardViewModel>()
             val context = LocalContext.current
+            var walletExist by remember(context) {
+                mutableStateOf(
+                    AnonConfig.isSecureWipePending(context) || AnonConfig.isWalletFileExist()
+                )
+            }
+            var useTor by remember(context) {
+                mutableStateOf(!AnonConfig.isSecureWipePending(context))
+            }
+            val onboardViewModel = koinViewModel<OnboardViewModel>()
 
             LaunchedEffect(key1 = true) {
                 scope.launch(Dispatchers.IO) {
-                    walletExist = AnonConfig.getDefaultWalletFile(context).exists()
-                    useTor = anonPrefs.getBoolean(WALLET_USE_TOR, true)
-                    isAppReady = true
+                    try {
+                        val wipePending = AnonConfig.isSecureWipePending(context)
+                        // Keep the recovery route available even if the wallet file was
+                        // already removed before the previous process was interrupted.
+                        walletExist = wipePending || AnonConfig.getDefaultWalletFile(context).exists()
+                        useTor = if (wipePending) false else anonPrefs.getBoolean(WALLET_USE_TOR, true)
+                    } catch (e: Exception) {
+                        Timber.tag(TAG).e(e, "Secure-wipe-aware startup initialization failed")
+                        walletExist = AnonConfig.isSecureWipePending(context)
+                        useTor = false
+                    } finally {
+                        isAppReady = true
+                    }
                 }
             }
             TorSplash(enableTor = useTor) {
@@ -99,6 +115,7 @@ class MainActivity : ComponentActivity() {
                         Timber.tag(TAG).d("destination changed to ${destination.route}")
                     }
                     val showLockScreen by walletState.backgroundSyncFlow.asLiveData().observeAsState(walletState.backgroundSync)
+                    val deletionWorkflowActive = AnonConfig.isSecureWipePending(context)
                     Box(modifier = androidx.compose.ui.Modifier.fillMaxSize()) {
                         NavHost(
                             navController = navController, popExitTransition = {
@@ -112,7 +129,7 @@ class MainActivity : ComponentActivity() {
                             //home bottom navigation
                             homeGraph(navController)
                         }
-                        if (showLockScreen) {
+                        if (showLockScreen && !deletionWorkflowActive) {
                             LockScreen(
                                 mode = LockScreenMode.LOCK_SCREEN,
                                 modifier = androidx.compose.ui.Modifier.fillMaxSize(),
