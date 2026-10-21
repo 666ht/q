@@ -36,6 +36,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import timber.log.Timber
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
@@ -94,6 +95,9 @@ class WalletState {
     private val _coins = MutableStateFlow<List<CoinsInfo>>(arrayListOf())
     private val _syncProgress = MutableStateFlow<SyncProgress?>(null)
     private val _connectedDaemon = MutableStateFlow<DaemonInfo?>(null)
+    // Keep valid node heights in the singleton wallet state, not a screen ViewModel.
+    // This cache survives leaving/re-entering NodeSettings while wallet sync continues.
+    private val knownDaemonHeights = ConcurrentHashMap<String, Long>()
     private val _connectionStatus = MutableStateFlow<Wallet.ConnectionStatus?>(null)
     private val _previousConnectionStatus = AtomicReference<Wallet.ConnectionStatus?>(null)
     private val _unlockShortcut = Channel<LockScreenShortCut>(capacity = 1)
@@ -567,13 +571,21 @@ class WalletState {
                 } catch (_: Exception) {
                     null
                 }
-                address?.let {
+                address?.let { daemonAddress ->
+                    val observedHeight = runCatching {
+                        WalletManager.instance?.getBlockchainHeight() ?: -1L
+                    }.getOrDefault(-1L)
+                    val retainedHeight = if (observedHeight > 0L) {
+                        rememberDaemonHeight(daemonAddress, observedHeight)
+                    } else {
+                        cachedDaemonHeight(daemonAddress)
+                    }
                     _connectedDaemon.update {
                         DaemonInfo(
-                            address,
+                            daemonAddress,
                             connectionStatus = wallet.fullStatus.connectionStatus
                                 ?: Wallet.ConnectionStatus.ConnectionStatus_Disconnected,
-                            WalletManager.instance?.getBlockchainHeight() ?: -1L
+                            retainedHeight
                         )
                     }
                 }
@@ -836,8 +848,35 @@ class WalletState {
         Result.failure(e)
     }
 
+    /**
+     * Return the last valid height for a node even if a later native read
+     * temporarily reports 0/-1 during refresh, reconnect, or screen navigation.
+     */
+    fun cachedDaemonHeight(daemonAddress: String?): Long {
+        if (daemonAddress.isNullOrBlank()) return 0L
+        return knownDaemonHeights[daemonAddress]?.takeIf { it > 0L }
+            ?: _connectedDaemon.value
+                ?.takeIf { it.daemon == daemonAddress }
+                ?.daemonHeight?.takeIf { it > 0L }
+            ?: 0L
+    }
+
+    /** Store valid heights centrally so a recreated screen ViewModel can reuse them. */
+    fun rememberDaemonHeight(daemonAddress: String?, height: Long): Long {
+        if (daemonAddress.isNullOrBlank()) return 0L
+        if (height > 0L) knownDaemonHeights[daemonAddress] = height
+        return cachedDaemonHeight(daemonAddress)
+    }
+
     fun updateDaemon(daemonInfo: DaemonInfo) {
-        this._connectedDaemon.update { daemonInfo }
+        val height = if (daemonInfo.daemonHeight > 0L) {
+            rememberDaemonHeight(daemonInfo.daemon, daemonInfo.daemonHeight)
+        } else {
+            cachedDaemonHeight(daemonInfo.daemon)
+        }
+        this._connectedDaemon.update {
+            daemonInfo.copy(daemonHeight = height)
+        }
     }
 
     fun syncUpdate(syncProgress: SyncProgress) {
