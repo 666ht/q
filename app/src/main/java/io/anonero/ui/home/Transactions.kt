@@ -794,10 +794,73 @@ private fun OverlappingTransactionItem(
 }
 
 @Composable
-fun TransactionItem(tx: TransactionInfo, hideAmounts: Boolean = false, modifier: Modifier = Modifier, onClick: (() -> Unit)? = null, rightAlignAmount: Boolean = true, showTime: Boolean = false, timePattern: String = "dd/MM\nHH:mm", timeZone: ZoneId = ZoneId.systemDefault(), upstreamLayout: Boolean = false, showBorder: Boolean = true) {
+fun TransactionItem(tx: TransactionInfo, hideAmounts: Boolean = false, modifier: Modifier = Modifier, onClick: (() -> Unit)? = null, rightAlignAmount: Boolean = true, showTime: Boolean = false, timePattern: String = "dd/MM\nHH:mm", timeZone: ZoneId = ZoneId.systemDefault(), upstreamLayout: Boolean = false, showBorder: Boolean = true, amountCenter: Boolean = false) {
     val isIncoming = tx.direction == TransactionInfo.Direction.Direction_In
     val amount = if (isIncoming) tx.amount else tx.amount
     val confirmations = tx.confirmations
+    if (amountCenter && showTime) {
+        // Match AN's detail-page layout: direction/confirmation on the left,
+        // timestamp on the right, and the amount centered in the row.
+        Box(
+            modifier = modifier
+                .fillMaxWidth()
+                .padding(start = 24.dp, end = 28.dp, top = 6.dp, bottom = 6.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                if (confirmations < 10) {
+                    Box(
+                        modifier = Modifier
+                            .size(28.dp)
+                            .offset(x = (-8).dp, y = 2.dp)
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(28.dp),
+                            strokeWidth = 2.dp,
+                            progress = {
+                                (confirmations.toFloat() / 10f).coerceIn(0f, 1f)
+                            }
+                        )
+                        Text(
+                            text = "$confirmations",
+                            modifier = Modifier.align(Alignment.Center),
+                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 9.sp)
+                        )
+                    }
+                } else {
+                    Box(modifier = Modifier.offset(x = 6.dp, y = 2.dp)) {
+                        Icon(
+                            if (isIncoming) AnonIcons.ArrowDownLeft else AnonIcons.ArrowUpRight,
+                            modifier = Modifier.size(28.dp),
+                            tint = if (isIncoming) MaterialTheme.colorScheme.primary
+                            else LocalContentColor.current,
+                            contentDescription = ""
+                        )
+                    }
+                }
+                Text(
+                    Formats.formatTransactionTime(tx.timestamp, timePattern, timeZone),
+                    style = MaterialTheme.typography.labelSmall,
+                    textAlign = TextAlign.End
+                )
+            }
+            Text(
+                if (hideAmounts) Formats.maskAmount(amount) else Formats.getDisplayAmount(amount),
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .fillMaxWidth()
+                    .padding(horizontal = 48.dp),
+                textAlign = TextAlign.Center,
+                style = MaterialTheme.typography.titleLarge
+            )
+        }
+        return
+    }
+
     Row(
         modifier = modifier
             .fillMaxWidth()
