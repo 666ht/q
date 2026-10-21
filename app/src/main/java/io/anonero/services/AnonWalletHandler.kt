@@ -82,6 +82,15 @@ class AnonWalletHandler(
             0L
         }
         val restoreScanPending = savedRestoreHeight > 0L && !wallet.nativeSynchronized
+        if (!restoreScanPending) {
+            // Wallet.isSynchronized is an in-memory Kotlin flag and defaults to
+            // false after every process restart. Seed it from native wallet2 before
+            // attaching listeners, so a previously-synced wallet isn't classified
+            // as a first sync merely because a new Wallet wrapper was created.
+            wallet.isSynchronized = runCatching { wallet.nativeSynchronized }
+                .onFailure { Timber.tag(TAG).w(it, "Could not restore native synchronized state") }
+                .getOrDefault(false)
+        }
         if (restoreScanPending) {
             // Keep the chosen start height armed, but allow ordinary-refresh listener
             // callbacks through so they can obtain the current daemon tip.
