@@ -94,13 +94,20 @@ class MoneroHandlerThread(
             return
         }
 
-        // Native wallet2 is authoritative for normal synchronization.
+        // Native wallet2 can report its refresh cycle as synchronized while the
+        // live daemon tip is still ahead. Do not hide progress or mark the wallet
+        // complete until the local scan cursor is caught up with the daemon.
         if (!wallet.isSynchronized && wallet.nativeSynchronized) {
             // A restore callback can report nativeSynchronized before the recovery
             // rescan request has actually started. Do not finish the restore window
             // or fall back to normal-sync progress in that gap.
             if (walletState.restoreProgressInProgress &&
                 !walletState.restoreProgressRescanStarted) {
+                return
+            }
+            val scanHeight = runCatching { wallet.getBlockChainHeight() }.getOrDefault(-1L)
+            val daemonHeight = runCatching { wallet.getDaemonBlockChainHeight() }.getOrDefault(0L)
+            if (keepNormalSyncProgress(scanHeight, daemonHeight)) {
                 return
             }
             completeSynchronization()
@@ -279,23 +286,42 @@ class MoneroHandlerThread(
 
         if (status === Wallet.ConnectionStatus.ConnectionStatus_Disconnected || status == null) {
             tryRestartConnection()
+        } else if (keepNormalSyncProgress(chainHeight, daemonHeight)) {
+            // The daemon is reachable but the wallet cursor is behind. Publish the
+            // real remaining-block count first, then resume the existing native scan.
+            // Re-running wallet.init() here resets the connection path and can leave
+            // the UI stuck showing ordinary refresh instead of scan progress.
+            runCatching { wallet.startRefresh() }
+                .onFailure { Timber.tag(name).e(it, "Failed to resume block synchronization") }
         } else {
-            val heightDiff = daemonHeight - chainHeight
-            if (heightDiff >= 2) {
-                tryRestartConnection()
-            } else {
-                if (!wallet.isSynchronized) {
-                    updateSyncProgress(wallet.getBlockChainHeight())
-                }
-                // Match upstream refresh completion: mark synchronized, persist,
-                // refresh the complete wallet data set, then stop the loading state.
-                wallet.setSynchronized()
-                wallet.store()
-                refresh(true)
-                walletState.finishSync()
+            if (!wallet.isSynchronized) {
+                updateSyncProgress(chainHeight)
             }
+            // Only mark synchronized after comparing valid live heights and confirming
+            // that no meaningful daemon blocks remain.
+            wallet.setSynchronized()
+            wallet.store()
+            refresh(true)
+            walletState.finishSync()
         }
         walletState.update()
+    }
+
+    /**
+     * Keep the normal-sync progress visible while the live daemon has blocks
+     * the wallet has not scanned yet. A missing daemon height is not proof of
+     * synchronization; keep waiting for a valid height instead of finishing early.
+     */
+    private fun keepNormalSyncProgress(scanHeight: Long, daemonHeight: Long): Boolean {
+        if (daemonHeight <= 0L || scanHeight < 0L) {
+            walletState.waitForSyncHeights()
+            return true
+        }
+        if (daemonHeight - scanHeight >= 2L) {
+            updateSyncProgress(scanHeight)
+            return true
+        }
+        return false
     }
 
     private fun completeSynchronization() {
