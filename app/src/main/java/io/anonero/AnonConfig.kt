@@ -115,8 +115,13 @@ object AnonConfig {
 
         val marker = File(File(app.applicationInfo.dataDir), SECURE_WIPE_MARKER_FILE)
         val markerReady = runCatching {
-            if (!marker.exists()) {
-                FileOutputStream(marker).use { output ->
+            if (marker.exists() && !marker.isFile) {
+                check(marker.deleteRecursively()) {
+                    "Unable to replace malformed secure-delete marker"
+                }
+            }
+            if (!marker.isFile || marker.length() == 0L) {
+                FileOutputStream(marker, false).use { output ->
                     output.write("secure-wipe-pending".toByteArray(Charsets.UTF_8))
                     output.fd.sync()
                 }
@@ -185,7 +190,9 @@ object AnonConfig {
 
         val externalDirs = (
             app.getExternalFilesDirs(null).filterNotNull() +
-                app.externalCacheDirs.filterNotNull()
+                app.externalCacheDirs.filterNotNull() +
+                app.externalMediaDirs.filterNotNull() +
+                app.obbDirs.filterNotNull()
             ).distinctBy { it.absolutePath }
 
         externalDirs.forEach { directory ->
