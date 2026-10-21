@@ -555,7 +555,39 @@ class WalletState {
         if (_blockUpdates.get()) return
         getWallet?.let { wallet ->
             if (wallet.isInitialized) {
-                _balanceInfo.update { wallet.balance }
+                // wallet2 may temporarily report 0 while its scan is rebuilding
+                // outputs/history. Do not let that transient value erase a known
+                // balance while synchronization is active.
+                val nativeBalance = runCatching { wallet.balance }.getOrNull()
+                val outputBalance = runCatching {
+                    wallet.coins?.all
+                        ?.asSequence()
+                        ?.filter {
+                            !it.spent && it.accountIndex == wallet.getAccountIndex()
+                        }
+                        ?.sumOf { it.amount }
+                        ?: 0L
+                }.getOrDefault(0L)
+                val balanceCandidate = nativeBalance?.takeIf { it > 0L }
+                    ?: outputBalance.takeIf { it > 0L }
+                    ?: (nativeBalance ?: 0L)
+                val balanceTransitionInProgress = _isLoading.value ||
+                    _isSyncing.get() ||
+                    restoreProgressInProgress ||
+                    restoreProgressFinalizing ||
+                    customRescanPreparing ||
+                    customRescanInProgress ||
+                    customRescanFinalizing
+                _balanceInfo.update { previous ->
+                    if (balanceCandidate <= 0L &&
+                        balanceTransitionInProgress &&
+                        (previous ?: 0L) > 0L
+                    ) {
+                        previous
+                    } else {
+                        balanceCandidate
+                    }
+                }
                 _unLockedBalance.update {
                     if (AnonConfig.viewOnly) {
                         wallet.viewOnlyBalance()
