@@ -69,7 +69,6 @@ private const val TAG = "WalletState"
 private const val PREF_WALLET_HAS_COMPLETED_SYNC = "walletHasCompletedSync"
 private const val PREF_LAST_COMPLETED_SCAN_HEIGHT = "lastCompletedScanHeight"
 private const val NORMAL_SYNC_PROGRESS_DISPLAY_THRESHOLD = 10L
-private const val NORMAL_SYNC_PROGRESS_DISPLAY_THRESHOLD = 10L
 
 class WalletState(private val prefs: SharedPreferences) {
     private var _blockUpdates = AtomicBoolean(false)
