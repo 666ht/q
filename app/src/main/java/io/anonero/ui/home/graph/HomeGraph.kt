@@ -4,6 +4,7 @@ import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.composable
 import androidx.navigation.navigation
+import io.anonero.AnonConfig
 import io.anonero.model.WalletManager
 import io.anonero.ui.home.HomeScreenComposable
 import io.anonero.ui.home.LockScreen
@@ -14,8 +15,15 @@ import io.anonero.ui.home.graph.routes.LockScreenRoute
 
 fun NavGraphBuilder.homeGraph(navController: NavHostController) {
     val walletStatus = WalletManager.instance?.wallet?.status?.isOk
+    val secureWipePending = AnonConfig.context?.let {
+        AnonConfig.isSecureWipePending(it)
+    } == true
     navigation<Home>(
-        startDestination = if (walletStatus == true) HomeScreenRoute() else LockScreenRoute
+        startDestination = if (secureWipePending || walletStatus == true) {
+            HomeScreenRoute()
+        } else {
+            LockScreenRoute
+        }
     ) {
         composable<HomeScreenRoute> {
             HomeScreenComposable(mainNavController = navController)
