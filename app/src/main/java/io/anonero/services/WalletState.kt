@@ -1,5 +1,6 @@
 package io.anonero.services
 
+import android.content.SharedPreferences
 import androidx.compose.ui.util.fastDistinctBy
 import androidx.compose.ui.util.fastFilter
 import io.anonero.AnonConfig
@@ -65,9 +66,12 @@ fun calculateSyncProgress(startHeight: Long, currentHeight: Long, targetHeight: 
 }
 
 private const val TAG = "WalletState"
+private const val PREF_WALLET_HAS_COMPLETED_SYNC = "walletHasCompletedSync"
+private const val PREF_LAST_COMPLETED_SCAN_HEIGHT = "lastCompletedScanHeight"
+private const val NORMAL_SYNC_PROGRESS_DISPLAY_THRESHOLD = 10L
 private const val NORMAL_SYNC_PROGRESS_DISPLAY_THRESHOLD = 10L
 
-class WalletState {
+class WalletState(private val prefs: SharedPreferences) {
     private var _blockUpdates = AtomicBoolean(false)
     val hideAmountsFlow = MutableStateFlow(false)
     private val _isLoading = MutableStateFlow(false)
@@ -100,6 +104,10 @@ class WalletState {
     // Those blocks must still be scanned, but should not reopen the full block-count UI.
     @Volatile
     private var normalSyncProgressVisible: Boolean? = null
+    // First callbacks after reopening may briefly report a zero/old scan height
+    // before wallet2 finishes restoring its persisted cursor.
+    @Volatile
+    private var invalidStartupHeightSince: Long = 0L
     private val _connectedDaemon = MutableStateFlow<DaemonInfo?>(null)
     // Keep valid node heights in the singleton wallet state, not a screen ViewModel.
     // This cache survives leaving/re-entering NodeSettings while wallet sync continues.
@@ -690,6 +698,11 @@ class WalletState {
     }
 
     fun prepareForWipe() {
+        prefs.edit()
+            .remove(PREF_WALLET_HAS_COMPLETED_SYNC)
+            .remove(PREF_LAST_COMPLETED_SCAN_HEIGHT)
+            .apply()
+        invalidStartupHeightSince = 0L
         _isWiping.set(true)
         _blockUpdates.set(true)
         _backgroundSync.value = false
@@ -923,12 +936,37 @@ class WalletState {
      * First scans and larger backlogs get full progress. If the wallet was already
      * near the daemon tip, continue scanning under the normal refresh indicator.
      */
+    fun hasCompletedSyncBefore(): Boolean =
+        prefs.getBoolean(PREF_WALLET_HAS_COMPLETED_SYNC, false)
+
+    /**
+     * A wallet that already completed a scan persists a high local cursor. On app
+     * startup, wallet2 can briefly return 0 or an older cursor while its database is
+     * being restored. Do not misclassify that startup read as a brand-new full scan.
+     * If the cursor stays invalid for 15 seconds, allow normal sync progress so a
+     * genuine unexpectedly-low cursor is not hidden forever.
+     */
     fun shouldShowNormalSyncProgress(scanHeight: Long, daemonHeight: Long): Boolean {
-        val remaining = daemonHeight - scanHeight
+        val previouslySynced = hasCompletedSyncBefore()
+        val lastCompletedHeight = prefs.getLong(PREF_LAST_COMPLETED_SCAN_HEIGHT, 0L)
+        val startupCursorInvalid = previouslySynced &&
+            lastCompletedHeight > 1L &&
+            scanHeight < lastCompletedHeight
+
+        if (startupCursorInvalid) {
+            val now = System.currentTimeMillis()
+            if (invalidStartupHeightSince == 0L) invalidStartupHeightSince = now
+            if (now - invalidStartupHeightSince < 15_000L) return false
+        } else {
+            invalidStartupHeightSince = 0L
+        }
+
         if (normalSyncProgressVisible == true) return true
 
-        val shouldShow = scanHeight <= 1L ||
-            remaining > NORMAL_SYNC_PROGRESS_DISPLAY_THRESHOLD
+        val remaining = daemonHeight - scanHeight
+        // Do not use scanHeight <= 1 alone as proof this is the first scan: on
+        // startup that value can be a transient JNI read before the saved cursor loads.
+        val shouldShow = remaining > NORMAL_SYNC_PROGRESS_DISPLAY_THRESHOLD
         normalSyncProgressVisible = shouldShow
         return shouldShow
     }
@@ -965,6 +1003,20 @@ class WalletState {
     }
 
     fun finishSync() {
+        // Persist evidence of a completed wallet scan for the next app process.
+        // The Kotlin Wallet.isSynchronized flag itself is not persistent.
+        runCatching {
+            val wallet = getWallet
+            val height = wallet?.takeIf { it.isInitialized }?.getBlockChainHeight() ?: 0L
+            if (height > 1L) {
+                prefs.edit()
+                    .putBoolean(PREF_WALLET_HAS_COMPLETED_SYNC, true)
+                    .putLong(PREF_LAST_COMPLETED_SCAN_HEIGHT, height)
+                    .apply()
+            }
+        }.onFailure {
+            Timber.tag(TAG).w(it, "Could not persist last completed wallet scan height")
+        }
         _manualRefreshInProgress.value = false
         // Normal synchronization/custom-rescan completion has already refreshed
         // history and outputs. A deferred request is satisfied by that snapshot.
