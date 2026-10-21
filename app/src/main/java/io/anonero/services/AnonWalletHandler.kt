@@ -13,8 +13,8 @@ import io.anonero.util.WALLET_PROXY_PORT
 import io.anonero.util.WALLET_USE_TOR
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.plus
@@ -41,6 +41,7 @@ class AnonWalletHandler(
     private val _scope = CoroutineScope(Dispatchers.Default) + SupervisorJob()
 
     private var handler: MoneroHandlerThread? = null
+    private var torSocksJob: Job? = null
     private val wipeInProgress = AtomicBoolean(false)
     private val secureWipeCleanupTasks = AtomicInteger(0)
     private val secureWipeRequestStartedInProcess = AtomicBoolean(false)
@@ -89,7 +90,7 @@ class AnonWalletHandler(
     val scope get() = _scope
 
     init {
-        scope.launch {
+        torSocksJob = scope.launch {
             torService.socksFlow.collect {
                 if (secureWipePriorityActive() || walletState.isWiping()) return@collect
                 val wallet = WalletManager.instance?.wallet
@@ -353,7 +354,8 @@ class AnonWalletHandler(
         try {
             // Keep the gate active and stop all ordinary wallet activity first.
             prepareForSecureWipeRequest()
-            _scope.coroutineContext.cancelChildren()
+            torSocksJob?.cancel()
+            torSocksJob = null
             handler = null
 
             val walletManager = WalletManager.instance
