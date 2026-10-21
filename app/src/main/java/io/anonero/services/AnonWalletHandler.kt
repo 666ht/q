@@ -83,6 +83,12 @@ class AnonWalletHandler(
         }
         val restoreScanPending = savedRestoreHeight > 0L && !wallet.nativeSynchronized
         if (!restoreScanPending) {
+            // Migrate the wallet's existing saved cursor before callbacks begin. Older
+            // builds did not persist an app-side completed-sync marker.
+            runCatching { wallet.getBlockChainHeight() }
+                .getOrDefault(0L)
+                .let(walletState::rememberKnownWalletCursor)
+
             // Wallet.isSynchronized is an in-memory Kotlin flag and defaults to
             // false after every process restart. Seed it from native wallet2 before
             // attaching listeners, so a previously-synced wallet isn't classified
