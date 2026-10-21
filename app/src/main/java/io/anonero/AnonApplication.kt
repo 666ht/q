@@ -33,18 +33,30 @@ class AnonApplication : Application(), Thread.UncaughtExceptionHandler {
     override fun onCreate() {
         super.onCreate()
         AnonConfig.context = this
-        AnonConfig.initWalletState()
+        val secureWipePending = AnonConfig.isSecureWipePending(this)
+        if (!secureWipePending) {
+            AnonConfig.initWalletState()
+        }
         startKoin {
             androidContext(this@AnonApplication)
             modules(appModule)
         }
+
+        // A pending secure deletion has priority over all normal startup work.
+        // In particular, do not initialize wallet2, start Tor, or create log files:
+        // the recovery screen must finish deleting the existing app data first.
+        if (secureWipePending) {
+            Thread.setDefaultUncaughtExceptionHandler(this)
+            return
+        }
+
         initConfigs()
         plantLog()
         Thread.setDefaultUncaughtExceptionHandler(this)
         val torService: TorService = get()
         val prefs: SharedPreferences = get(named(WALLET_PREFERENCES))
         val host = prefs.getString(NodeFields.RPC_HOST.value, "")
-        if(!host.isNullOrEmpty()){
+        if (!host.isNullOrEmpty()) {
             torService.start()
         }
         AnonConfig.clearSpendCacheFiles(this)
@@ -94,7 +106,7 @@ class AnonApplication : Application(), Thread.UncaughtExceptionHandler {
     override fun onTerminate() {
         val torService: TorService = get()
         torService.dispose()
-        anonLogTree.cleanup()
+        if (::anonLogTree.isInitialized) anonLogTree.cleanup()
         super.onTerminate()
     }
 
