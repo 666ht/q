@@ -128,7 +128,10 @@ object AnonConfig {
             }
             marker.isFile && marker.length() > 0L
         }.getOrDefault(false)
-        return prefsSaved && markerReady
+        // The root marker is the authoritative recovery signal. If SharedPreferences
+        // cannot commit but the marker is durable, continue the wipe instead of
+        // trapping the app on an endless pre-start retry loop.
+        return markerReady
     }
 
     fun isSecureWipePending(context: Context): Boolean {
