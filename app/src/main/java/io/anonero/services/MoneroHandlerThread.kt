@@ -148,7 +148,7 @@ class MoneroHandlerThread(
         // wallet2 still scans them; this only avoids reopening the full sync counter
         // every time an already-synced wallet is reopened.
         if (!restoreActive &&
-            effectiveTarget - syncHeight >= 2L &&
+            effectiveTarget - syncHeight > 0L &&
             !walletState.shouldShowNormalSyncProgress(syncHeight, effectiveTarget)
         ) {
             walletState.showOrdinaryCatchUpRefresh()
