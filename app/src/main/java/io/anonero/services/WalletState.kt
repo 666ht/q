@@ -65,6 +65,7 @@ fun calculateSyncProgress(startHeight: Long, currentHeight: Long, targetHeight: 
 }
 
 private const val TAG = "WalletState"
+private const val NORMAL_SYNC_PROGRESS_DISPLAY_THRESHOLD = 10L
 
 class WalletState {
     private var _blockUpdates = AtomicBoolean(false)
@@ -94,6 +95,11 @@ class WalletState {
     private val _nextAddress = MutableStateFlow<Subaddress?>(null)
     private val _coins = MutableStateFlow<List<CoinsInfo>>(arrayListOf())
     private val _syncProgress = MutableStateFlow<SyncProgress?>(null)
+    // Visibility policy for ordinary catch-up scans. A wallet may be fully synced
+    // from the previous session but have only a handful of new blocks on re-entry.
+    // Those blocks must still be scanned, but should not reopen the full block-count UI.
+    @Volatile
+    private var normalSyncProgressVisible: Boolean? = null
     private val _connectedDaemon = MutableStateFlow<DaemonInfo?>(null)
     // Keep valid node heights in the singleton wallet state, not a screen ViewModel.
     // This cache survives leaving/re-entering NodeSettings while wallet sync continues.
@@ -137,6 +143,7 @@ class WalletState {
         _userOperationTransition.value = true
         _syncProgress.value = null
         _isSyncing.set(false)
+        normalSyncProgressVisible = null
         _isLoading.value = true
         updateScanPreparationIndicator()
         operationId
@@ -911,6 +918,29 @@ class WalletState {
         }
     }
 
+    /**
+     * Decide whether ordinary catch-up deserves the visible block-count progress.
+     * First scans and larger backlogs get full progress. If the wallet was already
+     * near the daemon tip, continue scanning under the normal refresh indicator.
+     */
+    fun shouldShowNormalSyncProgress(scanHeight: Long, daemonHeight: Long): Boolean {
+        val remaining = daemonHeight - scanHeight
+        if (normalSyncProgressVisible == true) return true
+
+        val shouldShow = scanHeight <= 1L ||
+            remaining > NORMAL_SYNC_PROGRESS_DISPLAY_THRESHOLD
+        normalSyncProgressVisible = shouldShow
+        return shouldShow
+    }
+
+    /** Keep the native catch-up scan active without showing a full sync counter. */
+    fun showOrdinaryCatchUpRefresh() {
+        _syncProgress.value = null
+        _isSyncing.set(false)
+        _isLoading.value = true
+        updateScanPreparationIndicator()
+    }
+
     fun syncUpdate(syncProgress: SyncProgress) {
         // A real synchronization cursor owns the progress UI from this point.
         _manualRefreshInProgress.value = false
@@ -942,6 +972,7 @@ class WalletState {
         _syncProgress.value = null
         _isSyncing.set(false)
         _isLoading.value = false
+        normalSyncProgressVisible = null
         _connectionStatus.update { Wallet.ConnectionStatus.ConnectionStatus_Connected }
 
         // Publish the final wallet snapshot after clearing sync/loading flags.
