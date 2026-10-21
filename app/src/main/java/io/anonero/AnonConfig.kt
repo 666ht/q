@@ -10,6 +10,7 @@ import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import java.io.File
+import java.io.FileOutputStream
 import kotlin.math.pow
 
 val jsonDecoder = Json { ignoreUnknownKeys = true }
@@ -21,6 +22,10 @@ object AnonConfig {
     val ONE_XMR = Math.round(10.0.pow(XMR_DECIMALS.toDouble()))
     const val MAX_LOG_SIZE = 250
     const val PREFS = "anonPref"
+    const val APP_PREFERENCES = "anonero_prefs"
+    const val PREF_WALLET_WIPE_PENDING = "wallet_wipe_pending"
+    const val PREF_WALLET_WIPE_REQUESTED = "wallet_wipe_requested"
+    private const val SECURE_WIPE_MARKER_FILE = ".secure_wipe_pending"
     var context: AnonApplication? = null
     private var walletFound: Boolean = false
 
@@ -93,6 +98,45 @@ object AnonConfig {
         }
     }
 
+    /**
+     * A delete request is persisted in preferences and in a dedicated file at the
+     * app-data root. The marker file is intentionally preserved until the final
+     * full-data deletion pass has removed every other app-owned file.
+     */
+    fun markSecureWipePending(context: Context): Boolean {
+        val app = context.applicationContext
+        val prefsSaved = app.getSharedPreferences(
+            APP_PREFERENCES,
+            Context.MODE_PRIVATE
+        ).edit()
+            .putBoolean(PREF_WALLET_WIPE_REQUESTED, true)
+            .putBoolean(PREF_WALLET_WIPE_PENDING, true)
+            .commit()
+
+        val marker = File(File(app.applicationInfo.dataDir), SECURE_WIPE_MARKER_FILE)
+        val markerReady = runCatching {
+            if (!marker.exists()) {
+                FileOutputStream(marker).use { output ->
+                    output.write("secure-wipe-pending".toByteArray(Charsets.UTF_8))
+                    output.fd.sync()
+                }
+            }
+            marker.isFile && marker.length() > 0L
+        }.getOrDefault(false)
+        return prefsSaved && markerReady
+    }
+
+    fun isSecureWipePending(context: Context): Boolean {
+        val app = context.applicationContext
+        val marker = File(File(app.applicationInfo.dataDir), SECURE_WIPE_MARKER_FILE)
+        if (marker.isFile) return true
+        return runCatching {
+            val preferences = app.getSharedPreferences(APP_PREFERENCES, Context.MODE_PRIVATE)
+            preferences.getBoolean(PREF_WALLET_WIPE_PENDING, false) ||
+                preferences.getBoolean(PREF_WALLET_WIPE_REQUESTED, false)
+        }.getOrDefault(false)
+    }
+
     fun clearSpendCacheFiles(context: Context) {
         val files = arrayListOf(
             EXPORT_OUTPUT_FILE,
@@ -115,41 +159,68 @@ object AnonConfig {
     }
 
     /**
-     * Removes all app-owned persistent data that can contain wallet material,
-     * preferences, logs, caches, databases, or exported wallet artifacts.
-     *
-     * The app data root itself is not removed; only its data-bearing children
-     * are deleted so the running process can finish the wipe flow safely.
+     * Clears the complete application data set. When secure deletion is active,
+     * the root-level recovery marker is kept while every other private and
+     * app-specific external file is deleted. It is removed only as the final
+     * deletion operation, so an interrupted cleanup can still resume.
      */
     fun clearAllAppData(context: Context): Boolean {
         val app = context.applicationContext
-
-        // Wipe every child of the app data root, including files/directories
-        // that are not part of the known wallet paths.
         val dataRoot = File(app.applicationInfo.dataDir)
-        var success = deleteContents(dataRoot)
+        val marker = File(dataRoot, SECURE_WIPE_MARKER_FILE)
+        val preserveMarker = marker.isFile
+        var success = true
 
-        app.getExternalFilesDirs(null).filterNotNull().forEach { dir ->
-            if (!deleteContents(dir)) success = false
+        val children = dataRoot.listFiles()
+        if (children == null) {
+            success = false
+        } else {
+            children.forEach { child ->
+                if (preserveMarker && child.absoluteFile == marker.absoluteFile) {
+                    return@forEach
+                }
+                if (!child.deleteRecursively()) success = false
+            }
         }
-        app.externalCacheDirs.filterNotNull().forEach { dir ->
-            if (!deleteContents(dir)) success = false
+
+        val externalDirs = (
+            app.getExternalFilesDirs(null).filterNotNull() +
+                app.externalCacheDirs.filterNotNull()
+            ).distinctBy { it.absolutePath }
+
+        externalDirs.forEach { directory ->
+            if (!deleteContents(directory)) success = false
+        }
+
+        val otherPrivateFilesRemain = dataRoot.listFiles()
+            ?.any { !(preserveMarker && it.absoluteFile == marker.absoluteFile) }
+            ?: true
+        val externalDataRemains = externalDirs.any { directory ->
+            directory.exists() && directory.listFiles()?.isNotEmpty() != false
+        }
+        if (!success || otherPrivateFilesRemain || externalDataRemains) {
+            return false
+        }
+
+        // No wallet, preference, cache, database, log, keystore metadata, or
+        // external app file remains. Remove the recovery marker last.
+        if (preserveMarker && marker.exists() && !marker.delete()) {
+            return false
         }
 
         walletFound = false
-        return success
+        return dataRoot.listFiles()?.isEmpty() == true &&
+            externalDirs.all { !it.exists() || it.listFiles()?.isEmpty() == true }
     }
 
     private fun deleteContents(directory: File): Boolean {
         if (!directory.exists()) return true
-        val children = directory.listFiles() ?: return true
+        val children = directory.listFiles() ?: return false
         var success = true
         children.forEach { child ->
-            if (!child.deleteRecursively()) {
-                success = false
-            }
+            if (!child.deleteRecursively()) success = false
         }
-        return success && directory.listFiles().isNullOrEmpty()
+        return success && directory.listFiles()?.isEmpty() == true
     }
 
     fun disposeState() {
