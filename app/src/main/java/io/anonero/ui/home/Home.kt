@@ -41,6 +41,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
+import io.anonero.AnonConfig
 import io.anonero.R
 import io.anonero.model.Subaddress
 import io.anonero.ui.components.MainBottomNavigation
@@ -82,15 +83,17 @@ import io.anonero.services.WalletState
 @Composable
 fun HomeScreenComposable(modifier: Modifier = Modifier, mainNavController: NavHostController?) {
 
-    var showBottomNavigation by remember { mutableStateOf(true) }
-    val bottomNavController = rememberNavController()
     val context = LocalContext.current
+    var showBottomNavigation by remember {
+        mutableStateOf(!AnonConfig.isSecureWipePending(context))
+    }
+    val bottomNavController = rememberNavController()
     val navBackStackEntry by bottomNavController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route ?: TransactionsRoute
     var showBatteryManagerDialog by remember { mutableStateOf(false) }
     val walletState = koinInject<WalletState>()
 
-    val startDestination: Any = TransactionsRoute
+    val startDestination: Any = if (AnonConfig.isSecureWipePending(context)) SecureWipeRoute else TransactionsRoute
     
     LaunchedEffect(Unit) {
         walletState.unlockShortcut.collect { shortcut ->
