@@ -87,7 +87,7 @@ class AnonWalletHandler(
     init {
         scope.launch {
             torService.socksFlow.collect {
-                if (walletState.isWiping()) return@collect
+                if (secureWipePriorityActive() || walletState.isWiping()) return@collect
                 val wallet = WalletManager.instance?.wallet
                 if (prefs.getBoolean(WALLET_USE_TOR, false) && wallet?.isInitialized == true) {
                     setProxy(it.address.toString(), it.port.value)
@@ -267,6 +267,7 @@ class AnonWalletHandler(
     }
 
     fun updateDaemon(node: io.anonero.model.node.Node?) {
+        if (secureWipePriorityActive()) return
         walletState.setLoading(true)
         val wallet = WalletManager.instance?.wallet
         val walletManager = WalletManager.instance
