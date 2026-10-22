@@ -1,23 +1,12 @@
 package io.anonero.ui.home.settings
 
 import AnonNeroTheme
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
-import android.widget.Toast
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.runtime.rememberCoroutineScope
-import io.anonero.BuildConfig
-import java.io.File
-import kotlinx.coroutines.flow.first
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -26,26 +15,19 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -101,50 +83,6 @@ class LogViewModel(private val logRepository: LogRepository) : ViewModel() {
             logRepository.clear()
         }
     }
-
-    /**
-     * Return the persisted uncaught-exception report after a crash. If the app has
-     * not crashed since the previous clear/install, return device info plus current
-     * log history so the user can still copy useful diagnostics.
-     */
-    suspend fun prepareCrashReportForCopy(context: Context): Pair<String, Boolean> =
-        kotlinx.coroutines.withContext(Dispatchers.IO) {
-            val crashFile = File(context.filesDir, "crash_report.txt")
-            if (crashFile.isFile && crashFile.length() > 0L) {
-                return@withContext crashFile.readText(Charsets.UTF_8) to true
-            }
-
-            val logs = logRepository.logFlow.first()
-            val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS")
-            val logText = logs.joinToString(separator = "\n") { entry ->
-                val dateTime = LocalDateTime.ofInstant(
-                    Instant.ofEpochMilli(entry.date),
-                    ZoneId.systemDefault()
-                )
-                val level = when (entry.priority) {
-                    Log.VERBOSE -> "VERBOSE"
-                    Log.DEBUG -> "DEBUG"
-                    Log.INFO -> "INFO"
-                    Log.WARN -> "WARN"
-                    Log.ERROR -> "ERROR"
-                    Log.ASSERT -> "ASSERT"
-                    else -> "UNKNOWN"
-                }
-                "${formatter.format(dateTime)} | $level | ${entry.tag} | ${entry.message}"
-            }
-
-            buildString {
-                appendLine("ANONERO DIAGNOSTIC LOG")
-                appendLine("No saved uncaught-exception report was found.")
-                appendLine("App ID: ${BuildConfig.APPLICATION_ID}")
-                appendLine("App version: ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
-                appendLine()
-                appendLine(logDeviceInfo())
-                appendLine()
-                appendLine("CURRENT LOG HISTORY")
-                append(logText.ifBlank { "No log entries available." })
-            } to false
-        }
 
     private fun logDeviceInfo(): String {
         val deviceInfo = """
@@ -207,9 +145,6 @@ fun LogViewer(
     val listState = rememberLazyListState()
     val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior(rememberTopAppBarState())
     val context = LocalContext.current
-    val scope = androidx.compose.runtime.rememberCoroutineScope()
-    var reportDialogText by remember { mutableStateOf<String?>(null) }
-    var reportDialogIsCrash by remember { mutableStateOf(false) }
     Scaffold(
         topBar = {
             TopAppBar(
@@ -227,43 +162,6 @@ fun LogViewer(
                     containerColor = Color.Transparent
                 ),
                 actions = {
-                    IconButton(
-                        onClick = {
-                            scope.launch {
-                                try {
-                                    val (report, isCrashReport) =
-                                        viewModel.prepareCrashReportForCopy(context)
-                                    val clipboard = context.getSystemService(
-                                        Context.CLIPBOARD_SERVICE
-                                    ) as ClipboardManager
-                                    clipboard.setPrimaryClip(
-                                        ClipData.newPlainText("Anonero crash report", report)
-                                    )
-                                    // The crash report is stored separately from the live log list.
-                                    // Display its actual contents while keeping the one-tap copy action.
-                                    reportDialogText = report
-                                    reportDialogIsCrash = isCrashReport
-                                    Toast.makeText(
-                                        context,
-                                        if (isCrashReport) "闪退日志已显示并复制" else "未找到保存的闪退记录，已显示并复制当前运行日志",
-                                        Toast.LENGTH_SHORT
-                                    ).show()
-                                } catch (e: Exception) {
-                                    Timber.tag(TAG).e(e, "Copy crash report failed")
-                                    Toast.makeText(
-                                        context,
-                                        "复制日志失败",
-                                        Toast.LENGTH_SHORT
-                                    ).show()
-                                }
-                            }
-                        }
-                    ) {
-                        Icon(
-                            Icons.Filled.ContentCopy,
-                            contentDescription = "复制闪退日志"
-                        )
-                    }
                     IconButton(
                         onClick = {
                             viewModel.prePareForShare()
@@ -328,55 +226,6 @@ fun LogViewer(
         }
     }
 
-    reportDialogText?.let { report ->
-        val displayReport = if (report.length > 100_000) {
-            report.take(100_000) + "\n\n[为避免页面卡顿，屏幕仅展示前 100000 个字符；复制日志仍包含完整内容。]"
-        } else {
-            report
-        }
-        AlertDialog(
-            onDismissRequest = { reportDialogText = null },
-            title = {
-                Text(if (reportDialogIsCrash) "最近一次闪退日志" else "当前诊断日志（没有保存的闪退记录）")
-            },
-            text = {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 520.dp)
-                        .verticalScroll(rememberScrollState())
-                ) {
-                    Text(
-                        text = displayReport,
-                        fontFamily = FontFamily.Monospace,
-                        fontSize = 11.sp
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        runCatching {
-                            val clipboard = context.getSystemService(
-                                Context.CLIPBOARD_SERVICE
-                            ) as ClipboardManager
-                            clipboard.setPrimaryClip(
-                                ClipData.newPlainText("Anonero crash report", report)
-                            )
-                        }
-                        Toast.makeText(context, "日志已复制", Toast.LENGTH_SHORT).show()
-                    }
-                ) {
-                    Text("复制日志")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { reportDialogText = null }) {
-                    Text("关闭")
-                }
-            }
-        )
-    }
 }
 
 @Composable
