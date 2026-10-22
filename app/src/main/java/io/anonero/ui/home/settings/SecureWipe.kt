@@ -340,10 +340,9 @@ fun SecureWipe(
 
         if (progressMessage == "钱包已成功安全删除") {
             val completedActivity = activity
-            // Always leave the wallet process after a successful full-data wipe.
-            // Do not make process termination conditional on Activity lifecycle state:
-            // a finishing/destroyed Activity can otherwise leave the process alive with
-            // its old WalletState singleton and stale deletion gate.
+            // No delayed kill here. A delay leaves the old process alive after
+            // returning to the launcher; a quick re-tap can start the app in that
+            // same process and then have the old callback kill the new Activity.
             runCatching {
                 context.applicationContext.startActivity(
                     Intent(Intent.ACTION_MAIN).apply {
@@ -363,12 +362,9 @@ fun SecureWipe(
                         Timber.tag(TAG).e(it, "Unable to remove secure-delete task")
                     }
             }
-            // Kill even when the Activity has already started finishing. Continuing
-            // with the old application-scoped wallet/Tor state after deleting all app
-            // data can race the first clean launch and recreate partially cleared state.
-            Handler(Looper.getMainLooper()).postDelayed({
-                Process.killProcess(Process.myPid())
-            }, 350)
+            // Terminate immediately after navigation/task removal: no time window
+            // remains for the user to relaunch into the old application process.
+            Process.killProcess(Process.myPid())
         }
     }
 
