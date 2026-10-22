@@ -43,9 +43,15 @@ class AnonApplication : Application(), Thread.UncaughtExceptionHandler {
     private val crashReportWriteStarted = AtomicBoolean(false)
     @Volatile
     private var secureWipeStartedInThisProcess = false
+    @Volatile
+    private var secureWipeCompletedInThisProcess = false
 
     fun markSecureWipeStartedInProcess() {
         secureWipeStartedInThisProcess = true
+    }
+
+    fun markSecureWipeCompletedInProcess() {
+        secureWipeCompletedInThisProcess = true
     }
 
     private fun persistCrashReport(thread: Thread, throwable: Throwable) {
@@ -245,10 +251,15 @@ class AnonApplication : Application(), Thread.UncaughtExceptionHandler {
     }
 
     override fun uncaughtException(t: Thread, e: Throwable) {
-        // A wipe request has higher priority than crash reporting. Do not recreate
-        // files after secure deletion has been requested or completed.
+        // Always write the fatal exception to Android's log. Keep app-private files
+        // empty while deletion is pending, but allow a crash report after the wipe
+        // has fully completed so a post-wipe startup failure remains diagnosable.
+        android.util.Log.e(TAG, "Uncaught exception on thread ${t.name}", e)
         runCatching {
-            if (!secureWipeStartedInThisProcess && !AnonConfig.isSecureWipePending(this)) {
+            val mayPersistCrashReport =
+                (!secureWipeStartedInThisProcess || secureWipeCompletedInThisProcess) &&
+                    !AnonConfig.isSecureWipePending(this)
+            if (mayPersistCrashReport) {
                 persistCrashReport(t, e)
             }
         }.onFailure {
