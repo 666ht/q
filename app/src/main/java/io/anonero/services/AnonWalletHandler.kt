@@ -60,6 +60,11 @@ class AnonWalletHandler(
         secureWipeRequestStartedInProcess.set(true)
         AnonConfig.context?.markSecureWipeStartedInProcess()
         walletState.prepareForWipe()
+        // Cancel the native refresh asynchronously right after the gate rises.
+        // The request is non-blocking; native teardown remains serialized below.
+        scope.launch(Dispatchers.IO) {
+            walletState.cancelNativeWorkForSecureWipe(WalletManager.instance?.wallet)
+        }
     }
 
     fun markSecureWipeCleanupStarted() {
