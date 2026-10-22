@@ -81,9 +81,12 @@ class AnonWalletHandler(
         if (walletState.backgroundSync) {
             secureWipeWasBackgroundSync.set(true)
         }
+        // This is the immediate priority gate and can be called from a UI lifecycle
+        // callback. Do not call wallet2/JNI here: pauseRefresh() can wait for the
+        // active scan's native lock and freeze the UI when invoked on the main thread.
+        // The deletion worker performs native listener detach, pause, and close in
+        // order from its IO coroutine below.
         walletState.prepareForWipe()
-        runCatching { WalletManager.instance?.wallet?.pauseRefresh() }
-            .onFailure { Timber.tag(TAG).e(it, "Unable to pause wallet refresh for secure deletion") }
         runCatching { torService.stop() }
             .onFailure { Timber.tag(TAG).e(it, "Unable to stop Tor for secure deletion") }
     }
