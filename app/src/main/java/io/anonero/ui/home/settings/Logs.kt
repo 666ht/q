@@ -44,6 +44,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -328,6 +329,11 @@ fun LogViewer(
     }
 
     reportDialogText?.let { report ->
+        val displayReport = if (report.length > 100_000) {
+            report.take(100_000) + "\n\n[为避免页面卡顿，屏幕仅展示前 100000 个字符；复制日志仍包含完整内容。]"
+        } else {
+            report
+        }
         AlertDialog(
             onDismissRequest = { reportDialogText = null },
             title = {
@@ -341,7 +347,7 @@ fun LogViewer(
                         .verticalScroll(rememberScrollState())
                 ) {
                     Text(
-                        text = report,
+                        text = displayReport,
                         fontFamily = FontFamily.Monospace,
                         fontSize = 11.sp
                     )
