@@ -1185,6 +1185,7 @@ class WalletState(private val prefs: SharedPreferences) {
             // sync and guarantees a deferred pull has a future safe listener callback.
             val scanOwnsWallet =
                 !wallet.isSynchronized ||
+                    _isLoading.value ||
                     _isSyncing.get() ||
                     _syncProgress.value != null ||
                     ordinaryCatchUpInProgress
