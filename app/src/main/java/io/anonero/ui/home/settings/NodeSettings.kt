@@ -287,10 +287,14 @@ class NodeSettingsViewModel(
     }
 
     suspend fun connect(node: Node) {
+        if (walletHandler.isSecureWipeInProgress() || walletState.isWiping()) return
         withContext(Dispatchers.IO) {
+            if (walletHandler.isSecureWipeInProgress() || walletState.isWiping()) return@withContext
             val editor = prefs.edit()
             try {
+                if (walletHandler.isSecureWipeInProgress() || walletState.isWiping()) return@withContext
                 WalletManager.instance?.wallet?.pauseRefresh()
+                if (walletHandler.isSecureWipeInProgress() || walletState.isWiping()) return@withContext
                 editor.putString(
                     NodeFields.RPC_HOST.value,
                     node.host
@@ -309,15 +313,18 @@ class NodeSettingsViewModel(
                 )
 
                 editor.apply()
+                if (walletHandler.isSecureWipeInProgress() || walletState.isWiping()) return@withContext
                 // Preserve the known-working #1070 connection sequence. The Tor
                 // runtime starts asynchronously; wallet2 owns the subsequent RPC
                 // handshake and sync callbacks. Do not abort refresh merely because
                 // init() returns false during an initial/reconnection transition.
                 torService.start()
                 walletHandler.updateDaemon(node)
+                if (walletHandler.isSecureWipeInProgress() || walletState.isWiping()) return@withContext
                 walletState.setLoading(false)
                 walletState.update()
                 val wallet = WalletManager.instance?.wallet
+                if (walletHandler.isSecureWipeInProgress() || walletState.isWiping()) return@withContext
                 val initialized = wallet?.init(0L)
                 if (initialized == false) {
                     Timber.tag(TAG).w(
@@ -326,7 +333,9 @@ class NodeSettingsViewModel(
                         node.rpcPort
                     )
                 }
+                if (walletHandler.isSecureWipeInProgress() || walletState.isWiping()) return@withContext
                 wallet?.setTrustedDaemon(true)
+                if (walletHandler.isSecureWipeInProgress() || walletState.isWiping()) return@withContext
                 wallet?.startRefresh()
             } catch (e: Exception) {
                 Timber.tag(TAG).e(e, "Node connection attempt failed: %s:%d", node.host, node.rpcPort)
