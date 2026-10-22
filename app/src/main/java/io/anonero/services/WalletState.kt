@@ -20,6 +20,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.withContext
@@ -132,6 +133,8 @@ class WalletState(private val prefs: SharedPreferences) {
     private val userOperationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val userOperationMutex = Mutex()
     private val userOperationGeneration = AtomicLong(0L)
+    @Volatile
+    private var secureWipeCancellationId: Long = 0L
     private val userOperationTransitionLock = Any()
     private var userOperationTransitionOwner = 0L
 
@@ -571,7 +574,7 @@ class WalletState(private val prefs: SharedPreferences) {
     val incomingTx = _incomingTx.asSharedFlow()
 
     fun update() {
-        if (_blockUpdates.get()) return
+        if (_isWiping.get() || _blockUpdates.get()) return
         getWallet?.let { wallet ->
             if (wallet.isInitialized) {
                 // wallet2 may temporarily report 0 while its scan is rebuilding
@@ -702,20 +705,31 @@ class WalletState(private val prefs: SharedPreferences) {
     }
 
     fun prepareForWipe() {
+        // The gate is set before touching any other wallet state.
+        _isWiping.set(true)
+        secureWipeCancellationId = userOperationGeneration.incrementAndGet()
         prefs.edit()
             .remove(PREF_WALLET_HAS_COMPLETED_SYNC)
             .remove(PREF_LAST_COMPLETED_SCAN_HEIGHT)
             .apply()
         invalidStartupHeightSince = 0L
-        _isWiping.set(true)
         ordinaryCatchUpInProgress = false
         _blockUpdates.set(true)
         _backgroundSync.value = false
         nativeBackgroundSyncActive.set(false)
 
-        // Do not carry restore/sync UI state into a newly restored wallet in
-        // the same process. A secure wipe must also terminate the old progress
-        // window held by this singleton state object.
+        // Stop polling/queued work. The secure-delete worker has a separate scope.
+        backgroundLifecycleScope.cancel()
+        customRescanScope.cancel()
+        userOperationScope.cancel()
+        customRescanJob?.cancel()
+        customRescanFinishJob?.cancel()
+        scanDataRefreshJob?.cancel()
+        scanDataRefreshRunning.set(false)
+        customRescanRequesting.set(false)
+        customRescanScanStarted.set(false)
+        customRescanFinishStarted.set(false)
+
         restoreProgressStartHeight = null
         restoreProgressRescanStarted = false
         restoreProgressInitialWalletHeight = null
@@ -723,10 +737,26 @@ class WalletState(private val prefs: SharedPreferences) {
         restoreProgressInProgress = false
         restoreProgressCompleted = false
         restoreProgressFinalizing = false
+        customRescanPreparing = false
+        customRescanInProgress = false
+        customRescanFinalizing = false
+        customRescanFinished = false
+        customRescanCompletionCallback = null
         lastScanDataRefreshAt = 0L
-        scanDataRefreshRunning.set(false)
         _syncProgress.value = null
         _isSyncing.set(false)
+        _manualRefreshInProgress.value = false
+        _isLoading.value = false
+        userOperationTransitionInProgress = false
+        _userOperationTransition.value = false
+    }
+
+    fun cancelNativeWorkForSecureWipe(wallet: Wallet?) {
+        if (!_isWiping.get() || wallet == null || !wallet.isInitialized) return
+        val operationId = secureWipeCancellationId
+        if (operationId <= 0L) return
+        runCatching { wallet.cancelCurrentOperation(operationId) }
+            .onFailure { Timber.tag(TAG).e(it, "Native operation cancellation request failed") }
     }
 
     fun isWiping(): Boolean = _isWiping.get()
@@ -762,6 +792,7 @@ class WalletState(private val prefs: SharedPreferences) {
     }
     
     suspend fun enterBackgroundSync(): Boolean = bgSyncMutex.withLock {
+        if (_isWiping.get()) return false
         val wallet = getWallet ?: return false
         if (!wallet.isInitialized || backgroundSync) return false
         emitUnlockShortcut(LockScreenShortCut.HOME)
@@ -807,6 +838,7 @@ class WalletState(private val prefs: SharedPreferences) {
     }
 
     suspend fun exitBackgroundSync(pin: String): Boolean = bgSyncMutex.withLock {
+        if (_isWiping.get()) return false
         val wallet = getWallet ?: return false
         if (AnonConfig.viewOnly) {
             _backgroundSync.value = false
@@ -859,6 +891,7 @@ class WalletState(private val prefs: SharedPreferences) {
     }
 
     fun setConnectionStatus(status: Wallet.ConnectionStatus) {
+        if (_isWiping.get()) return
         val previous = _previousConnectionStatus.getAndSet(status)
         _connectionStatus.update { status }
         if (previous == Wallet.ConnectionStatus.ConnectionStatus_Disconnected &&
@@ -1143,12 +1176,17 @@ class WalletState(private val prefs: SharedPreferences) {
      * overload so the pull gesture remains active until the explicit refresh work ends.
      */
     fun refresh() {
+        if (_isWiping.get()) return
         userOperationScope.launch {
             refresh(manual = true)
         }
     }
 
     suspend fun refresh(manual: Boolean) {
+        if (_isWiping.get()) {
+            if (manual) _manualRefreshInProgress.value = false
+            return
+        }
         val wallet = getWallet
         if (wallet?.isInitialized != true || _isWiping.get()) {
             if (manual) _manualRefreshInProgress.value = false
@@ -1279,6 +1317,7 @@ class WalletState(private val prefs: SharedPreferences) {
      */
     suspend fun <T> executeLatestWalletQuery(query: (Wallet) -> T): Result<T> {
         _manualRefreshInProgress.value = false
+        if (_isWiping.get()) return Result.failure(IllegalStateException("Secure deletion in progress"))
         val wallet = getWallet
             ?: return Result.failure(IllegalStateException("Wallet not initialized"))
         val operationId = beginUserOperationTransition()
@@ -1372,6 +1411,7 @@ class WalletState(private val prefs: SharedPreferences) {
         onPrepared: (suspend () -> Unit)? = null
     ): Result<Boolean> {
         _manualRefreshInProgress.value = false
+        if (_isWiping.get()) return Result.failure(IllegalStateException("Secure deletion in progress"))
         val wallet = getWallet
             ?: return Result.failure(IllegalStateException("Wallet not initialized"))
         if (!wallet.isInitialized) {
@@ -1879,5 +1919,5 @@ class WalletState(private val prefs: SharedPreferences) {
         }
     }
 
-    private val getWallet get() = WalletManager.instance?.wallet
+    private val getWallet get() = if (_isWiping.get()) null else WalletManager.instance?.wallet
 }
