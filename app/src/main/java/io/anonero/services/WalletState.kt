@@ -1155,10 +1155,10 @@ class WalletState(private val prefs: SharedPreferences) {
             return
         }
 
-        if (manual) _manualRefreshInProgress.value = false
         userOperationMutex.lock()
         var manualWorkStarted = false
         try {
+            if (manual) _manualRefreshInProgress.value = false
             if (!wallet.isInitialized || _isWiping.get()) return
 
             // A reset/restore/query that owns the wallet must finish first. Preserve the
