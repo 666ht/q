@@ -39,6 +39,7 @@ import io.anonero.services.startAnonService
 import io.anonero.ui.home.LockScreen
 import io.anonero.ui.home.LockScreenMode
 import io.anonero.ui.home.LockScreenShortCut
+import io.anonero.ui.home.settings.SecureWipe
 import io.anonero.ui.home.graph.homeGraph
 import io.anonero.ui.home.graph.routes.Home
 import io.anonero.ui.onboard.OnboardViewModel
@@ -85,6 +86,12 @@ class MainActivity : ComponentActivity() {
         )
         setContent {
             val context = LocalContext.current
+            // Latch the interrupted-wipe state for this process. If the previous
+            // process died before clearing its marker, recovery must run before
+            // HomeGraph/TorSplash can initialize the deleted wallet state.
+            val wipeRecoveryAtStartup = remember(context) {
+                AnonConfig.isSecureWipePending(context)
+            }
             LaunchedEffect(context) {
                 val app = context.applicationContext as? io.anonero.AnonApplication
                 app?.recordStartupStage("MainActivity: first Compose effect started")
@@ -120,8 +127,15 @@ class MainActivity : ComponentActivity() {
                 }
             }
             Box(modifier = androidx.compose.ui.Modifier.fillMaxSize()) {
-                TorSplash(enableTor = useTor) {
+                if (wipeRecoveryAtStartup) {
+                    // Recovery takes priority over wallet navigation and Tor splash.
+                    // SecureWipe resumes the persisted deletion and exits when complete.
                     AnonNeroTheme {
+                        SecureWipe()
+                    }
+                } else {
+                    TorSplash(enableTor = useTor) {
+                        AnonNeroTheme {
                     val navController = rememberNavController()
                     navController.addOnDestinationChangedListener { x, destination, d ->
                         Timber.tag(TAG).d("destination changed to ${destination.route}")
@@ -153,7 +167,8 @@ class MainActivity : ComponentActivity() {
                             )
                         }
                     }
-                }
+                        }
+                    }
                 }
 
             }
