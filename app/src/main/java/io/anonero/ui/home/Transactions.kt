@@ -169,6 +169,9 @@ fun TransactionScreen(
     val anonPrefs = koinInject<android.content.SharedPreferences>(named(WALLET_PREFERENCES))
     val showLockScreen by walletState.backgroundSyncFlow.asLiveData().observeAsState(walletState.backgroundSync)
     val hideAmounts by walletState.hideAmountsFlow.asLiveData().observeAsState(false)
+    val syncProgress by walletState.syncProgress.collectAsState(null)
+    val blockSyncProgressVisible = syncProgress?.left?.let { it > 0L } == true
+    var manualPullRefreshInProgress by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val toastState = rememberToasterState()
     val scanUnsignedTxText = stringResource(R.string.scan_unsigned_tx)
@@ -597,7 +600,7 @@ fun TransactionScreen(
                                     showMenu = false
                                     scope.launch {
                                         view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
-                                        walletState.refresh()
+                                        walletState.refresh(manual = true)
                                     }
                                 }
                             )
@@ -650,11 +653,16 @@ fun TransactionScreen(
                 ),
             onRefresh = {
                 scope.launch {
-                    view.performHapticFeedback(
-                        HapticFeedbackConstants.CONFIRM
-                    )
-                    walletState.refresh()
-                    refreshState.animateToHidden()
+                    manualPullRefreshInProgress = true
+                    try {
+                        view.performHapticFeedback(
+                            HapticFeedbackConstants.CONFIRM
+                        )
+                        walletState.refresh(manual = true)
+                    } finally {
+                        refreshState.animateToHidden()
+                        manualPullRefreshInProgress = false
+                    }
                 }
             },
             indicator = {}
@@ -665,10 +673,15 @@ fun TransactionScreen(
                 stickyHeader(key = "progress") {
                     Column {
                         WalletProgressIndicator(
-                            refreshIndicatorProgress = refreshState.distanceFraction
+                            refreshIndicatorProgress = if (
+                                blockSyncProgressVisible
+                            ) 0f else refreshState.distanceFraction
                         )
                         AnimatedVisibility(
-                            visible = refreshState.distanceFraction > .2f && !showIndefiniteLoading,
+                            visible = !manualPullRefreshInProgress &&
+                                !blockSyncProgressVisible &&
+                                refreshState.distanceFraction > .2f &&
+                                !showIndefiniteLoading,
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Text(
