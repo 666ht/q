@@ -57,6 +57,7 @@ class AnonWalletHandler(
 
     fun markSecureWipeRequestStartedInProcess() {
         secureWipeRequestStartedInProcess.set(true)
+        AnonConfig.context?.markSecureWipeStartedInProcess()
     }
 
     fun markSecureWipeCleanupStarted() {
