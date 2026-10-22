@@ -202,7 +202,28 @@ class MoneroHandlerThread(
             syncHeight
         }
 
-        val progressStart = if (restoreActive) restoreStart else 0L
+        // A newly created Polyseed wallet may have a native birthday-derived
+        // refresh-from height. Use the actual scan origin so the percentage and
+        // remaining-block count describe the same range (instead of measuring from
+        // genesis while the wallet starts scanning later).
+        val progressStart = if (restoreActive) {
+            restoreStart
+        } else {
+            runCatching { wallet.getRestoreHeight() }
+                .getOrDefault(0L)
+                .coerceAtLeast(0L)
+        }
+        // A restore/birthday height can exceed the connected node's current tip
+        // (for example, with a stale or wrong-network node). Do not clamp the
+        // target up to the start and report a false 100% / zero remaining.
+        if (effectiveTarget < progressStart) {
+            Timber.tag(name).w(
+                "Waiting for daemon height to reach scan start: start=%d daemon=%d",
+                progressStart, effectiveTarget
+            )
+            walletState.waitForSyncHeights()
+            return
+        }
 
         val progress = calculateSyncProgress(progressStart, currentHeight, effectiveTarget)
         val left = progress.left
