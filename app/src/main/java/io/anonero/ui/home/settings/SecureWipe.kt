@@ -167,6 +167,7 @@ class SecureWipeViewModel(
                         check(AnonConfig.clearAllAppData(activity.applicationContext)) {
                             "Final application-data cleanup is incomplete"
                         }
+                        AnonConfig.context?.markSecureWipeCompletedInProcess()
 
                         _wipeProgress.postValue(1f)
                         _wipeProgressMessage.postValue("钱包已成功安全删除")
