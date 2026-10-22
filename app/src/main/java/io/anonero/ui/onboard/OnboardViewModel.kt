@@ -182,12 +182,15 @@ class OnboardViewModel(private val prefs: SharedPreferences) : ViewModel() {
         val crazyPass: String = KeyStoreHelper.getCrazyPass(AnonConfig.context, passPhrase)
         prefs.edit(commit = true) {
             putString(PREFS_PASSPHRASE_HASH, crazyPass)
-            restorePayload?.restoreHeight?.let {
+            // A missing/zero height means restore from genesis. Remove any
+            // prior one-shot height so a previous wallet's value cannot override it.
+            restorePayload?.restoreHeight?.takeIf { it > 0L }?.let {
                 putLong(RESTORE_HEIGHT, it)
-            }
+            } ?: remove(RESTORE_HEIGHT)
             putBoolean(RESTORE_NEEDS_RESCAN, true)
-            restorePayload?.restoreHeight?.let { putLong("MNEMONIC_SELECTED_RESTORE_HEIGHT", it) }
-                ?: remove("MNEMONIC_SELECTED_RESTORE_HEIGHT")
+            restorePayload?.restoreHeight?.takeIf { it > 0L }?.let {
+                putLong("MNEMONIC_SELECTED_RESTORE_HEIGHT", it)
+            } ?: remove("MNEMONIC_SELECTED_RESTORE_HEIGHT")
         }
         try {
             anonWallet.close()
