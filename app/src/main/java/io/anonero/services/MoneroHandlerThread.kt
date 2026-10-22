@@ -36,6 +36,7 @@ class MoneroHandlerThread(
     }
 
     override fun moneyReceived(txId: String?, amount: Long) {
+        if (walletState.isWiping()) return
         Timber.tag(name).i("moneyReceived: %s", amount)
         WalletManager.instance?.wallet?.store()
     }
@@ -43,6 +44,7 @@ class MoneroHandlerThread(
     override fun unconfirmedMoneyReceived(txId: String?, amount: Long) {}
 
     override fun newBlock(height: Long) {
+        if (walletState.isWiping()) return
         if (walletState.heightRefreshInProgress) {
             val status = runCatching { wallet.fullStatus.connectionStatus }.getOrNull()
             val daemonHeight = runCatching { wallet.getDaemonBlockChainHeight() }.getOrDefault(0L)
@@ -224,6 +226,7 @@ class MoneroHandlerThread(
     }
 
     override fun updated() {
+        if (walletState.isWiping()) return
         if (walletState.userOperationTransitionInProgress) {
             Timber.tag(name).d("updated() ignored during latest-operation handoff")
             return
@@ -244,6 +247,7 @@ class MoneroHandlerThread(
     }
 
     override fun refreshed() {
+        if (walletState.isWiping()) return
         val status = runCatching { wallet.fullStatus.connectionStatus }.getOrNull()
         val daemonHeight = runCatching { wallet.getDaemonBlockChainHeight() }.getOrDefault(0L)
         if (walletState.heightRefreshInProgress) {
