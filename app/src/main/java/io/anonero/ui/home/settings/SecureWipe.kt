@@ -317,10 +317,16 @@ fun SecureWipe(
         ), label = "animatedProgress"
     )
 
-    val backgroundBlur: Float by animateFloatAsState(
+    val animatedBackgroundBlur by animateFloatAsState(
         if (passPhraseDialog) 6f else 0f,
         label = "blur-radius"
     )
+    // Never blur the progress UI once deletion has started. The previous animated
+    // blur was applied to the whole Scaffold, so a blocked transition could leave
+    // the deletion ring/text looking permanently blurred.
+    val backgroundBlur = if (
+        wipeSubmitting || wipePending || anonWalletHandler.isSecureWipeInProgress()
+    ) 0f else animatedBackgroundBlur
 
     LaunchedEffect(passPhraseDialog) {
         if (passPhraseDialog) {
