@@ -179,6 +179,20 @@ object AnonConfig {
         val preserveMarker = marker.isFile
         var success = true
 
+        // Keep Android's standard app-data directories themselves. Removing these
+        // directory roots while this process is alive can leave the next startup
+        // with missing files/cache/preferences/database parents. Their contents are
+        // removed completely; only empty framework-owned directory shells remain.
+        val preservedDirectoryNames = setOf(
+            "files",
+            "cache",
+            "code_cache",
+            "no_backup",
+            "shared_prefs",
+            "databases"
+        )
+        val preservedDirectories = preservedDirectoryNames.map { File(dataRoot, it) }
+
         val children = dataRoot.listFiles()
         if (children == null) {
             success = false
@@ -187,7 +201,24 @@ object AnonConfig {
                 if (preserveMarker && child.absoluteFile == marker.absoluteFile) {
                     return@forEach
                 }
-                if (!child.deleteRecursively()) success = false
+                if (child.isDirectory && child.name in preservedDirectoryNames) {
+                    if (!deleteContents(child)) success = false
+                } else if (!child.deleteRecursively()) {
+                    success = false
+                }
+            }
+        }
+
+        // Re-create any standard empty parent that did not exist beforehand. This
+        // avoids a post-wipe launch racing a missing app-private directory.
+        preservedDirectories.forEach { directory ->
+            if (!directory.exists() && !directory.mkdirs() && !directory.isDirectory) {
+                success = false
+            }
+            if (directory.exists() &&
+                (!directory.isDirectory || directory.listFiles()?.isEmpty() != true)
+            ) {
+                success = false
             }
         }
 
@@ -202,9 +233,14 @@ object AnonConfig {
             if (!deleteContents(directory)) success = false
         }
 
-        val otherPrivateFilesRemain = dataRoot.listFiles()
-            ?.any { !(preserveMarker && it.absoluteFile == marker.absoluteFile) }
-            ?: true
+        val remaining = dataRoot.listFiles()
+        val otherPrivateFilesRemain = remaining == null || remaining.any { child ->
+            val isMarker = preserveMarker && child.absoluteFile == marker.absoluteFile
+            val isEmptyFrameworkDir = child.isDirectory &&
+                child.name in preservedDirectoryNames &&
+                child.listFiles()?.isEmpty() == true
+            !isMarker && !isEmptyFrameworkDir
+        }
         val externalDataRemains = externalDirs.any { directory ->
             directory.exists() && directory.listFiles()?.isNotEmpty() != false
         }
@@ -219,12 +255,18 @@ object AnonConfig {
         }
 
         walletFound = false
-        return dataRoot.listFiles()?.isEmpty() == true &&
+        val privateDataIsEmpty = dataRoot.listFiles()?.all { child ->
+            child.isDirectory &&
+                child.name in preservedDirectoryNames &&
+                child.listFiles()?.isEmpty() == true
+        } == true
+        return privateDataIsEmpty &&
             externalDirs.all { !it.exists() || it.listFiles()?.isEmpty() == true }
     }
 
     private fun deleteContents(directory: File): Boolean {
         if (!directory.exists()) return true
+        if (!directory.isDirectory) return false
         val children = directory.listFiles() ?: return false
         var success = true
         children.forEach { child ->
