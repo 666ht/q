@@ -68,28 +68,29 @@ class AnonNeroService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (
-            intent?.action == "start" &&
-            (walletState.isWiping() || AnonConfig.isSecureWipePending(this))
-        ) {
+        // This service should only survive when explicitly started for wallet
+        // notifications. Android may recreate a START_STICKY service with a null
+        // Intent after process death; never revive it during/after secure deletion.
+        if (intent?.action != "start") {
+            stopForeground(STOP_FOREGROUND_REMOVE)
             stopSelfResult(startId)
             return START_NOT_STICKY
         }
-        if (intent?.action == "start") {
-            if (!started) {
-                runCatching {
-                    start()
-                    started = true
-                }.onFailure {
-                    Timber.tag(TAG).e(it, "Failed to start foreground notification service")
-                    stopSelfResult(startId)
-                }
-            }
-        }
-        if (intent?.action == "stop") {
-            stopForeground(STOP_FOREGROUND_REMOVE) // Properly removes the notification
-            stopSelf() // Stops the service completely
+        if (walletState.isWiping() || AnonConfig.isSecureWipePending(this)) {
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            stopSelfResult(startId)
             return START_NOT_STICKY
+        }
+        if (!started) {
+            runCatching {
+                start()
+                started = true
+            }.onFailure {
+                Timber.tag(TAG).e(it, "Failed to start foreground notification service")
+                stopForeground(STOP_FOREGROUND_REMOVE)
+                stopSelfResult(startId)
+                return START_NOT_STICKY
+            }
         }
         return START_STICKY
     }

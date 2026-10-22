@@ -186,9 +186,13 @@ class MainActivity : ComponentActivity() {
     }
 
     fun stopNotificationService() {
-        Intent(applicationContext, AnonNeroService::class.java).also {
-            it.action = "stop"
-            ContextCompat.startForegroundService(applicationContext, it)
+        // Stopping must not start a new foreground service. Secure deletion calls
+        // this while the wallet is being torn down; startForegroundService("stop")
+        // can recreate a service after it has already stopped and race process exit.
+        runCatching {
+            stopService(Intent(applicationContext, AnonNeroService::class.java))
+        }.onFailure {
+            Timber.tag(TAG).e(it, "Unable to stop notification service")
         }
     }
 
