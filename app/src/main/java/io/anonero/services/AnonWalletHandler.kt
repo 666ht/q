@@ -289,10 +289,13 @@ class AnonWalletHandler(
 
     fun updateDaemon(node: io.anonero.model.node.Node?) {
         if (secureWipePriorityActive()) return
+        if (secureWipePriorityActive()) return
         walletState.setLoading(true)
         val wallet = WalletManager.instance?.wallet
         val walletManager = WalletManager.instance
+        if (secureWipePriorityActive()) return
         wallet?.pauseRefresh()
+        if (secureWipePriorityActive()) return
         try {
             if (node != null) {
                 walletState.updateDaemon(
@@ -311,7 +314,9 @@ class AnonWalletHandler(
                     )
                 )
             }
+            if (secureWipePriorityActive()) return
             walletManager?.setDaemon(node)
+            if (secureWipePriorityActive()) return
             wallet?.setTrustedDaemon(true)
             walletState.setLoading(false)
         } catch (e: Exception) {
@@ -348,7 +353,9 @@ class AnonWalletHandler(
             } else {
                 return
             }
+            if (secureWipePriorityActive()) return
             WalletManager.instance?.setProxy(proxyStr)
+            if (secureWipePriorityActive()) return
             WalletManager.instance?.wallet?.setProxy(proxyStr)
         }
     }
