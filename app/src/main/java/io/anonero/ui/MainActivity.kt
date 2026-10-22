@@ -50,6 +50,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import org.koin.android.ext.android.inject
 import org.koin.androidx.compose.koinViewModel
 import org.koin.core.qualifier.named
@@ -73,6 +74,8 @@ class MainActivity : ComponentActivity() {
         val splashscreen = installSplashScreen()
         var isAppReady by mutableStateOf(false)
         super.onCreate(savedInstanceState)
+        (application as? io.anonero.AnonApplication)
+            ?.recordStartupStage("MainActivity.onCreate: before setContent")
 
         val scrimColor = Color.Black.copy(alpha = 0.1f).toArgb()
         splashscreen.setKeepOnScreenCondition { isAppReady }
@@ -82,6 +85,13 @@ class MainActivity : ComponentActivity() {
         )
         setContent {
             val context = LocalContext.current
+            LaunchedEffect(context) {
+                val app = context.applicationContext as? io.anonero.AnonApplication
+                app?.recordStartupStage("MainActivity: first Compose effect started")
+                delay(10_000)
+                app?.markStartupStable("MainActivity: Compose remained alive for 10 seconds")
+            }
+
             var walletExist by remember(context) {
                 mutableStateOf(
                     AnonConfig.isSecureWipePending(context) || AnonConfig.isWalletFileExist()

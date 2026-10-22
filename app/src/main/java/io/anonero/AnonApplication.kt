@@ -54,6 +54,36 @@ class AnonApplication : Application(), Thread.UncaughtExceptionHandler {
         secureWipeCompletedInThisProcess = true
     }
 
+    private fun startupStageFile(): File = File(filesDir, "startup_stage.txt")
+
+    private fun readStartupStage(): String? = runCatching {
+        startupStageFile().takeIf { it.isFile && it.length() > 0L }
+            ?.readText(Charsets.UTF_8)
+            ?.trim()
+    }.getOrNull()
+
+    private fun writeStartupStage(state: String, stage: String) {
+        if (runCatching { AnonConfig.isSecureWipePending(this) }.getOrDefault(true)) {
+            return
+        }
+        try {
+            val record = "$state|time=${System.currentTimeMillis()}|pid=${android.os.Process.myPid()}|stage=$stage\n"
+            FileOutputStream(startupStageFile(), false).use { output ->
+                output.write(record.toByteArray(Charsets.UTF_8))
+            }
+        } catch (e: Exception) {
+            android.util.Log.w(TAG, "Unable to record startup stage: $stage", e)
+        }
+    }
+
+    fun recordStartupStage(stage: String) {
+        writeStartupStage("IN_PROGRESS", stage)
+    }
+
+    fun markStartupStable(stage: String) {
+        writeStartupStage("HEALTHY", stage)
+    }
+
     private fun persistCrashReport(thread: Thread, throwable: Throwable) {
         if (!crashReportWriteStarted.compareAndSet(false, true)) return
         try {
@@ -88,7 +118,7 @@ class AnonApplication : Application(), Thread.UncaughtExceptionHandler {
      * On Android 11+, recover the system's last crash/native-crash/ANR record
      * on next startup when no matching Java crash report was already written.
      */
-    private fun persistPreviousCrashReportIfAny() {
+    private fun persistPreviousCrashReportIfAny(previousStartupStage: String? = null) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return
         if (AnonConfig.isSecureWipePending(this)) return
 
@@ -164,6 +194,22 @@ class AnonApplication : Application(), Thread.UncaughtExceptionHandler {
             }
         }
 
+        previousStartupStage?.takeIf { it.isNotBlank() }?.let { stage ->
+            val stageText = "Last persisted startup stage before this exit: $stage"
+            runCatching {
+                if (reportFile.isFile) {
+                    val existing = reportFile.readText(Charsets.UTF_8)
+                    if (!existing.contains("Last persisted startup stage before this exit:")) {
+                        FileOutputStream(reportFile, true).use { output ->
+                            output.write("\n\n$stageText\n".toByteArray(Charsets.UTF_8))
+                        }
+                    }
+                }
+            }.onFailure {
+                android.util.Log.e(TAG, "Unable to append startup-stage diagnostics", it)
+            }
+        }
+
         preferences.edit(commit = true) {
             putLong("last_processed_exit_timestamp", crashExit.timestamp)
         }
@@ -176,11 +222,21 @@ class AnonApplication : Application(), Thread.UncaughtExceptionHandler {
         AnonConfig.context = this
         val secureWipePending = AnonConfig.isSecureWipePending(this)
         if (!secureWipePending) {
+            // Recover the previous process' failure before replacing its last-stage marker.
+            persistPreviousCrashReportIfAny(readStartupStage())
+            recordStartupStage("AnonApplication.onCreate: before wallet-state initialization")
             AnonConfig.initWalletState()
+        }
+
+        if (!secureWipePending) {
+            recordStartupStage("AnonApplication.onCreate: before Koin initialization")
         }
         startKoin {
             androidContext(this@AnonApplication)
             modules(appModule)
+        }
+        if (!secureWipePending) {
+            recordStartupStage("AnonApplication.onCreate: after Koin initialization")
         }
 
         // A pending secure deletion has priority over all normal startup work.
@@ -190,16 +246,21 @@ class AnonApplication : Application(), Thread.UncaughtExceptionHandler {
             return
         }
 
-        persistPreviousCrashReportIfAny()
+        recordStartupStage("AnonApplication.onCreate: before WalletManager initialization")
         initConfigs()
+        recordStartupStage("AnonApplication.onCreate: after WalletManager initialization")
         plantLog()
+        recordStartupStage("AnonApplication.onCreate: after Timber/log initialization")
         val torService: TorService = get()
+        recordStartupStage("AnonApplication.onCreate: after TorService construction")
         val prefs: SharedPreferences = get(named(WALLET_PREFERENCES))
         val host = prefs.getString(NodeFields.RPC_HOST.value, "")
         if (!host.isNullOrEmpty()) {
+            recordStartupStage("AnonApplication.onCreate: before Tor start request")
             torService.start()
         }
         AnonConfig.clearSpendCacheFiles(this)
+        recordStartupStage("AnonApplication.onCreate: completed")
     }
 
     private fun plantLog() {
