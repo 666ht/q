@@ -1233,30 +1233,37 @@ class WalletState(private val prefs: SharedPreferences) {
                 wallet.refreshCoins(force = true)
                 update()
             }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
             if (manual) _manualRefreshInProgress.value = false
             Timber.tag(TAG).e(e, "Manual wallet refresh failed")
         } finally {
-            if (manualWorkStarted && !_isWiping.get()) {
-                val scanStillOwnsWallet =
-                    ordinaryCatchUpInProgress ||
-                        _isSyncing.get() ||
-                        _syncProgress.value != null ||
-                        customRescanPreparing ||
-                        customRescanInProgress ||
-                        customRescanFinalizing ||
-                        restoreProgressInProgress ||
-                        restoreProgressFinalizing ||
-                        restoreProgressCompleted ||
-                        (!wallet.isSynchronized && wallet.isInitialized)
+            try {
+                if (manualWorkStarted && !_isWiping.get()) {
+                    val scanStillOwnsWallet =
+                        ordinaryCatchUpInProgress ||
+                            _isSyncing.get() ||
+                            _syncProgress.value != null ||
+                            customRescanPreparing ||
+                            customRescanInProgress ||
+                            customRescanFinalizing ||
+                            restoreProgressInProgress ||
+                            restoreProgressFinalizing ||
+                            restoreProgressCompleted ||
+                            (!wallet.isSynchronized && wallet.isInitialized)
 
-                setLoading(scanStillOwnsWallet)
-                if (!scanStillOwnsWallet) {
-                    _manualRefreshInProgress.value = false
+                    setLoading(scanStillOwnsWallet)
+                    if (!scanStillOwnsWallet) {
+                        _manualRefreshInProgress.value = false
+                    }
+                    // update() contains JNI reads; never run it on the Compose thread,
+                    // and always release the operation mutex even if a read fails.
+                    withContext(Dispatchers.IO) { update() }
                 }
-                update()
+            } finally {
+                userOperationMutex.unlock()
             }
-            userOperationMutex.unlock()
         }
     }
 
