@@ -364,6 +364,11 @@ class AnonWalletHandler(
 
             val walletManager = WalletManager.instance
             val wallet = walletManager?.wallet
+
+            // Submit the native cancellation request before pause/close. This call is
+            // non-blocking and lets an active scan/refresh unwind before native teardown.
+            walletState.cancelNativeWorkForSecureWipe(wallet)
+
             if (wallet != null && wallet.isInitialized) {
                 if (secureWipeWasBackgroundSync.get()) {
                     check(wallet.stopBackgroundSync(passPhrase)) {
