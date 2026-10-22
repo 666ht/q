@@ -127,6 +127,10 @@ class SecureWipeViewModel(
         anonWalletHandler.prepareForSecureWipeRequest()
 
         return anonWalletHandler.scope.launch(Dispatchers.IO) {
+            var walletFilesDeleted = false
+            var preferencesCleared = false
+            var nodesCleared = false
+            var logsAndKeysCleared = false
             try {
                 while (true) {
                     try {
@@ -138,36 +142,58 @@ class SecureWipeViewModel(
                         // the application-scoped Tor daemon running. Await its stop
                         // before removing the directories it may still be using.
                         anonWalletHandler.stopTorForSecureWipe()
-                        _wipeProgress.postValue(.18f)
-                        _wipeProgressMessage.postValue("正在恢复安全删除钱包")
 
-                        val walletDir = File(activity.filesDir, "wallets")
-                        check(!walletDir.exists() || walletDir.deleteRecursively()) {
-                            "Wallet files could not be deleted"
+                        // Keep the same staged pacing as the upstream wipe animation,
+                        // while progressing only after each real cleanup step succeeds.
+                        if (!walletFilesDeleted) {
+                            _wipeProgress.postValue(.28f)
+                            _wipeProgressMessage.postValue("正在恢复安全删除钱包")
+                            val walletDir = File(activity.filesDir, "wallets")
+                            check(!walletDir.exists() || walletDir.deleteRecursively()) {
+                                "Wallet files could not be deleted"
+                            }
+                            check(!walletDir.exists()) { "Wallet files remain after deletion" }
+                            walletFilesDeleted = true
+                            delay(1_000)
+                            _wipeProgress.postValue(.48f)
+                            _wipeProgressMessage.postValue("钱包数据已清除")
+                            delay(1_200)
                         }
-                        check(!walletDir.exists()) { "Wallet files remain after deletion" }
 
-                        _wipeProgress.postValue(.42f)
-                        _wipeProgressMessage.postValue("正在清除钱包设置")
-                        check(sharedPreferences.edit().clear().commit()) {
-                            "Unable to clear wallet preferences"
+                        if (!preferencesCleared) {
+                            _wipeProgress.postValue(.58f)
+                            _wipeProgressMessage.postValue("正在清除钱包设置")
+                            check(sharedPreferences.edit().clear().commit()) {
+                                "Unable to clear wallet preferences"
+                            }
+                            preferencesCleared = true
+                            delay(800)
                         }
 
-                        _wipeProgress.postValue(.58f)
-                        _wipeProgressMessage.postValue("正在清除节点配置")
-                        nodesRepository.clearAll()
+                        if (!nodesCleared) {
+                            _wipeProgress.postValue(.68f)
+                            _wipeProgressMessage.postValue("正在清除节点配置")
+                            nodesRepository.clearAll()
+                            nodesCleared = true
+                            delay(1_200)
+                        }
 
-                        _wipeProgress.postValue(.70f)
-                        _wipeProgressMessage.postValue("正在清除日志和密钥")
-                        logRepository.clear()
-                        KeyStoreHelper.clearWalletCredentials(activity.applicationContext, "anon")
-                        AnonConfig.clearSpendCacheFiles(activity.applicationContext)
-                        AnonConfig.disposeState()
+                        if (!logsAndKeysCleared) {
+                            _wipeProgress.postValue(.76f)
+                            _wipeProgressMessage.postValue("正在清除日志和密钥")
+                            delay(1_000)
+                            logRepository.clear()
+                            KeyStoreHelper.clearWalletCredentials(activity.applicationContext, "anon")
+                            AnonConfig.clearSpendCacheFiles(activity.applicationContext)
+                            AnonConfig.disposeState()
+                            logsAndKeysCleared = true
+                        }
 
                         _wipeProgress.postValue(.86f)
                         _wipeProgressMessage.postValue("正在清除应用全部数据")
-                        // clearAllAppData keeps the root-level recovery marker until
-                        // every other private/external app-data file has been removed.
+                        // Keep the success state behind a visible final phase. The
+                        // recovery marker remains until clearAllAppData finishes.
+                        delay(1_200)
                         check(AnonConfig.clearAllAppData(activity.applicationContext)) {
                             "Final application-data cleanup is incomplete"
                         }
@@ -202,6 +228,9 @@ class SecureWipeViewModel(
 
         return anonWalletHandler.scope.launch(Dispatchers.IO) {
             var nativeWalletDeletionCompleted = false
+            var preferencesCleared = false
+            var nodesCleared = false
+            var logsAndKeysCleared = false
             try {
                 // This loop is intentionally retry-based: after the deletion password
                 // is accepted, no error dialog or password prompt can stop the flow.
@@ -219,31 +248,46 @@ class SecureWipeViewModel(
                                 "Wallet deletion did not finish"
                             }
                             nativeWalletDeletionCompleted = true
+                            delay(1_000)
                             _wipeProgress.postValue(.48f)
                             _wipeProgressMessage.postValue("钱包数据已清除")
+                            delay(1_200)
                         }
 
-                        _wipeProgress.postValue(.58f)
-                        _wipeProgressMessage.postValue("正在清除钱包设置")
-                        check(sharedPreferences.edit().clear().commit()) {
-                            "Unable to clear wallet preferences"
+                        if (!preferencesCleared) {
+                            _wipeProgress.postValue(.58f)
+                            _wipeProgressMessage.postValue("正在清除钱包设置")
+                            check(sharedPreferences.edit().clear().commit()) {
+                                "Unable to clear wallet preferences"
+                            }
+                            preferencesCleared = true
+                            delay(800)
                         }
 
-                        _wipeProgress.postValue(.68f)
-                        _wipeProgressMessage.postValue("正在清除节点配置")
-                        nodesRepository.clearAll()
+                        if (!nodesCleared) {
+                            _wipeProgress.postValue(.68f)
+                            _wipeProgressMessage.postValue("正在清除节点配置")
+                            nodesRepository.clearAll()
+                            nodesCleared = true
+                            delay(1_200)
+                        }
 
-                        _wipeProgress.postValue(.76f)
-                        _wipeProgressMessage.postValue("正在清除日志和密钥")
-                        logRepository.clear()
-                        KeyStoreHelper.clearWalletCredentials(activity.applicationContext, "anon")
-                        AnonConfig.clearSpendCacheFiles(activity.applicationContext)
-                        AnonConfig.disposeState()
+                        if (!logsAndKeysCleared) {
+                            _wipeProgress.postValue(.76f)
+                            _wipeProgressMessage.postValue("正在清除日志和密钥")
+                            delay(1_000)
+                            logRepository.clear()
+                            KeyStoreHelper.clearWalletCredentials(activity.applicationContext, "anon")
+                            AnonConfig.clearSpendCacheFiles(activity.applicationContext)
+                            AnonConfig.disposeState()
+                            logsAndKeysCleared = true
+                        }
 
                         _wipeProgress.postValue(.86f)
                         _wipeProgressMessage.postValue("正在清除应用全部数据")
-                        // This is the final destructive phase. The marker is the last
-                        // item clearAllAppData removes, so an interrupted cleanup can resume.
+                        // This is the final destructive phase. Keep the recovery marker
+                        // until app-data cleanup and residue checks have actually completed.
+                        delay(1_200)
                         check(AnonConfig.clearAllAppData(activity.applicationContext)) {
                             "Final application-data cleanup is incomplete"
                         }
