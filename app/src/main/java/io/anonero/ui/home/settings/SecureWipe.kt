@@ -340,21 +340,35 @@ fun SecureWipe(
 
         if (progressMessage == "钱包已成功安全删除") {
             val completedActivity = activity
-            if (completedActivity != null &&
-                !completedActivity.isFinishing &&
-                !completedActivity.isDestroyed
-            ) {
-                completedActivity.startActivity(
+            // Always leave the wallet process after a successful full-data wipe.
+            // Do not make process termination conditional on Activity lifecycle state:
+            // a finishing/destroyed Activity can otherwise leave the process alive with
+            // its old WalletState singleton and stale deletion gate.
+            runCatching {
+                context.applicationContext.startActivity(
                     Intent(Intent.ACTION_MAIN).apply {
                         addCategory(Intent.CATEGORY_HOME)
                         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                     }
                 )
-                completedActivity.finishAndRemoveTask()
-                Handler(Looper.getMainLooper()).postDelayed({
-                    Process.killProcess(Process.myPid())
-                }, 350)
+            }.onFailure {
+                Timber.tag(TAG).e(it, "Unable to open launcher after secure deletion")
             }
+            if (completedActivity != null &&
+                !completedActivity.isFinishing &&
+                !completedActivity.isDestroyed
+            ) {
+                runCatching { completedActivity.finishAndRemoveTask() }
+                    .onFailure {
+                        Timber.tag(TAG).e(it, "Unable to remove secure-delete task")
+                    }
+            }
+            // Kill even when the Activity has already started finishing. Continuing
+            // with the old application-scoped wallet/Tor state after deleting all app
+            // data can race the first clean launch and recreate partially cleared state.
+            Handler(Looper.getMainLooper()).postDelayed({
+                Process.killProcess(Process.myPid())
+            }, 350)
         }
     }
 
