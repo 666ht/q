@@ -708,6 +708,8 @@ class WalletState(private val prefs: SharedPreferences) {
         // The gate is set before touching any other wallet state.
         _isWiping.set(true)
         secureWipeCancellationId = userOperationGeneration.incrementAndGet()
+        // Wake/cancel any reset waiting for an ordinary-refresh height callback.
+        finishOrdinaryHeightRefresh()
         prefs.edit()
             .remove(PREF_WALLET_HAS_COMPLETED_SYNC)
             .remove(PREF_LAST_COMPLETED_SCAN_HEIGHT)
