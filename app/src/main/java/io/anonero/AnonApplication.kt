@@ -41,6 +41,12 @@ class AnonApplication : Application(), Thread.UncaughtExceptionHandler {
     private val defaultHandler =
         Thread.getDefaultUncaughtExceptionHandler()
     private val crashReportWriteStarted = AtomicBoolean(false)
+    @Volatile
+    private var secureWipeStartedInThisProcess = false
+
+    fun markSecureWipeStartedInProcess() {
+        secureWipeStartedInThisProcess = true
+    }
 
     private fun persistCrashReport(thread: Thread, throwable: Throwable) {
         if (!crashReportWriteStarted.compareAndSet(false, true)) return
@@ -241,10 +247,14 @@ class AnonApplication : Application(), Thread.UncaughtExceptionHandler {
     override fun uncaughtException(t: Thread, e: Throwable) {
         // A wipe request has higher priority than crash reporting. Do not recreate
         // files after secure deletion has been requested or completed.
-        if (!AnonConfig.isSecureWipePending(this)) {
-            persistCrashReport(t, e)
+        runCatching {
+            if (!secureWipeStartedInThisProcess && !AnonConfig.isSecureWipePending(this)) {
+                persistCrashReport(t, e)
+            }
+        }.onFailure {
+            android.util.Log.e(TAG, "Unable to check crash-report policy", it)
         }
-        Timber.tag(TAG).e(e)
+        runCatching { Timber.tag(TAG).e(e) }
         defaultHandler?.uncaughtException(t, e)
     }
 
