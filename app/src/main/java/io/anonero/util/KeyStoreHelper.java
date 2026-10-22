@@ -44,6 +44,9 @@ import java.security.Signature;
 import java.security.SignatureException;
 import java.security.UnrecoverableEntryException;
 import java.security.cert.CertificateException;
+import java.util.ArrayList;
+import java.util.Enumeration;
+import java.util.List;
 import java.util.Calendar;
 import java.util.GregorianCalendar;
 
@@ -187,28 +190,95 @@ public class KeyStoreHelper {
         }
     }
 
-    private static void deleteKeys(String alias) throws KeyStoreException {
+    private static KeyStore loadAndroidKeyStore() throws KeyStoreException {
         KeyStore keyStore = KeyStore.getInstance(SecurityConstants.KEYSTORE_PROVIDER_ANDROID_KEYSTORE);
         try {
             keyStore.load(null);
-            keyStore.deleteEntry(alias);
         } catch (IOException | NoSuchAlgorithmException | CertificateException ex) {
-            Timber.tag(TAG).e(ex);
+            throw new KeyStoreException("Unable to load Android Keystore", ex);
+        }
+        return keyStore;
+    }
+
+    private static void deleteKeys(String alias) throws KeyStoreException {
+        KeyStore keyStore = loadAndroidKeyStore();
+        if (keyStore.containsAlias(alias)) {
+            keyStore.deleteEntry(alias);
+        }
+        // A successful deleteEntry call is not enough: verify that Android Keystore
+        // no longer exposes the alias before reporting the cleanup as complete.
+        if (keyStore.containsAlias(alias)) {
+            throw new KeyStoreException("Android Keystore alias remains after deletion: " + alias);
         }
     }
 
     public static void clearWalletCredentials(@NonNull Context context, String wallet) {
+        SharedPreferences passwordPreferences = context.getSharedPreferences(
+                SecurityConstants.WALLET_PASS_PREFS_NAME, Context.MODE_PRIVATE);
         String walletKeyAlias = SecurityConstants.WALLET_PASS_KEY_PREFIX + wallet;
+        List<String> aliasesToDelete = new ArrayList<>();
+
+        // Discover all wallet password keys, including keys left behind by older
+        // wallet names. Only remove aliases owned by this helper: walletKey-* and
+        // the shared MonerujoRSA password-protection key.
         try {
-            deleteKeys(walletKeyAlias);
-            deleteKeys(RSA_ALIAS);
+            KeyStore keyStore = loadAndroidKeyStore();
+            Enumeration<String> aliases = keyStore.aliases();
+            while (aliases.hasMoreElements()) {
+                String alias = aliases.nextElement();
+                if (RSA_ALIAS.equals(alias) ||
+                        alias.startsWith(SecurityConstants.WALLET_PASS_KEY_PREFIX)) {
+                    aliasesToDelete.add(alias);
+                }
+            }
         } catch (KeyStoreException ex) {
-            Timber.tag(TAG).e(ex, "Failed to clear wallet keystore entries");
+            throw new IllegalStateException("Unable to enumerate Android Keystore wallet keys", ex);
         }
-        context.getSharedPreferences(SecurityConstants.WALLET_PASS_PREFS_NAME, Context.MODE_PRIVATE)
-                .edit()
-                .clear()
-                .commit();
+
+        if (!aliasesToDelete.contains(walletKeyAlias)) aliasesToDelete.add(walletKeyAlias);
+        if (!aliasesToDelete.contains(RSA_ALIAS)) aliasesToDelete.add(RSA_ALIAS);
+        for (String walletName : passwordPreferences.getAll().keySet()) {
+            String alias = SecurityConstants.WALLET_PASS_KEY_PREFIX + walletName;
+            if (!aliasesToDelete.contains(alias)) aliasesToDelete.add(alias);
+        }
+
+        // Attempt every key independently. One failed alias must not prevent
+        // other wallet keys from being deleted; a later verification decides
+        // whether the secure-delete flow may proceed.
+        for (String alias : aliasesToDelete) {
+            try {
+                deleteKeys(alias);
+            } catch (KeyStoreException ex) {
+                Timber.tag(TAG).e(ex, "Failed to delete Android Keystore wallet key");
+            }
+        }
+
+        // Enumerate again after the deletion attempts. If any wallet-related
+        // alias remains, fail closed so SecureWipe retries instead of reporting
+        // success or deleting the alias inventory needed for another attempt.
+        try {
+            KeyStore keyStore = loadAndroidKeyStore();
+            Enumeration<String> aliases = keyStore.aliases();
+            while (aliases.hasMoreElements()) {
+                String alias = aliases.nextElement();
+                if (RSA_ALIAS.equals(alias) ||
+                        alias.startsWith(SecurityConstants.WALLET_PASS_KEY_PREFIX)) {
+                    throw new IllegalStateException(
+                            "Android Keystore wallet key remains after secure deletion");
+                }
+            }
+            if (keyStore.containsAlias(walletKeyAlias) || keyStore.containsAlias(RSA_ALIAS)) {
+                throw new IllegalStateException(
+                        "Android Keystore wallet key remains after secure deletion");
+            }
+        } catch (KeyStoreException ex) {
+            throw new IllegalStateException("Unable to verify Android Keystore cleanup", ex);
+        }
+
+        if (!passwordPreferences.edit().clear().commit() ||
+                !passwordPreferences.getAll().isEmpty()) {
+            throw new IllegalStateException("Unable to clear stored wallet credentials");
+        }
     }
 
     public static boolean keyExists(String wallet) throws BrokenPasswordStoreException {
