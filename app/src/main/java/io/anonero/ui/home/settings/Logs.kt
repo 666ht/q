@@ -1,6 +1,15 @@
 package io.anonero.ui.home.settings
 
 import AnonNeroTheme
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.widget.Toast
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.runtime.rememberCoroutineScope
+import io.anonero.BuildConfig
+import java.io.File
+import kotlinx.coroutines.flow.first
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -84,6 +93,50 @@ class LogViewModel(private val logRepository: LogRepository) : ViewModel() {
         }
     }
 
+    /**
+     * Return the persisted uncaught-exception report after a crash. If the app has
+     * not crashed since the previous clear/install, return device info plus current
+     * log history so the user can still copy useful diagnostics.
+     */
+    suspend fun prepareCrashReportForCopy(context: Context): Pair<String, Boolean> =
+        kotlinx.coroutines.withContext(Dispatchers.IO) {
+            val crashFile = File(context.filesDir, "crash_report.txt")
+            if (crashFile.isFile && crashFile.length() > 0L) {
+                return@withContext crashFile.readText(Charsets.UTF_8) to true
+            }
+
+            val logs = logRepository.logFlow.first()
+            val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS")
+            val logText = logs.joinToString(separator = "\n") { entry ->
+                val dateTime = LocalDateTime.ofInstant(
+                    Instant.ofEpochMilli(entry.date),
+                    ZoneId.systemDefault()
+                )
+                val level = when (entry.priority) {
+                    Log.VERBOSE -> "VERBOSE"
+                    Log.DEBUG -> "DEBUG"
+                    Log.INFO -> "INFO"
+                    Log.WARN -> "WARN"
+                    Log.ERROR -> "ERROR"
+                    Log.ASSERT -> "ASSERT"
+                    else -> "UNKNOWN"
+                }
+                "${formatter.format(dateTime)} | $level | ${entry.tag} | ${entry.message}"
+            }
+
+            buildString {
+                appendLine("ANONERO DIAGNOSTIC LOG")
+                appendLine("No saved uncaught-exception report was found.")
+                appendLine("App ID: ${BuildConfig.APPLICATION_ID}")
+                appendLine("App version: ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
+                appendLine()
+                appendLine(logDeviceInfo())
+                appendLine()
+                appendLine("CURRENT LOG HISTORY")
+                append(logText.ifBlank { "No log entries available." })
+            } to false
+        }
+
     private fun logDeviceInfo(): String {
         val deviceInfo = """
         Model          : ${Build.MODEL}
@@ -145,6 +198,7 @@ fun LogViewer(
     val listState = rememberLazyListState()
     val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior(rememberTopAppBarState())
     val context = LocalContext.current
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
     Scaffold(
         topBar = {
             TopAppBar(
@@ -162,6 +216,39 @@ fun LogViewer(
                     containerColor = Color.Transparent
                 ),
                 actions = {
+                    IconButton(
+                        onClick = {
+                            scope.launch {
+                                try {
+                                    val (report, isCrashReport) =
+                                        viewModel.prepareCrashReportForCopy(context)
+                                    val clipboard = context.getSystemService(
+                                        Context.CLIPBOARD_SERVICE
+                                    ) as ClipboardManager
+                                    clipboard.setPrimaryClip(
+                                        ClipData.newPlainText("Anonero crash report", report)
+                                    )
+                                    Toast.makeText(
+                                        context,
+                                        if (isCrashReport) "闪退日志已复制" else "没有保存的闪退记录，已复制当前运行日志",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                } catch (e: Exception) {
+                                    Timber.tag(TAG).e(e, "Copy crash report failed")
+                                    Toast.makeText(
+                                        context,
+                                        "复制日志失败",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                }
+                            }
+                        }
+                    ) {
+                        Icon(
+                            Icons.Filled.ContentCopy,
+                            contentDescription = "复制闪退日志"
+                        )
+                    }
                     IconButton(
                         onClick = {
                             viewModel.prePareForShare()
