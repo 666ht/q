@@ -14,12 +14,16 @@ import io.anonero.ui.home.graph.routes.LockScreenRoute
 
 
 fun NavGraphBuilder.homeGraph(navController: NavHostController) {
-    val walletStatus = WalletManager.instance?.wallet?.status?.isOk
+    // Never call wallet.status from the navigation graph builder: it enters JNI and
+    // may wait on wallet2's native lock while refresh/scan work is active. Graph
+    // construction runs on the UI thread, so use the in-memory wallet reference to
+    // choose the initial route without blocking input/focus dispatch.
+    val walletIsOpen = WalletManager.instance?.wallet != null
     val secureWipePending = AnonConfig.context?.let {
         AnonConfig.isSecureWipePending(it)
     } == true
     navigation<Home>(
-        startDestination = if (secureWipePending || walletStatus == true) {
+        startDestination = if (secureWipePending || walletIsOpen) {
             HomeScreenRoute()
         } else {
             LockScreenRoute
