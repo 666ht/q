@@ -50,7 +50,7 @@ class AnonApplication : Application(), Thread.UncaughtExceptionHandler {
                 appendLine("Thread: ${thread.name} (id=${thread.id})")
                 appendLine("App ID: ${BuildConfig.APPLICATION_ID}")
                 appendLine("App version: ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
-                appendLine("Android: ${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT)")
+                appendLine("Android: ${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT})")
                 appendLine("Device: ${Build.MANUFACTURER} ${Build.MODEL} / ${Build.DEVICE}")
                 appendLine("Product: ${Build.PRODUCT}; Hardware: ${Build.HARDWARE}; ABI: ${Build.SUPPORTED_ABIS.joinToString()}")
                 appendLine()
