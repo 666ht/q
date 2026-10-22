@@ -169,7 +169,10 @@ class OnboardViewModel(private val prefs: SharedPreferences) : ViewModel() {
             throw Exception("unable to create wallet from seed, invalid seed length ${restorePayload!!.seed.size}")
         }
         delay(1000)
-        restorePayload?.restoreHeight?.let {
+        // Only an explicitly selected positive height overrides native recovery.
+        // For Polyseed with no selected height, preserve the native birthday-derived
+        // scan start instead of resetting it to zero after wallet creation.
+        restorePayload?.restoreHeight?.takeIf { it > 0L }?.let {
             anonWallet?.setRestoreHeight(it)
         }
         anonWallet?.store()
@@ -184,13 +187,18 @@ class OnboardViewModel(private val prefs: SharedPreferences) : ViewModel() {
             putString(PREFS_PASSPHRASE_HASH, crazyPass)
             // A missing/zero height means restore from genesis. Remove any
             // prior one-shot height so a previous wallet's value cannot override it.
-            restorePayload?.restoreHeight?.takeIf { it > 0L }?.let {
+            val selectedRestoreHeight = restorePayload?.restoreHeight?.takeIf { it > 0L }
+            selectedRestoreHeight?.let {
                 putLong(RESTORE_HEIGHT, it)
-            } ?: remove(RESTORE_HEIGHT)
-            putBoolean(RESTORE_NEEDS_RESCAN, true)
-            restorePayload?.restoreHeight?.takeIf { it > 0L }?.let {
                 putLong("MNEMONIC_SELECTED_RESTORE_HEIGHT", it)
-            } ?: remove("MNEMONIC_SELECTED_RESTORE_HEIGHT")
+            } ?: run {
+                remove(RESTORE_HEIGHT)
+                remove("MNEMONIC_SELECTED_RESTORE_HEIGHT")
+            }
+            // Native recovery already chooses the correct default:
+            // Polyseed uses its embedded birthday; legacy 25-word seeds use
+            // their native default. Only an explicit height needs a custom rescan.
+            putBoolean(RESTORE_NEEDS_RESCAN, selectedRestoreHeight != null)
         }
         try {
             anonWallet.close()
