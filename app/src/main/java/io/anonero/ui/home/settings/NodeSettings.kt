@@ -123,6 +123,7 @@ class NodeSettingsViewModel(
     // while the node page is visible. Daemon height is reported separately.
     val walletHeight: StateFlow<Long?> = flow {
         while (currentCoroutineContext().isActive) {
+            if (walletHandler.isSecureWipeInProgress() || walletState.isWiping()) return@flow
             val height = withContext(Dispatchers.IO) {
                 runCatching {
                     WalletManager.instance?.wallet
@@ -153,6 +154,7 @@ class NodeSettingsViewModel(
         var lastDaemonAddress: String? = configuredDaemonAddress()
         var lastValidHeight = walletState.cachedDaemonHeight(lastDaemonAddress)
         while (currentCoroutineContext().isActive) {
+            if (walletHandler.isSecureWipeInProgress() || walletState.isWiping()) return@flow
             val info = walletState.daemonInfo.first()
             val daemonAddress = info?.daemon?.takeIf { it.isNotBlank() }
                 ?: configuredDaemonAddress()
@@ -346,28 +348,38 @@ class NodeSettingsViewModel(
 
     // Add a new item
     fun addItem(item: Node) {
+        if (walletHandler.isSecureWipeInProgress() || walletState.isWiping()) return
         viewModelScope.launch {
+            if (walletHandler.isSecureWipeInProgress() || walletState.isWiping()) return@launch
             nodesRepository.addItemFirst(item)
         }
     }
 
     // Remove an item
     fun removeItem(nodeString: String) {
+        if (walletHandler.isSecureWipeInProgress() || walletState.isWiping()) return
         viewModelScope.launch {
+            if (walletHandler.isSecureWipeInProgress() || walletState.isWiping()) return@launch
             nodesRepository.removeItemByNodeString(nodeString)
         }
     }
 
     fun updateItem(oldNode: Node, newNode: Node) {
+        if (walletHandler.isSecureWipeInProgress() || walletState.isWiping()) return
         viewModelScope.launch {
+            if (walletHandler.isSecureWipeInProgress() || walletState.isWiping()) return@launch
             nodesRepository.removeItemByNodeString(oldNode.toNodeString())
+            if (walletHandler.isSecureWipeInProgress() || walletState.isWiping()) return@launch
             nodesRepository.addItem(newNode)
         }
     }
 
     fun disconnect() {
+        if (walletHandler.isSecureWipeInProgress() || walletState.isWiping()) return
         viewModelScope.launch(Dispatchers.IO) {
+            if (walletHandler.isSecureWipeInProgress() || walletState.isWiping()) return@launch
             WalletManager.instance?.wallet?.pauseRefresh()
+            if (walletHandler.isSecureWipeInProgress() || walletState.isWiping()) return@launch
             prefs.edit {
                 putString(
                     NodeFields.RPC_HOST.value,
