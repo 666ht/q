@@ -1190,7 +1190,11 @@ class WalletState(private val prefs: SharedPreferences) {
                     ordinaryCatchUpInProgress
 
             if (scanOwnsWallet) {
-                if (manual) deferredManualRefresh.set(true)
+                if (manual) {
+                    deferredManualRefresh.set(true)
+                    _manualRefreshInProgress.value = true
+                    setLoading(true)
+                }
                 withContext(Dispatchers.IO) {
                     if (wallet.isInitialized && !_isWiping.get()) {
                         wallet.startRefresh()
