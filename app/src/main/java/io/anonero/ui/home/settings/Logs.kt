@@ -1,6 +1,8 @@
 package io.anonero.ui.home.settings
 
 import AnonNeroTheme
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -16,6 +18,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -81,6 +84,16 @@ class LogViewModel(private val logRepository: LogRepository) : ViewModel() {
     fun clearLogs() {
         viewModelScope.launch(Dispatchers.IO) {
             logRepository.clear()
+        }
+    }
+
+    /**
+     * Copy only the log lines shown in the log viewer.
+     * Do not append device diagnostics or saved crash reports.
+     */
+    fun logsTextForCopy(): String {
+        return logLines.value.joinToString(separator = "\n") { entry ->
+            "${Formats.formatLogTime(entry.date)}:  ${entry.message}"
         }
     }
 
@@ -198,6 +211,16 @@ fun LogViewer(
                     }
                     IconButton(
                         onClick = {
+                            val clipboard = context.getSystemService(ClipboardManager::class.java)
+                            clipboard?.setPrimaryClip(
+                                ClipData.newPlainText("ANONERO Logs", viewModel.logsTextForCopy())
+                            )
+                        }
+                    ) {
+                        Icon(Icons.Default.ContentCopy, contentDescription = "Copy Logs")
+                    }
+                    IconButton(
+                        onClick = {
                             viewModel.clearLogs()
                         }
                     ) {
@@ -218,7 +241,7 @@ fun LogViewer(
                 )
                 .fillMaxSize(),
             contentPadding = PaddingValues(0.dp),
-            verticalArrangement = Arrangement.Bottom
+            verticalArrangement = Arrangement.Top
         ) {
             items(logLines.size) { index ->
                 LogLine(logLines[index])
