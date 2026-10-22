@@ -20,7 +20,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancelAndJoin
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.withContext
@@ -124,6 +123,7 @@ class WalletState(private val prefs: SharedPreferences) {
     // Activity teardown must not cancel a wallet background-transition operation
     // while native wallet2 is switching refresh modes.
     private val backgroundLifecycleScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private var backgroundLifecycleJob: Job? = null
     // Distinguish the UI PIN lock from native wallet2 background-sync mode.
     // Switching the native wallet while a foreground scan is active can race its refresh worker.
     private val nativeBackgroundSyncActive = AtomicBoolean(false)
@@ -720,10 +720,11 @@ class WalletState(private val prefs: SharedPreferences) {
         _backgroundSync.value = false
         nativeBackgroundSyncActive.set(false)
 
-        // Stop polling/queued work. The secure-delete worker has a separate scope.
-        backgroundLifecycleScope.cancel()
-        customRescanScope.cancel()
-        userOperationScope.cancel()
+        // Cancel active jobs, not the long-lived scopes. Cancelling these singleton
+        // scopes permanently disables later refresh/reset jobs in the same process.
+        // The wipe gate and generation change prevent new wallet work during deletion.
+        backgroundLifecycleJob?.cancel()
+        backgroundLifecycleJob = null
         customRescanJob?.cancel()
         customRescanFinishJob?.cancel()
         scanDataRefreshJob?.cancel()
@@ -787,7 +788,9 @@ class WalletState(private val prefs: SharedPreferences) {
      * wallet operation must not be cancelled merely because Android destroys the UI.
      */
     fun requestBackgroundSyncOnLeave() {
-        backgroundLifecycleScope.launch {
+        if (_isWiping.get()) return
+        backgroundLifecycleJob?.cancel()
+        backgroundLifecycleJob = backgroundLifecycleScope.launch {
             runCatching { enterBackgroundSync() }
                 .onFailure { Timber.tag(TAG).e(it, "Background wallet transition failed") }
         }
