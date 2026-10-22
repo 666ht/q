@@ -13,6 +13,7 @@ import android.content.pm.ServiceInfo
 import android.provider.Settings
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
+import io.anonero.AnonConfig
 import io.anonero.FOREGROUND_CHANNEL
 import io.anonero.TX_CHANNEL
 import io.anonero.R
@@ -67,6 +68,13 @@ class AnonNeroService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (
+            intent?.action == "start" &&
+            (walletState.isWiping() || AnonConfig.isSecureWipePending(this))
+        ) {
+            stopSelfResult(startId)
+            return START_NOT_STICKY
+        }
         if (intent?.action == "start") {
             if (!started) {
                 runCatching {
@@ -118,11 +126,16 @@ class AnonNeroService : Service() {
         }
         scope.launch {
             walletState.incomingTx.collect {
-                postIncomingTxNotification()
+                if (!walletState.isWiping() && !AnonConfig.isSecureWipePending(this@AnonNeroService)) {
+                    postIncomingTxNotification()
+                }
             }
         }
         scope.launch {
             walletState.syncProgress.collect {
+                if (walletState.isWiping() || AnonConfig.isSecureWipePending(this@AnonNeroService)) {
+                    return@collect
+                }
                 val torSate = if (torService.socks != null) {
                     " | Tor 守护进程：${torService.socks?.port.toString()}"
                 } else {
@@ -147,6 +160,7 @@ class AnonNeroService : Service() {
     }
 
     private suspend fun updateNotificationState() {
+        if (walletState.isWiping() || AnonConfig.isSecureWipePending(this)) return
         val mNotificationManager =
             getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val wallet = WalletManager.instance?.wallet ?: return
