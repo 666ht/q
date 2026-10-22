@@ -3,6 +3,7 @@ package io.anonero
 import android.app.Application
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.os.Build
 import android.content.SharedPreferences
 import io.anonero.di.appModule
 import io.anonero.model.WalletManager
@@ -18,6 +19,12 @@ import org.koin.core.context.GlobalContext.startKoin
 import org.koin.core.qualifier.named
 import timber.log.Timber
 import timber.log.Timber.DebugTree
+import java.io.File
+import java.io.FileOutputStream
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.concurrent.atomic.AtomicBoolean
 
 
 const val FOREGROUND_CHANNEL = "anon_foreground"
@@ -29,6 +36,36 @@ class AnonApplication : Application(), Thread.UncaughtExceptionHandler {
     private lateinit var anonLogTree: AnonLogTree
     private val defaultHandler =
         Thread.getDefaultUncaughtExceptionHandler()
+    private val crashReportWriteStarted = AtomicBoolean(false)
+
+    private fun persistCrashReport(thread: Thread, throwable: Throwable) {
+        if (!crashReportWriteStarted.compareAndSet(false, true)) return
+        try {
+            val reportFile = File(filesDir, "crash_report.txt")
+            val timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS Z", Locale.US)
+                .format(Date())
+            val report = buildString {
+                appendLine("ANONERO CRASH REPORT")
+                appendLine("Time: $timestamp")
+                appendLine("Thread: ${thread.name} (id=${thread.id})")
+                appendLine("App ID: ${BuildConfig.APPLICATION_ID}")
+                appendLine("App version: ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
+                appendLine("Android: ${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT)")
+                appendLine("Device: ${Build.MANUFACTURER} ${Build.MODEL} / ${Build.DEVICE}")
+                appendLine("Product: ${Build.PRODUCT}; Hardware: ${Build.HARDWARE}; ABI: ${Build.SUPPORTED_ABIS.joinToString()}")
+                appendLine()
+                appendLine("Uncaught exception:")
+                append(throwable.stackTraceToString())
+            }
+            FileOutputStream(reportFile, false).use { output ->
+                output.write(report.toByteArray(Charsets.UTF_8))
+                output.fd.sync()
+            }
+        } catch (writeError: Throwable) {
+            // Do not rely on Timber/async logging while the process is crashing.
+            android.util.Log.e(TAG, "Unable to persist crash report", writeError)
+        }
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -111,6 +148,11 @@ class AnonApplication : Application(), Thread.UncaughtExceptionHandler {
     }
 
     override fun uncaughtException(t: Thread, e: Throwable) {
+        // A wipe request has higher priority than crash reporting. Do not recreate
+        // files after secure deletion has been requested or completed.
+        if (!AnonConfig.isSecureWipePending(this)) {
+            persistCrashReport(t, e)
+        }
         Timber.tag(TAG).e(e)
         defaultHandler?.uncaughtException(t, e)
     }
