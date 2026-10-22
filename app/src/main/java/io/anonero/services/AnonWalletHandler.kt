@@ -56,6 +56,10 @@ class AnonWalletHandler(
         wipeInProgress.get() || secureWipeCleanupTasks.get() > 0
 
     fun markSecureWipeRequestStartedInProcess() {
+        // Capture native background-sync mode before the priority gate clears UI state.
+        if (walletState.backgroundSync) {
+            secureWipeWasBackgroundSync.set(true)
+        }
         // Publish the priority gate synchronously, before any IO job is queued.
         secureWipeRequestStartedInProcess.set(true)
         AnonConfig.context?.markSecureWipeStartedInProcess()
