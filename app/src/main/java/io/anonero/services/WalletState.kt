@@ -103,6 +103,10 @@ class WalletState(private val prefs: SharedPreferences) {
     // Those blocks must still be scanned, but should not reopen the full block-count UI.
     @Volatile
     private var normalSyncProgressVisible: Boolean? = null
+    // A previously-synced wallet may be catching up without a numeric block counter.
+    // Protect its native scan from direct history/output queries until finishSync().
+    @Volatile
+    private var ordinaryCatchUpInProgress: Boolean = false
     // First callbacks after reopening may briefly report a zero/old scan height
     // before wallet2 finishes restoring its persisted cursor.
     @Volatile
@@ -151,6 +155,7 @@ class WalletState(private val prefs: SharedPreferences) {
         _syncProgress.value = null
         _isSyncing.set(false)
         normalSyncProgressVisible = null
+        ordinaryCatchUpInProgress = false
         _isLoading.value = true
         updateScanPreparationIndicator()
         operationId
@@ -703,6 +708,7 @@ class WalletState(private val prefs: SharedPreferences) {
             .apply()
         invalidStartupHeightSince = 0L
         _isWiping.set(true)
+        ordinaryCatchUpInProgress = false
         _blockUpdates.set(true)
         _backgroundSync.value = false
         nativeBackgroundSyncActive.set(false)
@@ -987,6 +993,7 @@ class WalletState(private val prefs: SharedPreferences) {
 
     /** Keep the native catch-up scan active without showing a full sync counter. */
     fun showOrdinaryCatchUpRefresh() {
+        ordinaryCatchUpInProgress = true
         _syncProgress.value = null
         _isSyncing.set(false)
         _isLoading.value = true
@@ -1017,6 +1024,7 @@ class WalletState(private val prefs: SharedPreferences) {
     }
 
     fun finishSync() {
+        ordinaryCatchUpInProgress = false
         // Persist evidence of a completed wallet scan for the next app process.
         // The Kotlin Wallet.isSynchronized flag itself is not persistent.
         runCatching {
@@ -1130,58 +1138,125 @@ class WalletState(private val prefs: SharedPreferences) {
             !restoreProgressFinalizing
     }
 
+    /**
+     * Backward-compatible trigger for non-screen callers. The UI uses the suspending
+     * overload so the pull gesture remains active until the explicit refresh work ends.
+     */
     fun refresh() {
-        val wallet = getWallet
-        if (wallet?.isInitialized != true) return
-
-        // Ordinary pull-to-refresh must not cancel/reinitialize the current scan or
-        // clear its progress state. If the wallet is catching up, coalesce the request
-        // into that scan; its next safe callback will refresh the visible history.
         userOperationScope.launch {
-            userOperationMutex.lock()
-            try {
-                if (!wallet.isInitialized) return@launch
+            refresh(manual = true)
+        }
+    }
 
-                val scanOwnsWallet = !wallet.isSynchronized ||
-                    _isLoading.value ||
-                    _isSyncing.get() ||
-                    _syncProgress.value != null ||
+    suspend fun refresh(manual: Boolean) {
+        val wallet = getWallet
+        if (wallet?.isInitialized != true || _isWiping.get()) {
+            if (manual) _manualRefreshInProgress.value = false
+            return
+        }
+
+        if (manual) _manualRefreshInProgress.value = false
+        userOperationMutex.lock()
+        var manualWorkStarted = false
+        try {
+            if (!wallet.isInitialized || _isWiping.get()) return
+
+            // A reset/restore/query that owns the wallet must finish first. Preserve the
+            // manual request, but never reinitialize the wallet or interfere with its scan.
+            val priorityOperationOwnsWallet =
+                userOperationTransitionInProgress ||
+                    heightRefreshInProgress ||
                     customRescanPreparing ||
                     customRescanInProgress ||
                     customRescanFinalizing ||
+                    customRescanFinished ||
                     restoreProgressInProgress ||
                     restoreProgressFinalizing ||
                     restoreProgressCompleted
 
-                if (scanOwnsWallet || userOperationTransitionInProgress) {
-                    deferredManualRefresh.set(true)
-                    Timber.tag(TAG).i(
-                        "Manual refresh coalesced into current scan: synchronized=%s loading=%s syncing=%s",
-                        wallet.isSynchronized, _isLoading.value, _isSyncing.get()
-                    )
-                    return@launch
+            if (priorityOperationOwnsWallet) {
+                if (manual) deferredManualRefresh.set(true)
+                Timber.tag(TAG).i("Manual refresh queued behind the current wallet operation")
+                return
+            }
+
+            // Do not query transaction/output state while wallet2 is processing blocks.
+            // Still restart the native refresh worker: that both wakes a stalled first
+            // sync and guarantees a deferred pull has a future safe listener callback.
+            val scanOwnsWallet =
+                !wallet.isSynchronized ||
+                    _isSyncing.get() ||
+                    _syncProgress.value != null ||
+                    ordinaryCatchUpInProgress
+
+            if (scanOwnsWallet) {
+                if (manual) deferredManualRefresh.set(true)
+                withContext(Dispatchers.IO) {
+                    if (wallet.isInitialized && !_isWiping.get()) {
+                        wallet.startRefresh()
+                    }
+                }
+                Timber.tag(TAG).i(
+                    "Manual refresh handed to active scan: synchronized=%s loading=%s syncing=%s",
+                    wallet.isSynchronized, _isLoading.value, _isSyncing.get()
+                )
+                return
+            }
+
+            if (manual) {
+                _manualRefreshInProgress.value = true
+                setLoading(true)
+                manualWorkStarted = true
+            }
+
+            withContext(Dispatchers.IO) {
+                if (!wallet.isInitialized || _isWiping.get()) return@withContext
+
+                val connected = runCatching {
+                    wallet.fullStatus.connectionStatus == Wallet.ConnectionStatus.ConnectionStatus_Connected
+                }.getOrDefault(false)
+
+                if (!connected) {
+                    // The old path simply skipped the request when disconnected. Wake
+                    // the native refresh/reconnect lifecycle instead of making pull-to-
+                    // refresh a no-op; MoneroHandlerThread handles connection recovery.
+                    Timber.tag(TAG).i("Manual refresh requested while disconnected; restarting native refresh")
+                    wallet.startRefresh()
+                    return@withContext
                 }
 
-                if (wallet.fullStatus.connectionStatus == Wallet.ConnectionStatus.ConnectionStatus_Connected) {
-                    // Run one explicit asynchronous refresh without pausing/restarting
-                    // the periodic worker or clearing synchronization state. wallet2
-                    // serializes async refresh against its background refresh thread.
-                    deferredManualRefresh.set(false)
-                    _manualRefreshInProgress.value = true
-                    setLoading(true)
-                    wallet.refreshAsync()
-                } else {
-                    _manualRefreshInProgress.value = false
-                    setLoading(false)
-                    Timber.tag(TAG).w("Manual refresh skipped because daemon is disconnected")
-                }
-            } catch (e: Exception) {
-                _manualRefreshInProgress.value = false
-                setLoading(false)
-                Timber.tag(TAG).e(e, "Manual refresh failed")
-            } finally {
-                userOperationMutex.unlock()
+                // Resume block catch-up and refresh the cached transaction/output view.
+                // This matches the upstream manual-refresh path while keeping all direct
+                // native reads off the Compose/main thread.
+                wallet.startRefresh()
+                wallet.refreshHistory()
+                wallet.refreshCoins(force = true)
+                update()
             }
+        } catch (e: Exception) {
+            if (manual) _manualRefreshInProgress.value = false
+            Timber.tag(TAG).e(e, "Manual wallet refresh failed")
+        } finally {
+            if (manualWorkStarted && !_isWiping.get()) {
+                val scanStillOwnsWallet =
+                    ordinaryCatchUpInProgress ||
+                        _isSyncing.get() ||
+                        _syncProgress.value != null ||
+                        customRescanPreparing ||
+                        customRescanInProgress ||
+                        customRescanFinalizing ||
+                        restoreProgressInProgress ||
+                        restoreProgressFinalizing ||
+                        restoreProgressCompleted ||
+                        (!wallet.isSynchronized && wallet.isInitialized)
+
+                setLoading(scanStillOwnsWallet)
+                if (!scanStillOwnsWallet) {
+                    _manualRefreshInProgress.value = false
+                }
+                update()
+            }
+            userOperationMutex.unlock()
         }
     }
 
