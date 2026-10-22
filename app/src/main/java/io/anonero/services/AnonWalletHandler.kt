@@ -136,6 +136,7 @@ class AnonWalletHandler(
         } else {
             0L
         }
+        if (secureWipePriorityActive()) return
         val restoreScanPending = savedRestoreHeight > 0L && !wallet.nativeSynchronized
         if (!restoreScanPending) {
             // Migrate the wallet's existing saved cursor before callbacks begin. Older
@@ -170,12 +171,15 @@ class AnonWalletHandler(
             }
         }
 
+        if (secureWipePriorityActive()) return
         wallet.setListener(handler)
         // A selected-height mnemonic restore must enter the shared reset scan directly.
         // Its finalization refreshes history and outputs; do not refresh history before scanning.
         if (!restoreScanPending) {
+            if (secureWipePriorityActive()) return
             wallet.refreshHistory()
         }
+        if (secureWipePriorityActive()) return
         handler?.start()
         if (!restoreScanPending) {
             walletState.setLoading(true)
@@ -197,6 +201,7 @@ class AnonWalletHandler(
                     }
                     torService.socks
                 } ?: throw IllegalStateException("Tor 代理启动超时，无法执行普通刷新获取最新高度")
+                if (secureWipePriorityActive()) return
                 WalletManager.instance?.setProxy("${socket.value}")
             } else if (proxyHost.isNotEmpty() && proxyPort != -1) {
                 WalletManager.instance?.setProxy("${proxyHost}:$proxyPort")
@@ -218,11 +223,14 @@ class AnonWalletHandler(
                 walletState.setLoading(true)
             }
 
+            if (secureWipePriorityActive()) return
             walletState.update()
             if (!restoreScanPending && wallet.isSynchronized) {
+                if (secureWipePriorityActive()) return
                 wallet.refreshHistory()
             }
 
+            if (secureWipePriorityActive()) return
             wallet.init(0)
 
             // Restore mode is only a guard against normal-sync estimates until the
@@ -231,10 +239,12 @@ class AnonWalletHandler(
                 wallet.setRestoreHeight(savedRestoreHeight)
                 wallet.store()
             }
-            if (wallet.isInitialized) {
+            if (wallet.isInitialized && !secureWipePriorityActive()) {
                 if (!restoreScanPending || wallet.nativeSynchronized) {
+                    if (secureWipePriorityActive()) return
                     wallet.refreshHistory()
                 }
+                if (secureWipePriorityActive()) return
                 wallet.setTrustedDaemon(true)
                 val effectiveRestoreHeight = if (needsRestoreRescan) {
                     savedRestoreHeight.takeIf { it > 0L }
