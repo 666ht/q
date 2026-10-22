@@ -2,8 +2,6 @@ package io.anonero.ui
 
 import AnonNeroTheme
 import android.Manifest
-import android.content.ClipData
-import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
@@ -18,9 +16,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.LaunchedEffect
@@ -55,13 +50,10 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import org.koin.android.ext.android.inject
 import org.koin.androidx.compose.koinViewModel
 import org.koin.core.qualifier.named
 import timber.log.Timber
-import java.io.File
-import android.widget.Toast
 
 
 private const val TAG = "MainActivity"
@@ -98,37 +90,6 @@ class MainActivity : ComponentActivity() {
             var useTor by remember(context) {
                 mutableStateOf(!AnonConfig.isSecureWipePending(context))
             }
-            var showCrashDialog by remember(context) { mutableStateOf(false) }
-            var crashReportText by remember(context) { mutableStateOf("") }
-
-            // Show a saved crash report once on the next launch. This check runs
-            // outside TorSplash so a slow Tor connection cannot hide the dialog.
-            LaunchedEffect(context) {
-                if (AnonConfig.isSecureWipePending(context)) return@LaunchedEffect
-                val report = withContext(Dispatchers.IO) {
-                    runCatching {
-                        val file = File(context.filesDir, "crash_report.txt")
-                        if (file.isFile && file.length() > 0L) {
-                            file.readText(Charsets.UTF_8)
-                        } else {
-                            null
-                        }
-                    }.getOrNull()
-                }
-                if (!report.isNullOrBlank()) {
-                    val reportKey = report.hashCode().toString()
-                    val popupPrefs = context.getSharedPreferences(
-                        "crash_report_popup_state",
-                        Context.MODE_PRIVATE
-                    )
-                    if (popupPrefs.getString("last_shown_report_hash", null) != reportKey) {
-                        popupPrefs.edit().putString("last_shown_report_hash", reportKey).apply()
-                        crashReportText = report
-                        showCrashDialog = true
-                    }
-                }
-            }
-
             val onboardViewModel = koinViewModel<OnboardViewModel>()
 
             LaunchedEffect(key1 = true) {
@@ -184,39 +145,7 @@ class MainActivity : ComponentActivity() {
                     }
                 }
                 }
-                if (showCrashDialog) {
-                    AlertDialog(
-                        onDismissRequest = { showCrashDialog = false },
-                        title = { Text("检测到上次运行时闪退") },
-                        text = {
-                            Text("已保存闪退日志。点击“复制日志”后，可将日志粘贴发送以便排查。")
-                        },
-                        confirmButton = {
-                            TextButton(
-                                onClick = {
-                                    runCatching {
-                                        val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                        clipboard.setPrimaryClip(
-                                            ClipData.newPlainText("Anonero crash report", crashReportText)
-                                        )
-                                    }.onSuccess {
-                                        Toast.makeText(this@MainActivity, "闪退日志已复制", Toast.LENGTH_SHORT).show()
-                                    }.onFailure {
-                                        Toast.makeText(this@MainActivity, "复制日志失败", Toast.LENGTH_SHORT).show()
-                                    }
-                                    showCrashDialog = false
-                                }
-                            ) {
-                                Text("复制日志")
-                            }
-                        },
-                        dismissButton = {
-                            TextButton(onClick = { showCrashDialog = false }) {
-                                Text("关闭")
-                            }
-                        }
-                    )
-                }
+
             }
         }
 
