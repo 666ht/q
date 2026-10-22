@@ -653,6 +653,7 @@ fun TransactionScreen(
                 ),
             onRefresh = {
                 scope.launch {
+                    if (manualPullRefreshInProgress) return@launch
                     manualPullRefreshInProgress = true
                     try {
                         view.performHapticFeedback(
