@@ -248,8 +248,29 @@ object AnonConfig {
             return false
         }
 
+        // Remove the in-memory recovery flags before deleting the marker. SharedPreferences
+        // can remain cached in this process even after its XML file is deleted; without
+        // clearing the cached values, isSecureWipePending() may still report "pending"
+        // after the wipe has completed and route the finishing Activity back into recovery.
+        val wipePreferences = app.getSharedPreferences(APP_PREFERENCES, Context.MODE_PRIVATE)
+        if (!wipePreferences.edit()
+                .remove(PREF_WALLET_WIPE_PENDING)
+                .remove(PREF_WALLET_WIPE_REQUESTED)
+                .commit()
+        ) {
+            return false
+        }
+        val wipePreferencesFile = File(
+            File(dataRoot, "shared_prefs"),
+            "$APP_PREFERENCES.xml"
+        )
+        if (wipePreferencesFile.exists() && !wipePreferencesFile.delete()) {
+            return false
+        }
+
         // No wallet, preference, cache, database, log, keystore metadata, or
-        // external app file remains. Remove the recovery marker last.
+        // external app file remains. Remove the recovery marker last. If any step
+        // fails before this point, the marker still lets the next launch resume.
         if (preserveMarker && marker.exists() && !marker.delete()) {
             return false
         }
