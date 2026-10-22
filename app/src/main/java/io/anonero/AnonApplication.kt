@@ -69,6 +69,8 @@ class AnonApplication : Application(), Thread.UncaughtExceptionHandler {
 
     override fun onCreate() {
         super.onCreate()
+        // Install crash persistence before wallet/native initialization can fail.
+        Thread.setDefaultUncaughtExceptionHandler(this)
         AnonConfig.context = this
         val secureWipePending = AnonConfig.isSecureWipePending(this)
         if (!secureWipePending) {
@@ -83,13 +85,11 @@ class AnonApplication : Application(), Thread.UncaughtExceptionHandler {
         // In particular, do not initialize wallet2, start Tor, or create log files:
         // the recovery screen must finish deleting the existing app data first.
         if (secureWipePending) {
-            Thread.setDefaultUncaughtExceptionHandler(this)
             return
         }
 
         initConfigs()
         plantLog()
-        Thread.setDefaultUncaughtExceptionHandler(this)
         val torService: TorService = get()
         val prefs: SharedPreferences = get(named(WALLET_PREFERENCES))
         val host = prefs.getString(NodeFields.RPC_HOST.value, "")
