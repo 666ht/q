@@ -1,8 +1,11 @@
 package io.anonero
 
 import android.app.Application
+import android.app.ApplicationExitInfo
+import android.app.ActivityManager
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.content.Context
 import android.os.Build
 import android.content.SharedPreferences
 import io.anonero.di.appModule
@@ -13,6 +16,7 @@ import io.anonero.store.LogRepository
 import io.anonero.store.NodesRepository
 import io.anonero.ui.util.AnonLogTree
 import io.anonero.util.WALLET_PREFERENCES
+import androidx.core.content.edit
 import org.koin.android.ext.android.get
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.context.GlobalContext.startKoin
@@ -67,6 +71,92 @@ class AnonApplication : Application(), Thread.UncaughtExceptionHandler {
         }
     }
 
+    /**
+     * Java's uncaught-exception handler cannot see native SIGSEGV/abort exits.
+     * On Android 11+, recover the system's last crash/native-crash/ANR record
+     * on next startup when no matching Java crash report was already written.
+     */
+    private fun persistPreviousCrashReportIfAny() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return
+        if (AnonConfig.isSecureWipePending(this)) return
+
+        val activityManager = getSystemService(ACTIVITY_SERVICE) as? ActivityManager ?: return
+        val recentExits = runCatching {
+            activityManager.getHistoricalProcessExitReasons(packageName, 0, 10)
+        }.getOrDefault(emptyList())
+
+        val crashExit = recentExits
+            .filter {
+                it.reason == ApplicationExitInfo.REASON_CRASH ||
+                    it.reason == ApplicationExitInfo.REASON_CRASH_NATIVE ||
+                    it.reason == ApplicationExitInfo.REASON_ANR
+            }
+            .maxByOrNull { it.timestamp }
+            ?: return
+
+        val preferences = getSharedPreferences("crash_report_state", Context.MODE_PRIVATE)
+        val processedTimestamp = preferences.getLong("last_processed_exit_timestamp", 0L)
+        if (crashExit.timestamp <= processedTimestamp) return
+
+        val reportFile = File(filesDir, "crash_report.txt")
+        // The Java handler writes its own detailed stack trace just before the
+        // process exits. Preserve it if its timestamp matches this same event.
+        val javaReportAlreadySaved = reportFile.isFile &&
+            reportFile.length() > 0L &&
+            reportFile.lastModified() >= crashExit.timestamp - 30_000L
+
+        if (!javaReportAlreadySaved) {
+            val reasonText = when (crashExit.reason) {
+                ApplicationExitInfo.REASON_CRASH -> "Java/Kotlin crash"
+                ApplicationExitInfo.REASON_CRASH_NATIVE -> "Native crash"
+                ApplicationExitInfo.REASON_ANR -> "Application Not Responding (ANR)"
+                else -> "Unknown crash"
+            }
+            val trace = runCatching {
+                crashExit.traceInputStream?.use { input ->
+                    input.readBytes().let { bytes ->
+                        val boundedBytes = if (bytes.size > 1_000_000) {
+                            bytes.copyOf(1_000_000)
+                        } else {
+                            bytes
+                        }
+                        boundedBytes.toString(Charsets.UTF_8)
+                    }
+                }.orEmpty()
+            }.getOrDefault("System trace unavailable.")
+
+            val timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS Z", Locale.US)
+                .format(Date(crashExit.timestamp))
+            val report = buildString {
+                appendLine("ANONERO CRASH REPORT (recovered from Android)")
+                appendLine("Time: $timestamp")
+                appendLine("Exit reason: $reasonText")
+                appendLine("System description: ${crashExit.description.orEmpty()}")
+                appendLine("App ID: ${BuildConfig.APPLICATION_ID}")
+                appendLine("App version: ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
+                appendLine("Android: ${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT})")
+                appendLine("Device: ${Build.MANUFACTURER} ${Build.MODEL} / ${Build.DEVICE}")
+                appendLine("Product: ${Build.PRODUCT}; Hardware: ${Build.HARDWARE}; ABI: ${Build.SUPPORTED_ABIS.joinToString()}")
+                appendLine()
+                appendLine("Android system trace:")
+                append(trace)
+            }
+            try {
+                FileOutputStream(reportFile, false).use { output ->
+                    output.write(report.toByteArray(Charsets.UTF_8))
+                    output.fd.sync()
+                }
+            } catch (writeError: Exception) {
+                android.util.Log.e(TAG, "Unable to recover system crash report", writeError)
+                return
+            }
+        }
+
+        preferences.edit(commit = true) {
+            putLong("last_processed_exit_timestamp", crashExit.timestamp)
+        }
+    }
+
     override fun onCreate() {
         super.onCreate()
         // Install crash persistence before wallet/native initialization can fail.
@@ -88,6 +178,7 @@ class AnonApplication : Application(), Thread.UncaughtExceptionHandler {
             return
         }
 
+        persistPreviousCrashReportIfAny()
         initConfigs()
         plantLog()
         val torService: TorService = get()
