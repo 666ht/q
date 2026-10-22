@@ -134,6 +134,10 @@ class SecureWipeViewModel(
                             "Unable to persist secure-delete recovery state"
                         }
                         (activity as? MainActivity)?.stopNotificationService()
+                        // A process interrupted during secure deletion may have left
+                        // the application-scoped Tor daemon running. Await its stop
+                        // before removing the directories it may still be using.
+                        anonWalletHandler.stopTorForSecureWipe()
                         _wipeProgress.postValue(.18f)
                         _wipeProgressMessage.postValue("正在恢复安全删除钱包")
 

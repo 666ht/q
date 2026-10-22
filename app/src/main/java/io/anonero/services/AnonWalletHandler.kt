@@ -102,6 +102,11 @@ class AnonWalletHandler(
             .onFailure { Timber.tag(TAG).e(it, "Unable to stop Tor for secure deletion") }
     }
 
+    /** Await Tor teardown before secure-delete recovery removes app data. */
+    suspend fun stopTorForSecureWipe() {
+        torService.stopAndWait()
+    }
+
     val scope get() = _scope
 
     init {
@@ -379,7 +384,7 @@ class AnonWalletHandler(
         return null
     }
 
-    fun wipe(passPhrase: String): Boolean {
+    suspend fun wipe(passPhrase: String): Boolean {
         check(wipeInProgress.compareAndSet(false, true)) {
             "Secure deletion is already in progress"
         }
@@ -389,6 +394,10 @@ class AnonWalletHandler(
             torSocksJob?.cancel()
             torSocksJob = null
             handler = null
+
+            // Do not close/delete wallet state or app directories until Tor has
+            // actually stopped. stop() alone merely queues an asynchronous action.
+            torService.stopAndWait()
 
             val walletManager = WalletManager.instance
             val wallet = walletManager?.wallet
@@ -421,8 +430,6 @@ class AnonWalletHandler(
 
             runCatching { walletManager?.setDaemon(null) }
                 .onFailure { Timber.tag(TAG).e(it, "Daemon detach failed; continuing cleanup") }
-            runCatching { torService.stop() }
-                .onFailure { Timber.tag(TAG).e(it, "Tor stop failed; continuing cleanup") }
 
             // Reset the native singleton only after the wallet handle has closed.
             WalletManager.resetInstance()

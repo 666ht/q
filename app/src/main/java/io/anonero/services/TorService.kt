@@ -84,6 +84,17 @@ class TorService(prefs: SharedPreferences) {
         }
     }
 
+    /**
+     * Secure deletion must not remove Tor's work/cache directories while the
+     * daemon is still stopping. The runtime action is suspending: completion means
+     * StopDaemon has finished and any active StartDaemon action was interrupted.
+     */
+    suspend fun stopAndWait() {
+        _socks = null
+        runtime.stopDaemonAsync()
+        Timber.tag(TAG).i("Tor daemon stopped before secure-delete filesystem cleanup")
+    }
+
 
     fun restart() {
         scope.launch {
