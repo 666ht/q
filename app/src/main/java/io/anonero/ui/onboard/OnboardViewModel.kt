@@ -185,8 +185,8 @@ class OnboardViewModel(private val prefs: SharedPreferences) : ViewModel() {
         val crazyPass: String = KeyStoreHelper.getCrazyPass(AnonConfig.context, passPhrase)
         prefs.edit(commit = true) {
             putString(PREFS_PASSPHRASE_HASH, crazyPass)
-            // A missing/zero height means restore from genesis. Remove any
-            // prior one-shot height so a previous wallet's value cannot override it.
+            // Remove stale one-shot heights when none was selected. Native
+            // recovery must retain its own default (Polyseed birthday or legacy seed).
             val selectedRestoreHeight = restorePayload?.restoreHeight?.takeIf { it > 0L }
             selectedRestoreHeight?.let {
                 putLong(RESTORE_HEIGHT, it)
