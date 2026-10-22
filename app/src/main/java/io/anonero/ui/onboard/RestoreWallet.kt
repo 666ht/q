@@ -80,11 +80,6 @@ fun RestoreWallet(
     var restoreHeight by remember {
         mutableStateOf(onboardViewModel?.getRestorePayload()?.restoreHeight?.toString() ?: "")
     }
-    var restoreHeightError by remember {
-        mutableStateOf<String?>(
-            null
-        )
-    }
      var seed by remember {
         mutableStateOf(
             onboardViewModel?.getRestorePayload()?.seed?.fastJoinToString (
@@ -248,15 +243,6 @@ fun RestoreWallet(
                                 imeAction = ImeAction.Done,
                                 keyboardType = KeyboardType.Number
                             ),
-                            isError = restoreHeightError != null,
-                            supportingText = {
-                                if (restoreHeightError != null)
-                                    Text(
-                                        restoreHeightError!!,
-                                        color = MaterialTheme.colorScheme.error
-                                    )
-
-                            },
                             modifier = Modifier.fillMaxWidth()
                         )
                     },
@@ -266,10 +252,8 @@ fun RestoreWallet(
             AnonOutlineButton (
                 onClick = {
                     if (enabled) {
-                         if (seedList.size == 25 && restoreHeight.isEmpty()) {
-                            restoreHeightError = resources.getString(R.string.restore_height_required_25)
-                            return@AnonOutlineButton
-                        }
+                        // An empty height is valid; the restore pipeline maps it to
+                        // height 0 so a 25-word Monero seed scans from genesis.
                         oNextPressed(
                             RestorePayload(
                                 seed = seedList,
