@@ -343,35 +343,37 @@ fun SecureWipe(
 
     LaunchedEffect(progressMessage) {
         if (progressMessage != null) requestClearScreen.invoke(false)
+    }
 
-        if (progressMessage == "钱包已成功安全删除") {
-            val completedActivity = activity
-            // No delayed kill here. A delay leaves the old process alive after
-            // returning to the launcher; a quick re-tap can start the app in that
-            // same process and then have the old callback kill the new Activity.
-            runCatching {
-                context.applicationContext.startActivity(
-                    Intent(Intent.ACTION_MAIN).apply {
-                        addCategory(Intent.CATEGORY_HOME)
-                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    }
-                )
-            }.onFailure {
-                Timber.tag(TAG).e(it, "Unable to open launcher after secure deletion")
-            }
-            if (completedActivity != null &&
-                !completedActivity.isFinishing &&
-                !completedActivity.isDestroyed
-            ) {
-                runCatching { completedActivity.finishAndRemoveTask() }
-                    .onFailure {
-                        Timber.tag(TAG).e(it, "Unable to remove secure-delete task")
-                    }
-            }
-            // Terminate immediately after navigation/task removal: no time window
-            // remains for the user to relaunch into the old application process.
-            Process.killProcess(Process.myPid())
+    // Both the normal deletion path and interrupted-deletion recovery publish
+    // the same success message only after cleanup has completed. Wait for the
+    // animated ring to actually reach 100% before leaving the app.
+    LaunchedEffect(progressMessage, animatedProgress) {
+        if (progressMessage != "钱包已成功安全删除" || animatedProgress < 0.999f) {
+            return@LaunchedEffect
         }
+
+        val completedActivity = activity
+        runCatching {
+            context.applicationContext.startActivity(
+                Intent(Intent.ACTION_MAIN).apply {
+                    addCategory(Intent.CATEGORY_HOME)
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+            )
+        }.onFailure {
+            Timber.tag(TAG).e(it, "Unable to open launcher after secure deletion")
+        }
+        if (completedActivity != null &&
+            !completedActivity.isFinishing &&
+            !completedActivity.isDestroyed
+        ) {
+            runCatching { completedActivity.finishAndRemoveTask() }
+                .onFailure {
+                    Timber.tag(TAG).e(it, "Unable to remove secure-delete task")
+                }
+        }
+        Process.killProcess(Process.myPid())
     }
 
     LaunchedEffect(wipePending) {
