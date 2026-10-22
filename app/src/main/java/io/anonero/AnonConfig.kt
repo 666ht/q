@@ -57,10 +57,27 @@ object AnonConfig {
     }
 
     fun getTorConfig(scope: CoroutineScope): TorRuntime.Environment {
-        val torDir = File(context?.filesDir, "tor")
-        torDir.mkdirs()
-        val cacheDir = File(context?.cacheDir, "tor")
-        torDir.mkdirs()
+        val appContext = checkNotNull(context) {
+            "AnonConfig application context is not initialized"
+        }.applicationContext
+        val torDir = File(appContext.filesDir, "tor")
+        val cacheDir = File(appContext.cacheDir, "tor")
+
+        // Secure deletion empties both filesDir and cacheDir but keeps Android's
+        // standard parent directories. Recreate BOTH Tor directories before the
+        // runtime builder uses them; the previous duplicate torDir.mkdirs() call
+        // left cacheDir missing after a wipe and made the next app startup fragile.
+        if (!torDir.isDirectory) {
+            check(torDir.mkdirs() || torDir.isDirectory) {
+                "Unable to create Tor work directory: ${torDir.absolutePath}"
+            }
+        }
+        if (!cacheDir.isDirectory) {
+            check(cacheDir.mkdirs() || cacheDir.isDirectory) {
+                "Unable to create Tor cache directory: ${cacheDir.absolutePath}"
+            }
+        }
+
         return TorRuntime.Environment.Builder(
             workDirectory = torDir,
             cacheDirectory = cacheDir,
