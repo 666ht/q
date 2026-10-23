@@ -1204,10 +1204,21 @@ class WalletState(private val prefs: SharedPreferences) {
             if (manual) _manualRefreshInProgress.value = false
             if (!wallet.isInitialized || _isWiping.get()) return
 
+            // Completed custom rescans keep a terminal guard to ignore late callbacks
+            // from that scan. A new user refresh is a newer operation: release the old
+            // guard first, or MoneroHandlerThread.refreshed() will keep discarding every
+            // callback and later pulls won't perform a real daemon refresh.
+            if (manual && customRescanFinished &&
+                !customRescanPreparing &&
+                !customRescanInProgress &&
+                !customRescanFinalizing
+            ) {
+                customRescanFinished = false
+                Timber.tag(TAG).i("Manual refresh released completed custom-rescan callback guard")
+            }
+
             // Only genuinely active operations may defer a new manual refresh.
-            // customRescanFinished and restoreProgressCompleted are terminal callback
-            // guards, not active wallet operations: keeping them here made manual refresh
-            // a permanent no-op after a completed reset/restore scan.
+            // Terminal callback guards are not active wallet operations.
             val priorityOperationOwnsWallet =
                 userOperationTransitionInProgress ||
                     heightRefreshInProgress ||

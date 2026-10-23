@@ -652,17 +652,24 @@ fun TransactionScreen(
                     state = hazeState,
                 ),
             onRefresh = {
-                scope.launch {
-                    if (manualPullRefreshInProgress) return@launch
+                // Update synchronously before returning from the nested-scroll release.
+                // Otherwise the pull container can still observe isRefreshing=false and
+                // hide its state while the actual wallet refresh is underway.
+                if (!manualPullRefreshInProgress) {
                     manualPullRefreshInProgress = true
-                    try {
-                        view.performHapticFeedback(
-                            HapticFeedbackConstants.CONFIRM
-                        )
-                        walletState.refresh(manual = true)
-                    } finally {
-                        refreshState.animateToHidden()
-                        manualPullRefreshInProgress = false
+                    scope.launch {
+                        try {
+                            view.performHapticFeedback(
+                                HapticFeedbackConstants.CONFIRM
+                            )
+                            walletState.refresh(manual = true)
+                        } finally {
+                            try {
+                                refreshState.animateToHidden()
+                            } finally {
+                                manualPullRefreshInProgress = false
+                            }
+                        }
                     }
                 }
             },
