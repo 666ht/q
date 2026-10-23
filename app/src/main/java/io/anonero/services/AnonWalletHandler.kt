@@ -302,27 +302,12 @@ class AnonWalletHandler(
     }
 
     fun updateDaemon(node: io.anonero.model.node.Node?) {
-        updateDaemonInternal(node, pauseRefreshFirst = true)
-    }
-
-    /**
-     * Configure the daemon after the caller has already crossed the native
-     * pause barrier. Node switching uses this path to avoid pausing wallet2 twice.
-     */
-    fun updateDaemonAfterRefreshPaused(node: io.anonero.model.node.Node?) {
-        updateDaemonInternal(node, pauseRefreshFirst = false)
-    }
-
-    private fun updateDaemonInternal(
-        node: io.anonero.model.node.Node?,
-        pauseRefreshFirst: Boolean
-    ) {
         if (secureWipePriorityActive()) return
         walletState.setLoading(true)
         val wallet = WalletManager.instance?.wallet
         val walletManager = WalletManager.instance
         if (secureWipePriorityActive()) return
-        if (pauseRefreshFirst) wallet?.takeIf { it.isInitialized }?.pauseRefresh()
+        wallet?.takeIf { it.isInitialized }?.pauseRefresh()
         if (secureWipePriorityActive()) return
         try {
             if (node != null) {
@@ -356,8 +341,7 @@ class AnonWalletHandler(
                 )
             )
             Timber.tag(TAG).e(e, "Failed to configure daemon")
-            // Match the known-working #1070 behavior: keep the wallet refresh
-            // startup path alive, while retaining the real exception in logs.
+            // Keep the wallet refresh startup path alive; retain the exception in logs.
         }
     }
 
