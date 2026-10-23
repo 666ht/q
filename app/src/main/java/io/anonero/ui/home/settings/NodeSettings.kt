@@ -73,7 +73,9 @@ import com.dokar.sonner.Toaster
 import com.dokar.sonner.rememberToasterState
 import io.anonero.AnonConfig
 import io.anonero.R
+import io.anonero.model.Wallet
 import io.anonero.model.WalletManager
+import io.anonero.model.node.DaemonInfo
 import io.anonero.model.node.Node
 import io.anonero.model.node.NodeFields
 import io.anonero.services.AnonWalletHandler
@@ -95,12 +97,15 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import org.koin.androidx.compose.koinViewModel
 import org.koin.compose.koinInject
 import org.koin.java.KoinJavaComponent.inject
 import timber.log.Timber
+import java.util.concurrent.atomic.AtomicLong
 import kotlin.time.Duration.Companion.seconds
 
 private const val TAG = "NodeSettings"
@@ -114,6 +119,8 @@ class NodeSettingsViewModel(
 
     private val torService: TorService by inject(TorService::class.java)
     private val walletHandler: AnonWalletHandler by inject(AnonWalletHandler::class.java)
+    private val nodeSwitchMutex = Mutex()
+    private val nodeSwitchRequest = AtomicLong(0L)
     private val uriValidationError = MutableLiveData<String?>()
     private val _nodes = MutableStateFlow<List<Node>>(emptyList())
     private val daemonInfo = walletState.daemonInfo
@@ -290,58 +297,83 @@ class NodeSettingsViewModel(
 
     suspend fun connect(node: Node) {
         if (walletHandler.isSecureWipeInProgress() || walletState.isWiping()) return
-        withContext(Dispatchers.IO) {
-            if (walletHandler.isSecureWipeInProgress() || walletState.isWiping()) return@withContext
-            val editor = prefs.edit()
-            try {
-                if (walletHandler.isSecureWipeInProgress() || walletState.isWiping()) return@withContext
-                WalletManager.instance?.wallet?.pauseRefresh()
-                if (walletHandler.isSecureWipeInProgress() || walletState.isWiping()) return@withContext
-                editor.putString(
-                    NodeFields.RPC_HOST.value,
-                    node.host
-                )
-                editor.putInt(
-                    NodeFields.RPC_PORT.value,
-                    node.rpcPort
-                )
-                editor.putString(
-                    NodeFields.RPC_USERNAME.value,
-                    node.username
-                )
-                editor.putString(
-                    NodeFields.RPC_PASSWORD.value,
-                    node.password
-                )
 
-                editor.apply()
-                if (walletHandler.isSecureWipeInProgress() || walletState.isWiping()) return@withContext
-                // Preserve the known-working #1070 connection sequence. The Tor
-                // runtime starts asynchronously; wallet2 owns the subsequent RPC
-                // handshake and sync callbacks. Do not abort refresh merely because
-                // init() returns false during an initial/reconnection transition.
-                torService.start()
-                walletHandler.updateDaemon(node)
-                if (walletHandler.isSecureWipeInProgress() || walletState.isWiping()) return@withContext
-                walletState.setLoading(false)
-                walletState.update()
+        // Publish the user's choice before touching wallet2's blocking native
+        // refresh barrier, so the node page responds immediately while switching
+        // continues on IO.
+        val requestId = nodeSwitchRequest.incrementAndGet()
+        prefs.edit()
+            .putString(NodeFields.RPC_HOST.value, node.host)
+            .putInt(NodeFields.RPC_PORT.value, node.rpcPort)
+            .putString(NodeFields.RPC_USERNAME.value, node.username)
+            .putString(NodeFields.RPC_PASSWORD.value, node.password)
+            .apply()
+        walletState.updateDaemon(
+            DaemonInfo(
+                daemon = "${node.host}:${node.rpcPort}",
+                connectionStatus = Wallet.ConnectionStatus.ConnectionStatus_Disconnected,
+                daemonHeight = 0L
+            )
+        )
+        walletState.setLoading(true)
+
+        withContext(Dispatchers.IO) {
+            nodeSwitchMutex.withLock {
+                if (requestId != nodeSwitchRequest.get() ||
+                    walletHandler.isSecureWipeInProgress() || walletState.isWiping()
+                ) return@withLock
+
                 val wallet = WalletManager.instance?.wallet
-                if (walletHandler.isSecureWipeInProgress() || walletState.isWiping()) return@withContext
-                val initialized = wallet?.init(0L)
-                if (initialized == false) {
-                    Timber.tag(TAG).w(
-                        "wallet.init returned false while reconnecting to %s:%d; continuing refresh",
+                try {
+                    // pauseRefresh() is a blocking native barrier. Do it once, off
+                    // the UI thread, and let a newer tap supersede this request.
+                    wallet?.takeIf { it.isInitialized }?.pauseRefresh()
+                    if (requestId != nodeSwitchRequest.get() ||
+                        walletHandler.isSecureWipeInProgress() || walletState.isWiping()
+                    ) return@withLock
+
+                    // This variant skips its own pause barrier because it was just
+                    // crossed above. Calling the old method here paused wallet2 twice.
+                    torService.start()
+                    walletHandler.updateDaemonAfterRefreshPaused(node)
+                    if (requestId != nodeSwitchRequest.get() ||
+                        walletHandler.isSecureWipeInProgress() || walletState.isWiping()
+                    ) return@withLock
+
+                    walletState.setLoading(true)
+                    walletState.update()
+                    val initialized = wallet?.init(0L)
+                    if (initialized == false) {
+                        Timber.tag(TAG).w(
+                            "wallet.init returned false while reconnecting to %s:%d; continuing refresh",
+                            node.host,
+                            node.rpcPort
+                        )
+                    }
+                    if (requestId != nodeSwitchRequest.get() ||
+                        walletHandler.isSecureWipeInProgress() || walletState.isWiping()
+                    ) return@withLock
+
+                    wallet?.setTrustedDaemon(true)
+                    if (requestId != nodeSwitchRequest.get() ||
+                        walletHandler.isSecureWipeInProgress() || walletState.isWiping()
+                    ) return@withLock
+                    wallet?.startRefresh()
+                } catch (e: Exception) {
+                    Timber.tag(TAG).e(
+                        e,
+                        "Node connection attempt failed: %s:%d",
                         node.host,
                         node.rpcPort
                     )
+                    if (requestId == nodeSwitchRequest.get() &&
+                        !walletHandler.isSecureWipeInProgress() && !walletState.isWiping()
+                    ) {
+                        uriValidationError.postValue(e.message)
+                        runCatching { wallet?.takeIf { it.isInitialized }?.startRefresh() }
+                            .onFailure { Timber.tag(TAG).w(it, "Unable to resume wallet refresh after node switch failure") }
+                    }
                 }
-                if (walletHandler.isSecureWipeInProgress() || walletState.isWiping()) return@withContext
-                wallet?.setTrustedDaemon(true)
-                if (walletHandler.isSecureWipeInProgress() || walletState.isWiping()) return@withContext
-                wallet?.startRefresh()
-            } catch (e: Exception) {
-                Timber.tag(TAG).e(e, "Node connection attempt failed: %s:%d", node.host, node.rpcPort)
-                uriValidationError.postValue(e.message)
             }
         }
     }
