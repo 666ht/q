@@ -302,13 +302,27 @@ class AnonWalletHandler(
     }
 
     fun updateDaemon(node: io.anonero.model.node.Node?) {
-        if (secureWipePriorityActive()) return
+        updateDaemonInternal(node, pauseRefreshFirst = true)
+    }
+
+    /**
+     * Configure the daemon after the caller has already crossed the native
+     * pause barrier. Node switching uses this path to avoid pausing wallet2 twice.
+     */
+    fun updateDaemonAfterRefreshPaused(node: io.anonero.model.node.Node?) {
+        updateDaemonInternal(node, pauseRefreshFirst = false)
+    }
+
+    private fun updateDaemonInternal(
+        node: io.anonero.model.node.Node?,
+        pauseRefreshFirst: Boolean
+    ) {
         if (secureWipePriorityActive()) return
         walletState.setLoading(true)
         val wallet = WalletManager.instance?.wallet
         val walletManager = WalletManager.instance
         if (secureWipePriorityActive()) return
-        wallet?.pauseRefresh()
+        if (pauseRefreshFirst) wallet?.takeIf { it.isInitialized }?.pauseRefresh()
         if (secureWipePriorityActive()) return
         try {
             if (node != null) {
