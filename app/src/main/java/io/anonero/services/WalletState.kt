@@ -1223,6 +1223,20 @@ class WalletState(private val prefs: SharedPreferences) {
                 return
             }
 
+            if (manual) {
+                // A completed scan keeps these guards set to ignore late native callbacks.
+                // A new manual refresh starts a fresh operation, so release the terminal
+                // guards after acquiring the operation mutex; otherwise later refresh
+                // callbacks keep returning early even though the scan has finished.
+                if (customRescanFinished || restoreProgressCompleted) {
+                    Timber.tag(TAG).i(
+                        "Releasing completed-scan callback guards for manual refresh"
+                    )
+                    customRescanFinished = false
+                    restoreProgressCompleted = false
+                }
+            }
+
             // Do not query transaction/output state while wallet2 is processing blocks.
             // Still restart the native refresh worker: that both wakes a stalled first
             // sync and guarantees a deferred pull has a future safe listener callback.
