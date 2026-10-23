@@ -28,6 +28,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -1200,6 +1201,7 @@ class WalletState(private val prefs: SharedPreferences) {
 
         userOperationMutex.lock()
         var manualWorkStarted = false
+        var awaitManualRefreshFinish = false
         try {
             if (manual) _manualRefreshInProgress.value = false
             if (!wallet.isInitialized || _isWiping.get()) return
@@ -1263,10 +1265,15 @@ class WalletState(private val prefs: SharedPreferences) {
                     deferredManualRefresh.set(true)
                     _manualRefreshInProgress.value = true
                     setLoading(true)
+                    awaitManualRefreshFinish = true
                 }
                 withContext(Dispatchers.IO) {
                     if (wallet.isInitialized && !_isWiping.get()) {
                         wallet.startRefresh()
+                    } else if (manual) {
+                        awaitManualRefreshFinish = false
+                        _manualRefreshInProgress.value = false
+                        setLoading(false)
                     }
                 }
                 Timber.tag(TAG).i(
@@ -1280,10 +1287,15 @@ class WalletState(private val prefs: SharedPreferences) {
                 _manualRefreshInProgress.value = true
                 setLoading(true)
                 manualWorkStarted = true
+                awaitManualRefreshFinish = true
             }
 
             withContext(Dispatchers.IO) {
-                if (!wallet.isInitialized || _isWiping.get()) return@withContext
+                if (!wallet.isInitialized || _isWiping.get()) {
+                    awaitManualRefreshFinish = false
+                    if (manual) _manualRefreshInProgress.value = false
+                    return@withContext
+                }
 
                 val connected = runCatching {
                     wallet.fullStatus.connectionStatus == Wallet.ConnectionStatus.ConnectionStatus_Connected
@@ -1309,8 +1321,11 @@ class WalletState(private val prefs: SharedPreferences) {
                 // end of a manual pull, which delays hiding the refresh indicator.
             }
         } catch (e: kotlinx.coroutines.CancellationException) {
+            awaitManualRefreshFinish = false
+            if (manual) _manualRefreshInProgress.value = false
             throw e
         } catch (e: Exception) {
+            awaitManualRefreshFinish = false
             if (manual) _manualRefreshInProgress.value = false
             Timber.tag(TAG).e(e, "Manual wallet refresh failed")
         } finally {
@@ -1327,8 +1342,11 @@ class WalletState(private val prefs: SharedPreferences) {
                             restoreProgressFinalizing ||
                             (!wallet.isSynchronized && wallet.isInitialized)
 
-                    setLoading(scanStillOwnsWallet)
-                    if (!scanStillOwnsWallet) {
+                    setLoading(
+                        scanStillOwnsWallet ||
+                            (awaitManualRefreshFinish && _manualRefreshInProgress.value)
+                    )
+                    if (!scanStillOwnsWallet && !awaitManualRefreshFinish) {
                         _manualRefreshInProgress.value = false
                     }
                     // update() contains JNI reads; never run it on the Compose thread,
@@ -1337,6 +1355,34 @@ class WalletState(private val prefs: SharedPreferences) {
                 }
             } finally {
                 userOperationMutex.unlock()
+            }
+
+            // startRefresh() schedules native work; returning from this method only
+            // means the cache snapshot was requested, not that the native refresh has
+            // reached its callback boundary. Keep the pull gesture alive off the main
+            // thread until syncUpdate(), finishSync(), or reconnect handling releases it.
+            if (awaitManualRefreshFinish && manual && !_isWiping.get()) {
+                try {
+                    _manualRefreshInProgress.first { !it }
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    _manualRefreshInProgress.value = false
+                    if (manualWorkStarted) setLoading(false)
+                    throw e
+                }
+
+                if (manualWorkStarted && !_isWiping.get()) {
+                    val scanStillOwnsWallet =
+                        ordinaryCatchUpInProgress ||
+                            _isSyncing.get() ||
+                            _syncProgress.value != null ||
+                            customRescanPreparing ||
+                            customRescanInProgress ||
+                            customRescanFinalizing ||
+                            restoreProgressInProgress ||
+                            restoreProgressFinalizing ||
+                            (!wallet.isSynchronized && wallet.isInitialized)
+                    setLoading(scanStillOwnsWallet)
+                }
             }
         }
     }
