@@ -1323,7 +1323,6 @@ class WalletState(private val prefs: SharedPreferences) {
                             customRescanFinalizing ||
                             restoreProgressInProgress ||
                             restoreProgressFinalizing ||
-                            restoreProgressCompleted ||
                             (!wallet.isSynchronized && wallet.isInitialized)
 
                     setLoading(scanStillOwnsWallet)
