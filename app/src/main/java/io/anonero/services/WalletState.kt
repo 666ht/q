@@ -1304,7 +1304,9 @@ class WalletState(private val prefs: SharedPreferences) {
                 wallet.startRefresh()
                 wallet.refreshHistory()
                 wallet.refreshCoins(force = true)
-                update()
+                // The finally block publishes one consolidated state snapshot off
+                // the UI thread. Avoid doing the same JNI-heavy update twice at the
+                // end of a manual pull, which delays hiding the refresh indicator.
             }
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
