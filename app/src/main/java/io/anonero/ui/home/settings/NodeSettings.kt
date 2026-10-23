@@ -298,9 +298,8 @@ class NodeSettingsViewModel(
     suspend fun connect(node: Node) {
         if (walletHandler.isSecureWipeInProgress() || walletState.isWiping()) return
 
-        // Publish the user's choice before touching wallet2's blocking native
-        // refresh barrier, so the node page responds immediately while switching
-        // continues on IO.
+        // Keep the UI responsive: publish the selected node before entering the
+        // native switching flow. Blocking wallet calls remain on Dispatchers.IO.
         val requestId = nodeSwitchRequest.incrementAndGet()
         prefs.edit()
             .putString(NodeFields.RPC_HOST.value, node.host)
@@ -325,23 +324,26 @@ class NodeSettingsViewModel(
 
                 val wallet = WalletManager.instance?.wallet
                 try {
-                    // pauseRefresh() is a blocking native barrier. Do it once, off
-                    // the UI thread, and let a newer tap supersede this request.
+                    // Follow ANONERO upstream's connection order. updateDaemon()
+                    // also pauses wallet2 before applying the new daemon.
                     wallet?.takeIf { it.isInitialized }?.pauseRefresh()
                     if (requestId != nodeSwitchRequest.get() ||
                         walletHandler.isSecureWipeInProgress() || walletState.isWiping()
                     ) return@withLock
 
-                    // This variant skips its own pause barrier because it was just
-                    // crossed above. Calling the old method here paused wallet2 twice.
                     torService.start()
-                    walletHandler.updateDaemonAfterRefreshPaused(node)
+                    if (walletHandler.isSecureWipeInProgress() || walletState.isWiping()) {
+                        return@withLock
+                    }
+
+                    walletHandler.updateDaemon(node)
                     if (requestId != nodeSwitchRequest.get() ||
                         walletHandler.isSecureWipeInProgress() || walletState.isWiping()
                     ) return@withLock
 
-                    walletState.setLoading(true)
+                    walletState.setLoading(false)
                     walletState.update()
+
                     val initialized = wallet?.init(0L)
                     if (initialized == false) {
                         Timber.tag(TAG).w(
@@ -358,6 +360,7 @@ class NodeSettingsViewModel(
                     if (requestId != nodeSwitchRequest.get() ||
                         walletHandler.isSecureWipeInProgress() || walletState.isWiping()
                     ) return@withLock
+
                     wallet?.startRefresh()
                 } catch (e: Exception) {
                     Timber.tag(TAG).e(
@@ -371,7 +374,12 @@ class NodeSettingsViewModel(
                     ) {
                         uriValidationError.postValue(e.message)
                         runCatching { wallet?.takeIf { it.isInitialized }?.startRefresh() }
-                            .onFailure { Timber.tag(TAG).w(it, "Unable to resume wallet refresh after node switch failure") }
+                            .onFailure {
+                                Timber.tag(TAG).w(
+                                    it,
+                                    "Unable to resume wallet refresh after node switch failure"
+                                )
+                            }
                     }
                 }
             }
