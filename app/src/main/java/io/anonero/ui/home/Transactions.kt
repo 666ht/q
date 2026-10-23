@@ -645,7 +645,7 @@ fun TransactionScreen(
         }
     ) { contentPadding ->
         PullToRefreshBox(
-            isRefreshing = false,
+            isRefreshing = manualPullRefreshInProgress,
             state = refreshState,
             modifier = Modifier
                 .hazeSource(
