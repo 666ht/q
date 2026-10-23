@@ -1204,18 +1204,18 @@ class WalletState(private val prefs: SharedPreferences) {
             if (manual) _manualRefreshInProgress.value = false
             if (!wallet.isInitialized || _isWiping.get()) return
 
-            // A reset/restore/query that owns the wallet must finish first. Preserve the
-            // manual request, but never reinitialize the wallet or interfere with its scan.
+            // Only genuinely active operations may defer a new manual refresh.
+            // customRescanFinished and restoreProgressCompleted are terminal callback
+            // guards, not active wallet operations: keeping them here made manual refresh
+            // a permanent no-op after a completed reset/restore scan.
             val priorityOperationOwnsWallet =
                 userOperationTransitionInProgress ||
                     heightRefreshInProgress ||
                     customRescanPreparing ||
                     customRescanInProgress ||
                     customRescanFinalizing ||
-                    customRescanFinished ||
                     restoreProgressInProgress ||
-                    restoreProgressFinalizing ||
-                    restoreProgressCompleted
+                    restoreProgressFinalizing
 
             if (priorityOperationOwnsWallet) {
                 if (manual) deferredManualRefresh.set(true)
