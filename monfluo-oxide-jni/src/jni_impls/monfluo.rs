@@ -140,7 +140,7 @@ pub fn restore_wallet<'local>(
     mut env: EnvUnowned<'local>,
     _class: JClass<'local>,
     java_monfluo_directory: JString,
-    java_network: JObject,
+    java_network: JObject<'local>,
     java_name: JString,
     java_password: JString,
     java_seed: JObject<'local>,
