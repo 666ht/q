@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -152,7 +153,7 @@ fun SettingsPage(
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
                     }
                 },
-                title = { Text(if (AnonConfig.viewOnly) "ИΞR0" else "ΛИ0И", style = MaterialTheme.typography.titleLarge.copy(fontSize = 28.sp)) }
+                title = { Text(if (AnonConfig.viewOnly) "ИΞR0" else "ΛИ0И", modifier = Modifier.offset(x = (-4).dp), style = MaterialTheme.typography.titleLarge.copy(fontSize = 28.sp)) }
             )
         }
     ) { paddingValues ->
