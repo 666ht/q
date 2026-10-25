@@ -152,7 +152,7 @@ fun SettingsPage(
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
                     }
                 },
-                title = { Text("") }
+                title = { Text(if (AnonConfig.viewOnly) "ИΞR0" else "ΛИ0И") }
             )
         }
     ) { paddingValues ->
