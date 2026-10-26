@@ -886,55 +886,70 @@ class WalletState(private val prefs: SharedPreferences) {
         }
     }
 
-    suspend fun exitBackgroundSync(pin: String): Boolean = bgSyncMutex.withLock {
+    suspend fun exitBackgroundSync(pin: String): Boolean {
         if (_isWiping.get()) return false
         val wallet = getWallet ?: return false
-        // View-only wallets and foreground-scan PIN locks never entered native
-        // background-sync mode. Unlock them without an eager JNI snapshot: the
-        // wallet stays open and its existing listener publishes state as it changes.
-        // Reading balance/history/outputs here can contend with wallet2's active
-        // refresh and make a valid PIN appear to do nothing.
-        if (AnonConfig.viewOnly || !nativeBackgroundSyncActive.get()) {
-            _backgroundSync.value = false
+
+        // A valid PIN has already been checked by LockScreen. Never make navigation
+        // wait for bgSyncMutex or a native wallet2 call: a refresh/startBackgroundSync
+        // operation may be waiting on a native lock that cannot be cancelled from Kotlin.
+        // Release the UI lock immediately and serialize any native teardown separately.
+        _backgroundSync.value = false
+
+        val nativeTransitionPending =
+            nativeBackgroundSyncActive.get() || backgroundLifecycleJob?.isActive == true
+        if (AnonConfig.viewOnly || !nativeTransitionPending) {
             Timber.tag(TAG).i(
-                "Released PIN lock without native background-sync teardown; wallet callbacks retain state"
+                "Released PIN lock immediately; no native background-sync teardown required"
             )
             return true
         }
 
-        // Keep the UI locked and suppress state publications while the native
-        // wallet leaves background sync.
-        _blockUpdates.set(true)
-        val exited = try {
-            if (wallet.stopBackgroundSync(pin)) {
+        backgroundLifecycleScope.launch {
+            bgSyncMutex.withLock {
+                if (_isWiping.get()) return@withLock
+                val currentWallet = getWallet ?: return@withLock
+                if (!nativeBackgroundSyncActive.get()) {
+                    Timber.tag(TAG).d(
+                        "Skipping deferred background-sync teardown; native mode was not entered"
+                    )
+                    return@withLock
+                }
+
+                _blockUpdates.set(true)
+                val exited = try {
+                    currentWallet.stopBackgroundSync(pin)
+                } catch (e: Exception) {
+                    Timber.tag(TAG).e(e, "Deferred native background-sync exit failed")
+                    false
+                } finally {
+                    _blockUpdates.set(false)
+                }
+
+                if (!exited) {
+                    Timber.tag(TAG).e(
+                        "Deferred stopBackgroundSync returned false; PIN screen was already released"
+                    )
+                    return@withLock
+                }
+
                 nativeBackgroundSyncActive.set(false)
-                Timber.tag(TAG).i("Native background sync stopped")
-                true
-            } else {
-                Timber.tag(TAG).e("stopBackgroundSync returned false")
-                false
+                runCatching { currentWallet.refreshHistory() }
+                    .onFailure { Timber.tag(TAG).e(it, "History refresh after background sync failed") }
+                runCatching { currentWallet.refreshCoins(force = true) }
+                    .onFailure { Timber.tag(TAG).e(it, "Output refresh after background sync failed") }
+                runCatching { update() }
+                    .onFailure { Timber.tag(TAG).e(it, "Wallet snapshot after background sync failed") }
+                runCatching { currentWallet.startRefresh() }
+                    .onFailure { Timber.tag(TAG).e(it, "Restart refresh after background sync failed") }
+                Timber.tag(TAG).i("Deferred native background-sync teardown completed")
             }
-        } catch (e: Exception) {
-            Timber.tag(TAG).e(e, "stopBackgroundSync error")
-            false
-        } finally {
-            _blockUpdates.set(false)
         }
 
-        if (!exited) return false
-
-        // Re-read native wallet data after the background worker has stopped,
-        // then publish the fresh output list while still holding the overlay.
-        runCatching { wallet.refreshHistory() }
-            .onFailure { Timber.tag(TAG).e(it, "History refresh after background sync failed") }
-        runCatching { wallet.refreshCoins(force = true) }
-            .onFailure { Timber.tag(TAG).e(it, "Output refresh after background sync failed") }
-
-        _backgroundSync.value = false
-        update()
-        wallet.startRefresh()
-        Timber.tag(TAG).i("Exited background sync and refreshed wallet data")
-        true
+        Timber.tag(TAG).i(
+            "PIN unlock accepted immediately; native background-sync teardown queued in IO"
+        )
+        return true
     }
 
     fun setConnectionStatus(status: Wallet.ConnectionStatus) {
