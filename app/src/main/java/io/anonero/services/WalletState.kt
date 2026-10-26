@@ -927,12 +927,18 @@ class WalletState(private val prefs: SharedPreferences) {
                 return true
             }
             nativeBackgroundSyncActive.set(false)
-            _backgroundSync.value = false
+            // A failed older transition must not clear a newer leave request's lock.
+            if (requestId == backgroundLockRequestGeneration.get()) {
+                _backgroundSync.value = false
+            }
             Timber.tag(TAG).e("startBackgroundSync returned false")
             return false
         } catch (e: Exception) {
             nativeBackgroundSyncActive.set(false)
-            _backgroundSync.value = false
+            // Do not let a stale native failure overwrite a newer lock intent.
+            if (requestId == backgroundLockRequestGeneration.get()) {
+                _backgroundSync.value = false
+            }
             Timber.tag(TAG).e(e, "startBackgroundSync error")
             return false
         } finally {
