@@ -207,16 +207,18 @@ fun LockScreen(
                                 showError()
                             }
                         } else {
-                            // Do the native background-sync exit inside this guarded
-                            // PIN task. A failed stop must not silently leave the keypad
-                            // looking unresponsive or escape as an uncaught coroutine error.
-                            val resumed = walletState.exitBackgroundSync(pin)
+                            // The stored PIN hash is the unlock authority. Remove the
+                            // overlay immediately on the UI thread; native background-sync
+                            // teardown is independent work and must never reject a valid PIN.
                             withContext(Dispatchers.Main) {
-                                if (resumed) {
-                                    onUnLocked(pin, shortCut)
-                                } else {
-                                    showError()
-                                }
+                                walletState.setBackGroundSync(false)
+                                onUnLocked(pin, shortCut)
+                            }
+                            val resumed = walletState.exitBackgroundSync(pin)
+                            if (!resumed) {
+                                Timber.tag(TAG).w(
+                                    "PIN hash accepted and UI unlocked; background-sync teardown deferred"
+                                )
                             }
                         }
                     }
