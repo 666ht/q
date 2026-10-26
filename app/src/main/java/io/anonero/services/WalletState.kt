@@ -788,6 +788,29 @@ class WalletState(private val prefs: SharedPreferences) {
      * Run the leave-app transition independently of Activity teardown. The native
      * wallet operation must not be cancelled merely because Android destroys the UI.
      */
+    /**
+     * True while foreground refresh, synchronization, or a user-initiated wallet
+     * operation may be using wallet2. Native background-sync transitions take the
+     * same native refresh lock, so do not start/finish those transitions or perform
+     * extra JNI snapshots while any of these states are active.
+     */
+    private fun foregroundWalletOperationActive(wallet: Wallet): Boolean =
+        isSyncing ||
+            _isLoading.value ||
+            _manualRefreshInProgress.value ||
+            _syncProgress.value != null ||
+            ordinaryCatchUpInProgress ||
+            heightRefreshInProgress ||
+            userOperationTransitionInProgress ||
+            customRescanRequesting.get() ||
+            restoreProgressInProgress ||
+            restoreProgressFinalizing ||
+            customRescanPreparing ||
+            customRescanInProgress ||
+            customRescanFinalizing ||
+            !wallet.isSynchronized ||
+            !runCatching { wallet.nativeSynchronized }.getOrDefault(false)
+
     fun requestBackgroundSyncOnLeave() {
         if (_isWiping.get()) return
 
@@ -825,21 +848,7 @@ class WalletState(private val prefs: SharedPreferences) {
         // the next callback. startBackgroundSync() takes the native refresh lock, so
         // missing these states can hold bgSyncMutex and make the next PIN unlock wait
         // indefinitely for stopBackgroundSync().
-        val scanActive = isSyncing ||
-            _isLoading.value ||
-            _manualRefreshInProgress.value ||
-            _syncProgress.value != null ||
-            ordinaryCatchUpInProgress ||
-            heightRefreshInProgress ||
-            userOperationTransitionInProgress ||
-            customRescanRequesting.get() ||
-            restoreProgressInProgress ||
-            restoreProgressFinalizing ||
-            customRescanPreparing ||
-            customRescanInProgress ||
-            customRescanFinalizing ||
-            !wallet.isSynchronized ||
-            !wallet.nativeSynchronized
+        val scanActive = foregroundWalletOperationActive(wallet)
         if (scanActive) {
             nativeBackgroundSyncActive.set(false)
             Timber.tag(TAG).i(
@@ -880,9 +889,16 @@ class WalletState(private val prefs: SharedPreferences) {
     suspend fun exitBackgroundSync(pin: String): Boolean = bgSyncMutex.withLock {
         if (_isWiping.get()) return false
         val wallet = getWallet ?: return false
+        val foregroundWorkActive = foregroundWalletOperationActive(wallet)
+
         if (AnonConfig.viewOnly) {
             _backgroundSync.value = false
-            update()
+            if (!foregroundWorkActive) {
+                runCatching { update() }
+                    .onFailure { Timber.tag(TAG).e(it, "Wallet update after PIN unlock failed") }
+            } else {
+                Timber.tag(TAG).i("PIN unlocked during foreground work; deferring wallet snapshot to scan callbacks")
+            }
             return true
         }
 
@@ -893,22 +909,6 @@ class WalletState(private val prefs: SharedPreferences) {
         // PIN coroutine and leave the lock overlay visible despite a correct PIN.
         if (!nativeBackgroundSyncActive.get()) {
             _backgroundSync.value = false
-
-            val foregroundWorkActive = isSyncing ||
-                _isLoading.value ||
-                _manualRefreshInProgress.value ||
-                _syncProgress.value != null ||
-                ordinaryCatchUpInProgress ||
-                heightRefreshInProgress ||
-                userOperationTransitionInProgress ||
-                customRescanRequesting.get() ||
-                restoreProgressInProgress ||
-                restoreProgressFinalizing ||
-                customRescanPreparing ||
-                customRescanInProgress ||
-                customRescanFinalizing ||
-                !wallet.isSynchronized ||
-                !runCatching { wallet.nativeSynchronized }.getOrDefault(false)
 
             if (!foregroundWorkActive) {
                 runCatching { update() }
