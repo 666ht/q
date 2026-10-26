@@ -7,6 +7,7 @@ import io.anonero.services.AnonWalletHandler
 import io.anonero.services.InvalidPin
 import io.anonero.services.TorService
 import io.anonero.services.WalletState
+import io.anonero.model.WalletManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -57,6 +58,25 @@ class AppViewModel(private val walletState: WalletState, private val torService:
      */
     fun launchPinOperation(block: suspend () -> Unit): Job =
         viewModelScope.launch(Dispatchers.IO) { block() }
+
+    /**
+     * Compatibility migration for wallets created by versions that failed to save
+     * PREFS_PIN_HASH during seed restore or view-only setup. Normal unlocks use the
+     * local hash only; this disk-wallet check is called solely when that hash mismatches.
+     */
+    fun verifyLegacyWalletPin(pin: String): Boolean {
+        val context = AnonConfig.context?.applicationContext ?: return false
+        val walletFile = AnonConfig.getDefaultWalletFile(context)
+        return runCatching {
+            WalletManager.instance?.verifyWalletPassword(
+                walletFile.path,
+                pin,
+                AnonConfig.viewOnly
+            ) == true
+        }.onFailure {
+            Timber.tag(TAG).w(it, "Legacy PIN-hash migration check failed")
+        }.getOrDefault(false)
+    }
 
     @Synchronized
     fun startService() {
