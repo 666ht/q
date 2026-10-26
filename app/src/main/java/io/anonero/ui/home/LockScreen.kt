@@ -220,11 +220,13 @@ fun LockScreen(
                             }
                             // Normal PIN unlock is local and immediate. Do not wait for
                             // wallet sync or background-sync teardown before hiding the overlay.
+                            // Register the unlock and invalidate queued lock transitions
+                            // before notifying navigation. This closes the race where a
+                            // fast app-leave event could be overwritten by a late unlock.
+                            val resumed = walletState.exitBackgroundSync(pin)
                             withContext(Dispatchers.Main) {
-                                walletState.setBackGroundSync(false)
                                 onUnLocked(pin, shortCut)
                             }
-                            val resumed = walletState.exitBackgroundSync(pin)
                             if (!resumed) {
                                 Timber.tag(TAG).w(
                                     "PIN accepted and UI unlocked; background-sync teardown deferred"
