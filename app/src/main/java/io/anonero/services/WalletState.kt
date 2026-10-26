@@ -886,11 +886,37 @@ class WalletState(private val prefs: SharedPreferences) {
             return true
         }
 
-        // If this was only a UI lock during an active foreground scan, do not call
-        // native stopBackgroundSync(): that native mode was never started.
+        // If this was only a UI lock during a foreground scan/refresh, do not call
+        // native stopBackgroundSync(): that mode was never started. Also do not call
+        // update() here while wallet2 is scanning. update() reads native balances,
+        // history and outputs; competing with the active block loop can stall this
+        // PIN coroutine and leave the lock overlay visible despite a correct PIN.
         if (!nativeBackgroundSyncActive.get()) {
             _backgroundSync.value = false
-            update()
+
+            val foregroundWorkActive = isSyncing ||
+                _isLoading.value ||
+                _manualRefreshInProgress.value ||
+                _syncProgress.value != null ||
+                ordinaryCatchUpInProgress ||
+                heightRefreshInProgress ||
+                userOperationTransitionInProgress ||
+                customRescanRequesting.get() ||
+                restoreProgressInProgress ||
+                restoreProgressFinalizing ||
+                customRescanPreparing ||
+                customRescanInProgress ||
+                customRescanFinalizing ||
+                !wallet.isSynchronized ||
+                !runCatching { wallet.nativeSynchronized }.getOrDefault(false)
+
+            if (!foregroundWorkActive) {
+                runCatching { update() }
+                    .onFailure { Timber.tag(TAG).e(it, "Wallet update after PIN unlock failed") }
+            } else {
+                Timber.tag(TAG).i("PIN unlocked during foreground work; deferring wallet snapshot to scan callbacks")
+            }
+
             Timber.tag(TAG).i("Released PIN lock; foreground scan remained active")
             return true
         }
