@@ -239,11 +239,6 @@ class AnonWalletHandler(
 
             if (secureWipePriorityActive()) return
             walletState.update()
-            if (!restoreScanPending && wallet.isSynchronized) {
-                if (secureWipePriorityActive()) return
-                wallet.refreshHistory()
-            }
-
             if (secureWipePriorityActive()) return
             wallet.init(0)
 
