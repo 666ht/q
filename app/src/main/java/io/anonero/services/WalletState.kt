@@ -128,6 +128,8 @@ class WalletState(private val prefs: SharedPreferences) {
     // Distinguish the UI PIN lock from native wallet2 background-sync mode.
     // Switching the native wallet while a foreground scan is active can race its refresh worker.
     private val nativeBackgroundSyncActive = AtomicBoolean(false)
+    // Invalidates queued background-entry work as soon as a valid PIN is accepted.
+    private val backgroundLockRequestGeneration = AtomicLong(0L)
     private val customRescanScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     // Serialize user-requested refresh/reset/query operations. The generation changes
     // as soon as a new action is requested, so older queued work can never take over later.
@@ -841,28 +843,43 @@ class WalletState(private val prefs: SharedPreferences) {
     fun requestBackgroundSyncOnLeave() {
         if (_isWiping.get()) return
 
-        // Native startBackgroundSync() enters wallet2 through LOCK_REFRESH and is
-        // not cooperatively cancellable while it waits for an active refresh. Do
-        // not cancel a lifecycle job in the middle of that JNI call: cancellation
-        // would leave its Mutex held until native code eventually returns, which
-        // makes the next valid PIN wait on the same stuck transition.
-        if (backgroundLifecycleJob?.isActive == true) {
-            Timber.tag(TAG).d("Background wallet transition already active; not cancelling native work")
-            return
-        }
+        val wallet = getWallet ?: return
+        if (!runCatching { wallet.isInitialized }.getOrDefault(false)) return
 
+        // Expose the existing PIN overlay immediately. Do not cancel native work
+        // that may be waiting for wallet2's refresh lock.
+        val requestId = backgroundLockRequestGeneration.incrementAndGet()
+        val wasAlreadyLocked = _backgroundSync.value
+        if (!wasAlreadyLocked) emitUnlockShortcut(LockScreenShortCut.HOME)
+        _backgroundSync.value = true
+
+        // Keep this request's identity so a fast valid PIN can invalidate it before
+        // it re-enters native background-sync mode.
+        val previousJob = backgroundLifecycleJob
         backgroundLifecycleJob = backgroundLifecycleScope.launch {
-            runCatching { enterBackgroundSync() }
+            previousJob?.join()
+            if (_isWiping.get() || requestId != backgroundLockRequestGeneration.get()) {
+                return@launch
+            }
+            runCatching { enterBackgroundSync(requestId) }
                 .onFailure { Timber.tag(TAG).e(it, "Background wallet transition failed") }
         }
     }
-    
-    suspend fun enterBackgroundSync(): Boolean = bgSyncMutex.withLock {
-        if (_isWiping.get()) return false
+
+    suspend fun enterBackgroundSync(): Boolean =
+        enterBackgroundSync(backgroundLockRequestGeneration.get())
+
+    private suspend fun enterBackgroundSync(requestId: Long): Boolean = bgSyncMutex.withLock {
+        if (_isWiping.get() || requestId != backgroundLockRequestGeneration.get()) return false
         val wallet = getWallet ?: return false
-        if (!wallet.isInitialized || backgroundSync) return false
-        emitUnlockShortcut(LockScreenShortCut.HOME)
+        if (!wallet.isInitialized) return false
+
+        val wasAlreadyLocked = _backgroundSync.value
         _backgroundSync.value = true
+        if (!wasAlreadyLocked) emitUnlockShortcut(LockScreenShortCut.HOME)
+
+        // If native mode was already entered, there is no second transition to start.
+        if (nativeBackgroundSyncActive.get()) return true
         if (AnonConfig.viewOnly) return true
 
         // Never switch wallet2 into native background-sync mode while its normal
@@ -892,6 +909,11 @@ class WalletState(private val prefs: SharedPreferences) {
             return true
         }
 
+        // A valid PIN may have arrived while the foreground-operation checks ran.
+        if (_isWiping.get() || requestId != backgroundLockRequestGeneration.get()) {
+            return false
+        }
+
         _blockUpdates.set(true)
         try {
             if (wallet.startBackgroundSync()) {
@@ -900,12 +922,16 @@ class WalletState(private val prefs: SharedPreferences) {
                 return true
             }
             nativeBackgroundSyncActive.set(false)
-            _backgroundSync.value = false
+            if (requestId == backgroundLockRequestGeneration.get()) {
+                _backgroundSync.value = false
+            }
             Timber.tag(TAG).e("startBackgroundSync returned false")
             return false
         } catch (e: Exception) {
             nativeBackgroundSyncActive.set(false)
-            _backgroundSync.value = false
+            if (requestId == backgroundLockRequestGeneration.get()) {
+                _backgroundSync.value = false
+            }
             Timber.tag(TAG).e(e, "startBackgroundSync error")
             return false
         } finally {
@@ -916,9 +942,8 @@ class WalletState(private val prefs: SharedPreferences) {
     suspend fun exitBackgroundSync(pin: String): Boolean {
         if (_isWiping.get()) return false
 
-        // LockScreen calls this only after matching the saved PIN hash. Release the
-        // lock overlay before looking up the wallet or attempting any native teardown:
-        // a temporarily missing WalletManager instance must never reject a valid PIN.
+        // Invalidate any queued lock-entry task before clearing the existing PIN overlay.
+        backgroundLockRequestGeneration.incrementAndGet()
         _backgroundSync.value = false
 
         val wallet = getWallet
@@ -1191,6 +1216,9 @@ class WalletState(private val prefs: SharedPreferences) {
     }
 
     fun setBackGroundSync(startBackgroundSync: Boolean) {
+        if (!startBackgroundSync) {
+            backgroundLockRequestGeneration.incrementAndGet()
+        }
         _backgroundSync.update { startBackgroundSync }
     }
 
