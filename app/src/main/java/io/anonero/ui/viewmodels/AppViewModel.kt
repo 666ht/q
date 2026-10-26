@@ -8,6 +8,7 @@ import io.anonero.services.InvalidPin
 import io.anonero.services.TorService
 import io.anonero.services.WalletState
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.launch
@@ -47,6 +48,15 @@ class AppViewModel(private val walletState: WalletState, private val torService:
             false
         }
     }
+
+    /**
+     * PIN verification may change navigation/background-lock state and remove the
+     * LockScreen composable before the operation has returned. Run that workflow in
+     * the ViewModel scope rather than rememberCoroutineScope(), which is cancelled
+     * when the composable leaves the composition.
+     */
+    fun launchPinOperation(block: suspend () -> Unit): Job =
+        viewModelScope.launch(Dispatchers.IO) { block() }
 
     @Synchronized
     fun startService() {
