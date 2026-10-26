@@ -132,8 +132,6 @@ fun LockScreen(
 
     fun showError() {
         if (!uiActive.get()) return
-        // A failed attempt must not be concatenated with the next PIN entry.
-        currentPin.clear()
         errorShake.shake(
             ShakeConfig(
                 6, translateX = 5f
@@ -156,9 +154,6 @@ fun LockScreen(
         if (checkingPin) return
 
         val pin = currentPin.joinToString(separator = "")
-        // Consume this entry. Otherwise retrying after returning from notifications
-        // can append digits to a previous attempt and never match the stored PIN hash.
-        currentPin.clear()
         if (pin.length < 4) {
             showError()
             return
