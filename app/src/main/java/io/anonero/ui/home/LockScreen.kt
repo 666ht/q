@@ -151,13 +151,37 @@ fun LockScreen(
     }
 
     fun checkPin(shortCut: LockScreenShortCut) {
-        if (checkingPin) return
-
         val pin = currentPin.joinToString(separator = "")
         if (pin.length < 4) {
             showError()
             return
         }
+
+        // A previously started legacy/native verification must not swallow a later
+        // correct PIN. The saved local hash is authoritative for normal lock-screen
+        // unlocks, so resolve this path before the in-flight-operation guard.
+        if (mode == LockScreenMode.LOCK_SCREEN) {
+            val localPinHash = CrazyPassEncoder.encode(
+                pin.toByteArray().let { bytes ->
+                    if (bytes.size < 32) bytes + ByteArray(32 - bytes.size)
+                    else bytes
+                }
+            )
+            if (prefs.getString(PREFS_PIN_HASH, "") == localPinHash) {
+                Timber.tag(TAG).i("Saved PIN hash matched; releasing lock immediately")
+                walletState.setBackGroundSync(false)
+                onUnLocked(pin, shortCut)
+                appViewModel.launchPinOperation {
+                    runCatching { walletState.exitBackgroundSync(pin) }
+                        .onFailure {
+                            Timber.tag(TAG).e(it, "PIN accepted but background-sync teardown failed")
+                        }
+                }
+                return
+            }
+        }
+
+        if (checkingPin) return
 
         // Prevent repeated taps from issuing concurrent native wallet-open calls.
         checkingPin = true
