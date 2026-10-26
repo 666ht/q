@@ -366,6 +366,33 @@ class WalletState(private val prefs: SharedPreferences) {
         updateScanPreparationIndicator()
     }
 
+    /**
+     * Keep the node page's wallet-height value aligned with the selected scan range
+     * while wallet2 is still returning the previous scan cursor. Once the native
+     * rescan cursor enters the selected range, show its live height, never below
+     * the selected start used by the scan-progress calculation.
+     */
+    fun walletHeightForDisplay(nativeHeight: Long?): Long? {
+        val restoreStart = restoreProgressStartHeight
+        if (restoreProgressInProgress && restoreStart != null) {
+            return restoreStart
+        }
+
+        val selectedStart = customRescanStartHeight ?: heightRefreshStartHeight
+        if (customRescanPreparing && selectedStart != null) {
+            return selectedStart
+        }
+        if (customRescanInProgress && selectedStart != null) {
+            if (!customRescanScanStarted.get()) return selectedStart
+            return nativeHeight?.coerceAtLeast(selectedStart) ?: selectedStart
+        }
+        if (customRescanFinalizing && selectedStart != null) {
+            return nativeHeight?.coerceAtLeast(selectedStart) ?: selectedStart
+        }
+
+        return nativeHeight
+    }
+
     fun beginRestoreProgress(startHeight: Long) {
         lastScanDataRefreshAt = 0L
         scanDataRefreshRunning.set(false)
