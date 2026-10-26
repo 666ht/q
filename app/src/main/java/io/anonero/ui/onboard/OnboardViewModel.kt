@@ -42,6 +42,16 @@ class OnboardViewModel(private val prefs: SharedPreferences) : ViewModel() {
 
     fun getSeed() = walllet?.getSeed(passPhrase) ?: ""
 
+    /**
+     * Must use the same PIN hash in every wallet-creation path because LockScreen
+     * validates this value without consulting the native wallet.
+     */
+    private fun encodePinHash(pin: String): String =
+        CrazyPassEncoder.encode(
+            pin.toByteArray().let { bytes ->
+                if (bytes.size < 32) bytes + ByteArray(32 - bytes.size) else bytes
+            }
+        )
 
     suspend fun create(pin: String) {
         if (AnonConfig.context == null) return
@@ -69,16 +79,8 @@ class OnboardViewModel(private val prefs: SharedPreferences) : ViewModel() {
                 remove("MNEMONIC_SELECTED_RESTORE_HEIGHT")
             }
 
-            //adds padding to the pin if it's less than 32 bytes
-            val pinHash = CrazyPassEncoder.encode(
-                pin.toByteArray().let { bytes ->
-                    if (bytes.size < 32) {
-                        bytes + ByteArray(32 - bytes.size)
-                    } else bytes
-                }
-            )
-            prefs.edit {
-                putString(PREFS_PIN_HASH, pinHash)
+            prefs.edit(commit = true) {
+                putString(PREFS_PIN_HASH, encodePinHash(pin))
             }
             walllet = anonWallet
             delay(500)
@@ -114,8 +116,9 @@ class OnboardViewModel(private val prefs: SharedPreferences) : ViewModel() {
                 throw CancellationException(context.getString(R.string.unable_to_create_wallet))
             }
             val crazyPass: String = KeyStoreHelper.getCrazyPass(AnonConfig.context, passPhrase)
-            prefs.edit {
+            prefs.edit(commit = true) {
                 putString("passPhraseHash", crazyPass)
+                putString(PREFS_PIN_HASH, encodePinHash(pin))
             }
             walllet = anonWallet
             delay(500)
@@ -185,6 +188,7 @@ class OnboardViewModel(private val prefs: SharedPreferences) : ViewModel() {
         val crazyPass: String = KeyStoreHelper.getCrazyPass(AnonConfig.context, passPhrase)
         prefs.edit(commit = true) {
             putString(PREFS_PASSPHRASE_HASH, crazyPass)
+            putString(PREFS_PIN_HASH, encodePinHash(pin))
             // Remove stale one-shot heights when none was selected. Native
             // recovery must retain its own default (Polyseed birthday or legacy seed).
             val selectedRestoreHeight = restorePayload?.restoreHeight?.takeIf { it > 0L }
