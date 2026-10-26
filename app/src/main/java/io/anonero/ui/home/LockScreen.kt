@@ -147,8 +147,6 @@ fun LockScreen(
             }
             delay(100)
             pinError = false
-            // Preserve the existing error feedback, then reset the buffer for the next attempt.
-            currentPin.clear()
         }
     }
 
@@ -177,7 +175,6 @@ fun LockScreen(
                     LockScreenMode.VERYFY_PIN -> {
                         withContext(Dispatchers.Main) {
                             if (prefsHash == pinHash) {
-                                currentPin.clear()
                                 onUnLocked(pin, shortCut)
                             } else {
                                 showError()
@@ -194,7 +191,6 @@ fun LockScreen(
                             }
                             withContext(Dispatchers.Main) {
                                 appViewModel.startService()
-                                currentPin.clear()
                                 onUnLocked(pin, shortCut)
                                 (activity as? MainActivity)?.startNotificationService()
                             }
@@ -225,7 +221,6 @@ fun LockScreen(
                             // Normal PIN unlock is local and immediate. Do not wait for
                             // wallet sync or background-sync teardown before hiding the overlay.
                             withContext(Dispatchers.Main) {
-                                currentPin.clear()
                                 walletState.setBackGroundSync(false)
                                 onUnLocked(pin, shortCut)
                             }
