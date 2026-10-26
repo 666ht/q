@@ -915,14 +915,22 @@ class WalletState(private val prefs: SharedPreferences) {
 
     suspend fun exitBackgroundSync(pin: String): Boolean {
         if (_isWiping.get()) return false
-        val wallet = getWallet ?: return false
 
-        // A valid PIN has already been checked by LockScreen. Never make navigation
-        // wait for bgSyncMutex or a native wallet2 call: a refresh/startBackgroundSync
-        // operation may be waiting on a native lock that cannot be cancelled from Kotlin.
-        // Release the UI lock immediately and serialize any native teardown separately.
+        // LockScreen calls this only after matching the saved PIN hash. Release the
+        // lock overlay before looking up the wallet or attempting any native teardown:
+        // a temporarily missing WalletManager instance must never reject a valid PIN.
         _backgroundSync.value = false
 
+        val wallet = getWallet
+        if (wallet == null) {
+            Timber.tag(TAG).w(
+                "PIN accepted and lock released; wallet instance unavailable for native teardown"
+            )
+            return true
+        }
+
+        // Native wallet2 may still be holding its refresh lock. Never make the PIN UI
+        // wait for bgSyncMutex or a JNI call; teardown is serialized separately.
         val nativeTransitionPending =
             nativeBackgroundSyncActive.get() || backgroundLifecycleJob?.isActive == true
         if (AnonConfig.viewOnly || !nativeTransitionPending) {
