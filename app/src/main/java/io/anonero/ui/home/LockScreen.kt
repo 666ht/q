@@ -167,11 +167,7 @@ fun LockScreen(
                     else bytes
                 }
             )
-            if (
-                prefs.getString(PREFS_PIN_HASH, "") == localPinHash &&
-                (!checkingPin || walletState.backgroundSync)
-            ) {
-                checkingPin = true
+            if (prefs.getString(PREFS_PIN_HASH, "") == localPinHash) {
                 Timber.tag(TAG).i("Saved PIN hash matched; releasing lock immediately")
                 walletState.setBackGroundSync(false)
                 onUnLocked(pin, shortCut)
@@ -232,9 +228,11 @@ fun LockScreen(
                     LockScreenMode.LOCK_SCREEN -> {
                         val localHashMatches = prefsHash == pinHash
                         // Older seed-restore builds did not persist the local PIN hash.
-                        // Only in that legacy/mismatch case, verify the wallet-file password
+                        // Only when no local hash exists, verify the wallet-file password
                         // off the UI thread and repair the local hash for future instant unlocks.
-                        val legacyPinMatches = !localHashMatches &&
+                        // A mismatch against an existing hash is a wrong PIN and should show
+                        // the existing error feedback without an unnecessary native check.
+                        val legacyPinMatches = prefsHash.isNullOrBlank() &&
                             appViewModel.verifyLegacyWalletPin(pin)
                         if (!localHashMatches && !legacyPinMatches) {
                             withContext(Dispatchers.Main) {
