@@ -36,6 +36,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
@@ -68,6 +69,7 @@ import io.anonero.util.WALLET_PREFERENCES
 import io.anonero.util.rememberShakeController
 import io.anonero.util.shake
 import io.anonero.util.shuffleExcept
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -77,6 +79,7 @@ import org.koin.androidx.compose.koinViewModel
 import org.koin.compose.koinInject
 import org.koin.core.qualifier.named
 import timber.log.Timber
+import java.util.concurrent.atomic.AtomicBoolean
 
 const val BackSpaceKey = -2
 const val ConfirmKey = -3
@@ -116,6 +119,11 @@ fun LockScreen(
     )
     val errorShake = rememberShakeController()
     val scope = rememberCoroutineScope()
+    val uiActive = remember { AtomicBoolean(true) }
+    DisposableEffect(Unit) {
+        uiActive.set(true)
+        onDispose { uiActive.set(false) }
+    }
     val appViewModel: AppViewModel = koinViewModel()
 
     LaunchedEffect(true) {
@@ -123,6 +131,7 @@ fun LockScreen(
     }
 
     fun showError() {
+        if (!uiActive.get()) return
         errorShake.shake(
             ShakeConfig(
                 6, translateX = 5f
@@ -152,7 +161,7 @@ fun LockScreen(
 
         // Prevent repeated taps from issuing concurrent native wallet-open calls.
         checkingPin = true
-        scope.launch(Dispatchers.IO) {
+        appViewModel.launchPinOperation {
             try {
                 val pinHash = CrazyPassEncoder.encode(
                     pin.toByteArray().let { bytes ->
@@ -212,6 +221,8 @@ fun LockScreen(
                         }
                     }
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Timber.tag(TAG).e(e, "PIN verification/open wallet failed")
                 withContext(Dispatchers.Main) {
@@ -219,7 +230,7 @@ fun LockScreen(
                 }
             } finally {
                 withContext(Dispatchers.Main) {
-                    checkingPin = false
+                    if (uiActive.get()) checkingPin = false
                 }
             }
         }
