@@ -202,14 +202,24 @@ fun LockScreen(
                     }
 
                     LockScreenMode.LOCK_SCREEN -> {
-                        if (prefsHash != pinHash) {
+                        val localHashMatches = prefsHash == pinHash
+                        // Older seed-restore builds did not persist the local PIN hash.
+                        // Only in that legacy/mismatch case, verify the wallet-file password
+                        // off the UI thread and repair the local hash for future instant unlocks.
+                        val legacyPinMatches = !localHashMatches &&
+                            appViewModel.verifyLegacyWalletPin(pin)
+                        if (!localHashMatches && !legacyPinMatches) {
                             withContext(Dispatchers.Main) {
                                 showError()
                             }
                         } else {
-                            // The stored PIN hash is the unlock authority. Remove the
-                            // overlay immediately on the UI thread; native background-sync
-                            // teardown is independent work and must never reject a valid PIN.
+                            if (legacyPinMatches) {
+                                prefs.edit(commit = true) {
+                                    putString(PREFS_PIN_HASH, pinHash)
+                                }
+                            }
+                            // Normal PIN unlock is local and immediate. Do not wait for
+                            // wallet sync or background-sync teardown before hiding the overlay.
                             withContext(Dispatchers.Main) {
                                 walletState.setBackGroundSync(false)
                                 onUnLocked(pin, shortCut)
@@ -217,7 +227,7 @@ fun LockScreen(
                             val resumed = walletState.exitBackgroundSync(pin)
                             if (!resumed) {
                                 Timber.tag(TAG).w(
-                                    "PIN hash accepted and UI unlocked; background-sync teardown deferred"
+                                    "PIN accepted and UI unlocked; background-sync teardown deferred"
                                 )
                             }
                         }
