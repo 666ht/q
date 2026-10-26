@@ -889,35 +889,16 @@ class WalletState(private val prefs: SharedPreferences) {
     suspend fun exitBackgroundSync(pin: String): Boolean = bgSyncMutex.withLock {
         if (_isWiping.get()) return false
         val wallet = getWallet ?: return false
-        val foregroundWorkActive = foregroundWalletOperationActive(wallet)
-
-        if (AnonConfig.viewOnly) {
+        // View-only wallets and foreground-scan PIN locks never entered native
+        // background-sync mode. Unlock them without an eager JNI snapshot: the
+        // wallet stays open and its existing listener publishes state as it changes.
+        // Reading balance/history/outputs here can contend with wallet2's active
+        // refresh and make a valid PIN appear to do nothing.
+        if (AnonConfig.viewOnly || !nativeBackgroundSyncActive.get()) {
             _backgroundSync.value = false
-            if (!foregroundWorkActive) {
-                runCatching { update() }
-                    .onFailure { Timber.tag(TAG).e(it, "Wallet update after PIN unlock failed") }
-            } else {
-                Timber.tag(TAG).i("PIN unlocked during foreground work; deferring wallet snapshot to scan callbacks")
-            }
-            return true
-        }
-
-        // If this was only a UI lock during a foreground scan/refresh, do not call
-        // native stopBackgroundSync(): that mode was never started. Also do not call
-        // update() here while wallet2 is scanning. update() reads native balances,
-        // history and outputs; competing with the active block loop can stall this
-        // PIN coroutine and leave the lock overlay visible despite a correct PIN.
-        if (!nativeBackgroundSyncActive.get()) {
-            _backgroundSync.value = false
-
-            if (!foregroundWorkActive) {
-                runCatching { update() }
-                    .onFailure { Timber.tag(TAG).e(it, "Wallet update after PIN unlock failed") }
-            } else {
-                Timber.tag(TAG).i("PIN unlocked during foreground work; deferring wallet snapshot to scan callbacks")
-            }
-
-            Timber.tag(TAG).i("Released PIN lock; foreground scan remained active")
+            Timber.tag(TAG).i(
+                "Released PIN lock without native background-sync teardown; wallet callbacks retain state"
+            )
             return true
         }
 
