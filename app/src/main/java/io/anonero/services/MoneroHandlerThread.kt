@@ -62,11 +62,27 @@ class MoneroHandlerThread(
             Timber.tag(name).d("Ignoring block callback while custom rescan is being prepared")
             return
         }
-        Timber.tag(name).i("newBlock: %s", height)
-
         // Custom-height scans have their own hard end and progress cursor. Do not
         // let the daemon's full target or native synchronized flag finish them.
         if (walletState.customRescanInProgress) {
+            val selectedStartHeight = walletState.customRescanStartHeight
+
+            // wallet2::fast_refresh emits newBlock callbacks while rebuilding the
+            // blockchain hash prefix before it reaches the selected transaction
+            // scan height. Those callbacks are NOT scanned transactions. Refreshing
+            // history for them adds needless wallet work during the hand-off and
+            // makes logs look as if the recovery were scanning from an older height.
+            // The native cursor poller continues independently until the selected
+            // height is reached.
+            if (selectedStartHeight != null && height < selectedStartHeight) {
+                return
+            }
+
+            Timber.tag(name).i(
+                "Custom-height transaction scan callback: height=%d selectedStart=%d",
+                height,
+                selectedStartHeight ?: height
+            )
             walletState.requestScanDataRefresh()
             walletState.onCustomRescanBlock(height)
             return
@@ -82,6 +98,8 @@ class MoneroHandlerThread(
         if (walletState.customRescanFinished) {
             return
         }
+
+        Timber.tag(name).i("newBlock: %s", height)
 
         // For mnemonic restore, the displayed remaining-block counter is the
         // completion authority. Never switch to nativeSynchronized early.
