@@ -67,9 +67,12 @@ class AppViewModel(private val walletState: WalletState, private val torService:
     fun verifyLegacyWalletPin(pin: String): Boolean {
         val context = AnonConfig.context?.applicationContext ?: return false
         val walletFile = AnonConfig.getDefaultWalletFile(context)
+        // Monero's verifyWalletPassword API expects the keys-file path, not the
+        // base wallet filename passed to openWallet().
+        val keysFilePath = "${walletFile.path}.keys"
         return runCatching {
             WalletManager.instance?.verifyWalletPassword(
-                walletFile.path,
+                keysFilePath,
                 pin,
                 AnonConfig.viewOnly
             ) == true
