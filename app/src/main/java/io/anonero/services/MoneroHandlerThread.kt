@@ -146,25 +146,6 @@ class MoneroHandlerThread(
         // remaining counts, so never use getDaemonBlockChainTargetHeight() here.
         val effectiveTarget = daemonHeight
 
-        // Once this wallet has completed an initial scan, a normal block callback
-        // must not reopen the full sync UI merely because the daemon is ahead.
-        // Keep wallet2 processing the blocks, but reserve numeric progress for first
-        // sync and the explicit restore/custom-rescan paths handled above.
-        if (!restoreActive &&
-            walletState.hasCompletedSyncBefore() &&
-            !walletState.restoreProgressFinalizing &&
-            !walletState.customRescanPreparing &&
-            !walletState.customRescanInProgress &&
-            !walletState.customRescanFinalizing
-        ) {
-            walletState.showOrdinaryCatchUpRefresh()
-            Timber.tag(name).d(
-                "Previously-completed wallet uses ordinary refresh: wallet=%d daemon=%d left=%d",
-                syncHeight, daemonHeight, (daemonHeight - syncHeight).coerceAtLeast(0L)
-            )
-            return
-        }
-
         // Keep a small number of newly mined blocks on the normal refresh indicator.
         // wallet2 still scans them; this only avoids reopening the full sync counter
         // every time an already-synced wallet is reopened.
@@ -377,25 +358,17 @@ class MoneroHandlerThread(
             return true
         }
         if (daemonHeight - scanHeight >= 2L) {
-            // A wallet that has already completed its initial scan should not reopen
-            // the full block-sync UI just because an ordinary refresh found newer blocks.
-            // Continue the native scan and keep the ordinary refresh indicator; reserve
-            // numeric block progress for first sync, restore, and explicit reset scans.
-            if (walletState.hasCompletedSyncBefore() &&
-                (wallet.isSynchronized || wallet.nativeSynchronized) &&
-                !walletState.restoreProgressInProgress &&
-                !walletState.customRescanInProgress &&
-                !walletState.customRescanFinalizing
-            ) {
+            // Keep small catch-up scans on the ordinary refresh indicator, but show
+            // real remaining-block progress when the backlog exceeds the visibility
+            // threshold. Previously-synced wallets must not hide a large backlog forever.
+            if (walletState.shouldShowNormalSyncProgress(scanHeight, daemonHeight)) {
+                updateSyncProgress(scanHeight)
+            } else {
                 walletState.showOrdinaryCatchUpRefresh()
                 Timber.tag(name).d(
-                    "Previously-synced wallet catching up silently: wallet=%d daemon=%d left=%d",
+                    "Normal catch-up below progress threshold or awaiting a stable cursor: wallet=%d daemon=%d left=%d",
                     scanHeight, daemonHeight, daemonHeight - scanHeight
                 )
-            } else {
-                // Record the initial backlog size before the progress callback re-reads heights.
-                walletState.shouldShowNormalSyncProgress(scanHeight, daemonHeight)
-                updateSyncProgress(scanHeight)
             }
             return true
         }
