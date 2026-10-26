@@ -790,7 +790,17 @@ class WalletState(private val prefs: SharedPreferences) {
      */
     fun requestBackgroundSyncOnLeave() {
         if (_isWiping.get()) return
-        backgroundLifecycleJob?.cancel()
+
+        // Native startBackgroundSync() enters wallet2 through LOCK_REFRESH and is
+        // not cooperatively cancellable while it waits for an active refresh. Do
+        // not cancel a lifecycle job in the middle of that JNI call: cancellation
+        // would leave its Mutex held until native code eventually returns, which
+        // makes the next valid PIN wait on the same stuck transition.
+        if (backgroundLifecycleJob?.isActive == true) {
+            Timber.tag(TAG).d("Background wallet transition already active; not cancelling native work")
+            return
+        }
+
         backgroundLifecycleJob = backgroundLifecycleScope.launch {
             runCatching { enterBackgroundSync() }
                 .onFailure { Timber.tag(TAG).e(it, "Background wallet transition failed") }
@@ -808,17 +818,41 @@ class WalletState(private val prefs: SharedPreferences) {
         // Never switch wallet2 into native background-sync mode while its normal
         // refresh/rescan worker is active. That transition can race the native scan
         // when the user leaves the app mid-sync and crash on the next activity launch.
+        // Consider every foreground wallet operation before entering native
+        // background-sync mode. In particular, an already-synchronized wallet may
+        // still be doing ordinary catch-up; its normal indicator does not necessarily
+        // set isSyncing/_isLoading, and wallet2 may still report synchronized until
+        // the next callback. startBackgroundSync() takes the native refresh lock, so
+        // missing these states can hold bgSyncMutex and make the next PIN unlock wait
+        // indefinitely for stopBackgroundSync().
         val scanActive = isSyncing ||
             _isLoading.value ||
+            _manualRefreshInProgress.value ||
+            _syncProgress.value != null ||
+            ordinaryCatchUpInProgress ||
+            heightRefreshInProgress ||
+            userOperationTransitionInProgress ||
+            customRescanRequesting.get() ||
             restoreProgressInProgress ||
             restoreProgressFinalizing ||
+            customRescanPreparing ||
             customRescanInProgress ||
             customRescanFinalizing ||
             !wallet.isSynchronized ||
             !wallet.nativeSynchronized
         if (scanActive) {
             nativeBackgroundSyncActive.set(false)
-            Timber.tag(TAG).i("Keeping foreground scan active; PIN lock only")
+            Timber.tag(TAG).i(
+                "Keeping foreground wallet operation active; PIN lock only (syncing=%s loading=%s manualRefresh=%s catchUp=%s heightRefresh=%s transition=%s customRescan=%s restore=%s)",
+                isSyncing,
+                _isLoading.value,
+                _manualRefreshInProgress.value,
+                ordinaryCatchUpInProgress,
+                heightRefreshInProgress,
+                userOperationTransitionInProgress,
+                customRescanPreparing || customRescanInProgress || customRescanFinalizing,
+                restoreProgressInProgress || restoreProgressFinalizing
+            )
             return true
         }
 
