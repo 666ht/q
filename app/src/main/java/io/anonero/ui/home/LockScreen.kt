@@ -167,7 +167,11 @@ fun LockScreen(
                     else bytes
                 }
             )
-            if (prefs.getString(PREFS_PIN_HASH, "") == localPinHash) {
+            if (
+                prefs.getString(PREFS_PIN_HASH, "") == localPinHash &&
+                (!checkingPin || walletState.backgroundSync)
+            ) {
+                checkingPin = true
                 Timber.tag(TAG).i("Saved PIN hash matched; releasing lock immediately")
                 walletState.setBackGroundSync(false)
                 onUnLocked(pin, shortCut)
