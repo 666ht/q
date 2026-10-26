@@ -67,18 +67,42 @@ class AppViewModel(private val walletState: WalletState, private val torService:
     fun verifyLegacyWalletPin(pin: String): Boolean {
         val context = AnonConfig.context?.applicationContext ?: return false
         val walletFile = AnonConfig.getDefaultWalletFile(context)
-        // Monero's verifyWalletPassword API expects the keys-file path, not the
-        // base wallet filename passed to openWallet().
-        val keysFilePath = "${walletFile.path}.keys"
-        return runCatching {
-            WalletManager.instance?.verifyWalletPassword(
-                keysFilePath,
-                pin,
-                AnonConfig.viewOnly
-            ) == true
-        }.onFailure {
-            Timber.tag(TAG).w(it, "Legacy PIN-hash migration check failed")
-        }.getOrDefault(false)
+        val manager = WalletManager.instance ?: return false
+
+        // Older builds and native wrappers have used both the wallet base path and
+        // the .keys path for password verification. Try both without changing the
+        // PIN UI contract; only a successful native credential check is accepted.
+        val candidatePaths = listOf(
+            "${walletFile.path}.keys",
+            walletFile.path
+        ).distinct()
+
+        for (path in candidatePaths) {
+            val verified = runCatching {
+                manager.verifyWalletPassword(path, pin, AnonConfig.viewOnly)
+            }.onFailure {
+                Timber.tag(TAG).d(it, "Wallet password verification failed for candidate path")
+            }.getOrDefault(false)
+            if (verified) {
+                Timber.tag(TAG).i("Legacy PIN verified against wallet credential file")
+                return true
+            }
+
+            // Compatibility fallback for native builds exposing the wallet-device
+            // password verifier separately from verifyWalletPassword().
+            val verifiedByWalletDevice = runCatching {
+                manager.verifyWalletPasswordOnly(path, pin)
+            }.onFailure {
+                Timber.tag(TAG).d(it, "Wallet-device PIN verification failed for candidate path")
+            }.getOrDefault(false)
+            if (verifiedByWalletDevice) {
+                Timber.tag(TAG).i("Legacy PIN verified by wallet-device password check")
+                return true
+            }
+        }
+
+        Timber.tag(TAG).w("PIN hash mismatch and wallet credential verification rejected the PIN")
+        return false
     }
 
     @Synchronized
