@@ -124,7 +124,11 @@ class WalletState(private val prefs: SharedPreferences) {
     // Activity teardown must not cancel a wallet background-transition operation
     // while native wallet2 is switching refresh modes.
     private val backgroundLifecycleScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    // Keep lock-entry and native teardown jobs ordered as one lifecycle. Otherwise
+    // a fast leave/re-enter can acquire bgSyncMutex before an older teardown job.
+    private val backgroundTransitionJobsLock = Any()
     private var backgroundLifecycleJob: Job? = null
+    private var backgroundTeardownJob: Job? = null
     // Distinguish the UI PIN lock from native wallet2 background-sync mode.
     // Switching the native wallet while a foreground scan is active can race its refresh worker.
     private val nativeBackgroundSyncActive = AtomicBoolean(false)
@@ -846,29 +850,37 @@ class WalletState(private val prefs: SharedPreferences) {
         val wallet = getWallet ?: return
         if (!runCatching { wallet.isInitialized }.getOrDefault(false)) return
 
-        // Show the existing PIN overlay immediately. Do not make lock visibility
-        // depend on native wallet work or silently drop a repeated app-leave event.
-        val requestId = backgroundLockRequestGeneration.incrementAndGet()
-        emitUnlockShortcut(LockScreenShortCut.HOME)
-        _backgroundSync.value = true
+        // Show the existing PIN overlay immediately. Register the lock intent and
+        // its lifecycle job atomically so a concurrent PIN unlock cannot be overwritten.
+        synchronized(backgroundTransitionJobsLock) {
+            val requestId = backgroundLockRequestGeneration.incrementAndGet()
+            emitUnlockShortcut(LockScreenShortCut.HOME)
+            _backgroundSync.value = true
 
-        // Native startBackgroundSync() may block while wallet2 finishes a refresh.
-        // Chain repeated requests instead of cancelling that JNI call or losing the
-        // newest lock intent. The generation check below makes older queued requests
-        // harmless after a valid PIN unlock.
-        val previousJob = backgroundLifecycleJob
-        backgroundLifecycleJob = backgroundLifecycleScope.launch {
-            previousJob?.join()
-            if (_isWiping.get() || requestId != backgroundLockRequestGeneration.get()) {
-                return@launch
+            // Do not start a new native transition until both the preceding entry and
+            // any deferred native teardown have finished. Mutex acquisition alone does
+            // not guarantee that these two queued jobs run in intent order.
+            val previousJob = backgroundLifecycleJob
+            val previousTeardownJob = backgroundTeardownJob
+            backgroundLifecycleJob = backgroundLifecycleScope.launch {
+                previousJob?.join()
+                previousTeardownJob?.join()
+                if (_isWiping.get() || requestId != backgroundLockRequestGeneration.get()) {
+                    return@launch
+                }
+                runCatching { enterBackgroundSync(requestId) }
+                    .onFailure { Timber.tag(TAG).e(it, "Background wallet transition failed") }
             }
-            runCatching { enterBackgroundSync(requestId) }
-                .onFailure { Timber.tag(TAG).e(it, "Background wallet transition failed") }
         }
     }
 
-    suspend fun enterBackgroundSync(): Boolean =
-        enterBackgroundSync(backgroundLockRequestGeneration.get())
+    suspend fun enterBackgroundSync(): Boolean {
+        val (requestId, pendingTeardown) = synchronized(backgroundTransitionJobsLock) {
+            backgroundLockRequestGeneration.get() to backgroundTeardownJob
+        }
+        pendingTeardown?.join()
+        return enterBackgroundSync(requestId)
+    }
 
     private suspend fun enterBackgroundSync(requestId: Long): Boolean = bgSyncMutex.withLock {
         if (_isWiping.get() || requestId != backgroundLockRequestGeneration.get()) return false
@@ -949,12 +961,79 @@ class WalletState(private val prefs: SharedPreferences) {
     suspend fun exitBackgroundSync(pin: String): Boolean {
         if (_isWiping.get()) return false
 
-        // A valid PIN supersedes any queued app-leave transition. Invalidate stale
-        // work before clearing the UI lock and scheduling native teardown.
-        backgroundLockRequestGeneration.incrementAndGet()
-        _backgroundSync.value = false
-
         val wallet = getWallet
+        var wipeStartedDuringUnlock = false
+
+        // Serialize the PIN-unlock intent and teardown-job registration against a
+        // concurrent app-leave request. The UI flag changes immediately; native work
+        // remains asynchronous and never blocks the PIN screen.
+        val teardownQueued = synchronized(backgroundTransitionJobsLock) {
+            backgroundLockRequestGeneration.incrementAndGet()
+            _backgroundSync.value = false
+
+            if (_isWiping.get()) {
+                wipeStartedDuringUnlock = true
+                false
+            } else {
+                val nativeTransitionPending =
+                    nativeBackgroundSyncActive.get() ||
+                        backgroundLifecycleJob?.isActive == true ||
+                        backgroundTeardownJob?.isActive == true
+
+                if (wallet == null || AnonConfig.viewOnly || !nativeTransitionPending) {
+                    false
+                } else {
+                    // Chain teardown jobs too: repeated PIN submissions must not race
+                    // each other or a newer entry for the same native wallet instance.
+                    val previousTeardownJob = backgroundTeardownJob
+                    backgroundTeardownJob = backgroundLifecycleScope.launch {
+                        previousTeardownJob?.join()
+                        bgSyncMutex.withLock {
+                            if (_isWiping.get()) return@withLock
+                            val currentWallet = getWallet ?: return@withLock
+                            if (!nativeBackgroundSyncActive.get()) {
+                                Timber.tag(TAG).d(
+                                    "Skipping deferred background-sync teardown; native mode was not entered"
+                                )
+                                return@withLock
+                            }
+
+                            _blockUpdates.set(true)
+                            val exited = try {
+                                currentWallet.stopBackgroundSync(pin)
+                            } catch (e: Exception) {
+                                Timber.tag(TAG).e(e, "Deferred native background-sync exit failed")
+                                false
+                            } finally {
+                                _blockUpdates.set(false)
+                            }
+
+                            if (!exited) {
+                                Timber.tag(TAG).e(
+                                    "Deferred stopBackgroundSync returned false; PIN screen was already released"
+                                )
+                                return@withLock
+                            }
+
+                            nativeBackgroundSyncActive.set(false)
+                            runCatching { currentWallet.refreshHistory() }
+                                .onFailure { Timber.tag(TAG).e(it, "History refresh after background sync failed") }
+                            runCatching { currentWallet.refreshCoins(force = true) }
+                                .onFailure { Timber.tag(TAG).e(it, "Output refresh after background sync failed") }
+                            runCatching { update() }
+                                .onFailure { Timber.tag(TAG).e(it, "Wallet snapshot after background sync failed") }
+                            runCatching { currentWallet.startRefresh() }
+                                .onFailure { Timber.tag(TAG).e(it, "Restart refresh after background sync failed") }
+                            Timber.tag(TAG).i("Deferred native background-sync teardown completed")
+                        }
+                    }
+                    true
+                }
+            }
+        }
+
+        if (wipeStartedDuringUnlock) return false
+
         if (wallet == null) {
             Timber.tag(TAG).w(
                 "PIN accepted and lock released; wallet instance unavailable for native teardown"
@@ -962,56 +1041,11 @@ class WalletState(private val prefs: SharedPreferences) {
             return true
         }
 
-        // Native wallet2 may still be holding its refresh lock. Never make the PIN UI
-        // wait for bgSyncMutex or a JNI call; teardown is serialized separately.
-        val nativeTransitionPending =
-            nativeBackgroundSyncActive.get() || backgroundLifecycleJob?.isActive == true
-        if (AnonConfig.viewOnly || !nativeTransitionPending) {
+        if (!teardownQueued) {
             Timber.tag(TAG).i(
                 "Released PIN lock immediately; no native background-sync teardown required"
             )
             return true
-        }
-
-        backgroundLifecycleScope.launch {
-            bgSyncMutex.withLock {
-                if (_isWiping.get()) return@withLock
-                val currentWallet = getWallet ?: return@withLock
-                if (!nativeBackgroundSyncActive.get()) {
-                    Timber.tag(TAG).d(
-                        "Skipping deferred background-sync teardown; native mode was not entered"
-                    )
-                    return@withLock
-                }
-
-                _blockUpdates.set(true)
-                val exited = try {
-                    currentWallet.stopBackgroundSync(pin)
-                } catch (e: Exception) {
-                    Timber.tag(TAG).e(e, "Deferred native background-sync exit failed")
-                    false
-                } finally {
-                    _blockUpdates.set(false)
-                }
-
-                if (!exited) {
-                    Timber.tag(TAG).e(
-                        "Deferred stopBackgroundSync returned false; PIN screen was already released"
-                    )
-                    return@withLock
-                }
-
-                nativeBackgroundSyncActive.set(false)
-                runCatching { currentWallet.refreshHistory() }
-                    .onFailure { Timber.tag(TAG).e(it, "History refresh after background sync failed") }
-                runCatching { currentWallet.refreshCoins(force = true) }
-                    .onFailure { Timber.tag(TAG).e(it, "Output refresh after background sync failed") }
-                runCatching { update() }
-                    .onFailure { Timber.tag(TAG).e(it, "Wallet snapshot after background sync failed") }
-                runCatching { currentWallet.startRefresh() }
-                    .onFailure { Timber.tag(TAG).e(it, "Restart refresh after background sync failed") }
-                Timber.tag(TAG).i("Deferred native background-sync teardown completed")
-            }
         }
 
         Timber.tag(TAG).i(
