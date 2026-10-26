@@ -132,11 +132,12 @@ class NodeSettingsViewModel(
         while (currentCoroutineContext().isActive) {
             if (walletHandler.isSecureWipeInProgress() || walletState.isWiping()) return@flow
             val height = withContext(Dispatchers.IO) {
-                runCatching {
+                val nativeHeight = runCatching {
                     WalletManager.instance?.wallet
                         ?.takeIf { it.isInitialized }
                         ?.getBlockChainHeight()
                 }.getOrNull()
+                walletState.walletHeightForDisplay(nativeHeight)
             }
             emit(height)
             delay(1_000L)
