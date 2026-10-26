@@ -1258,10 +1258,12 @@ class WalletState(private val prefs: SharedPreferences) {
     }
 
     fun setBackGroundSync(startBackgroundSync: Boolean) {
-        if (!startBackgroundSync) {
-            backgroundLockRequestGeneration.incrementAndGet()
+        synchronized(backgroundTransitionJobsLock) {
+            if (!startBackgroundSync) {
+                backgroundLockRequestGeneration.incrementAndGet()
+            }
+            _backgroundSync.update { startBackgroundSync }
         }
-        _backgroundSync.update { startBackgroundSync }
     }
 
     fun getNewAddress() {
