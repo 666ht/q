@@ -218,24 +218,14 @@ fun LockScreen(
                                     putString(PREFS_PIN_HASH, pinHash)
                                 }
                             }
-                            // A matching PIN is authoritative. Atomically release the lock
-                            // and queue native teardown before notifying the existing UI callback.
-                            // Native teardown itself remains asynchronous on WalletState's IO scope.
-                            val resumed = withContext(Dispatchers.Main) {
-                                val result = try {
-                                    walletState.exitBackgroundSync(pin)
-                                } catch (e: Exception) {
-                                    Timber.tag(TAG).e(
-                                        e,
-                                        "PIN accepted but background-sync teardown could not be queued"
-                                    )
-                                    false
-                                }
-                                // Cleanup failure must never reject a valid PIN.
-                                if (!result) walletState.setBackGroundSync(false)
+                            // Unlock the existing UI immediately after the PIN hash matches.
+                            // Native background-sync teardown is separate cleanup and must not
+                            // delay the visible unlock transition.
+                            withContext(Dispatchers.Main) {
+                                walletState.setBackGroundSync(false)
                                 onUnLocked(pin, shortCut)
-                                result
                             }
+                            val resumed = walletState.exitBackgroundSync(pin)
                             if (!resumed) {
                                 Timber.tag(TAG).w(
                                     "PIN accepted and UI unlocked; background-sync teardown deferred"
