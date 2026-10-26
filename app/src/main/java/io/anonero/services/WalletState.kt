@@ -866,17 +866,23 @@ class WalletState(private val prefs: SharedPreferences) {
         }
     }
 
-    suspend fun enterBackgroundSync(): Boolean =
-        enterBackgroundSync(backgroundLockRequestGeneration.get())
+    suspend fun enterBackgroundSync(): Boolean {
+        // This public entry point represents an explicit request to lock.
+        val requestId = backgroundLockRequestGeneration.incrementAndGet()
+        val wasAlreadyLocked = _backgroundSync.value
+        _backgroundSync.value = true
+        if (!wasAlreadyLocked) emitUnlockShortcut(LockScreenShortCut.HOME)
+        return enterBackgroundSync(requestId)
+    }
 
     private suspend fun enterBackgroundSync(requestId: Long): Boolean = bgSyncMutex.withLock {
         if (_isWiping.get() || requestId != backgroundLockRequestGeneration.get()) return false
         val wallet = getWallet ?: return false
         if (!wallet.isInitialized) return false
 
-        val wasAlreadyLocked = _backgroundSync.value
-        _backgroundSync.value = true
-        if (!wasAlreadyLocked) emitUnlockShortcut(LockScreenShortCut.HOME)
+        // The UI lock is set by the request itself. Do not set it here: a valid PIN
+        // may arrive while this coroutine is reading wallet state, and this stale
+        // native-transition job must never re-lock the UI after that PIN is accepted.
 
         // If native mode was already entered, there is no second transition to start.
         if (nativeBackgroundSyncActive.get()) return true
