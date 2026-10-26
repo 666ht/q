@@ -218,18 +218,13 @@ fun LockScreen(
                                     putString(PREFS_PIN_HASH, pinHash)
                                 }
                             }
-                            // PIN verification succeeded. Release the existing lock state and
-                            // notify navigation on Main before touching native wallet teardown.
-                            // Native cleanup failures must never be reported as an incorrect PIN.
+                            // Normal PIN unlock is local and immediate. Do not wait for
+                            // wallet sync or background-sync teardown before hiding the overlay.
                             withContext(Dispatchers.Main) {
                                 walletState.setBackGroundSync(false)
                                 onUnLocked(pin, shortCut)
                             }
-                            val resumed = runCatching {
-                                walletState.exitBackgroundSync(pin)
-                            }.onFailure {
-                                Timber.tag(TAG).e(it, "PIN accepted but background-sync teardown could not be queued")
-                            }.getOrDefault(false)
+                            val resumed = walletState.exitBackgroundSync(pin)
                             if (!resumed) {
                                 Timber.tag(TAG).w(
                                     "PIN accepted and UI unlocked; background-sync teardown deferred"
