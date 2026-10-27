@@ -8,13 +8,7 @@ import android.net.Uri
 import android.os.Build
 import android.util.Log
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -22,7 +16,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -38,17 +31,10 @@ import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.PointerEvent
-import androidx.compose.ui.input.pointer.PointerEventPass
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -165,26 +151,12 @@ class LogViewModel(private val logRepository: LogRepository) : ViewModel() {
         parsed
     }
 
-    fun getLogsText(): String {
-        val logs = logLines.value
-        val deviceInfo = logDeviceInfo()
-        val lines = logs.joinToString(separator = "\n") {
-            val instant = Instant.ofEpochMilli(it.date)
-            val dateTime = LocalDateTime.ofInstant(instant, ZoneId.systemDefault())
-            val formatter = DateTimeFormatter.ofPattern("MMM dd hh:mm:ssa")
-            val level = when (it.priority) {
-                Log.VERBOSE -> "VERBOSE"
-                Log.DEBUG -> "DEBUG"
-                Log.INFO -> "INFO"
-                Log.WARN -> "WARN"
-                Log.ERROR -> "ERROR"
-                Log.ASSERT -> "ASSERT"
-                else -> "UNKNOWN"
-            }
-            "${formatter.format(dateTime)} | $level | ${it.tag} | ${it.message}"
+    fun logsTextForCopy(): String {
+        return logLines.value.joinToString(separator = "\n") { entry ->
+            "${Formats.formatLogTime(entry.date)}:  ${entry.message}"
         }
-        return "${'-'.toString().repeat(100)}\n\n$deviceInfo\n\n${'-'.toString().repeat(100)}\n$lines"
     }
+
     fun clearLogs() {
         logsCleared.value = true
         fallbackFileLogs.value = emptyList()
@@ -244,22 +216,6 @@ class LogViewModel(private val logRepository: LogRepository) : ViewModel() {
     }
 }
 
-private fun PointerEvent.averageTouchRadius(useCurrent: Boolean): Float {
-    val points = changes
-        .filter { if (useCurrent) it.pressed else it.previousPressed }
-        .map { if (useCurrent) it.position else it.previousPosition }
-    if (points.size < 2) return 0f
-
-    val centerX = (points.sumOf { it.x.toDouble() } / points.size).toFloat()
-    val centerY = (points.sumOf { it.y.toDouble() } / points.size).toFloat()
-    val radiusTotal = points.sumOf { point ->
-        val dx = (point.x - centerX).toDouble()
-        val dy = (point.y - centerY).toDouble()
-        kotlin.math.sqrt(dx * dx + dy * dy)
-    }
-    return (radiusTotal / points.size).toFloat()
-}
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LogViewer(
@@ -268,8 +224,6 @@ fun LogViewer(
     val viewModel = koinViewModel<LogViewModel>()
     val logLines by viewModel.logLines.collectAsState(emptyList())
     val listState = rememberLazyListState()
-    val horizontalScrollState = rememberScrollState()
-    var textScale by remember { mutableStateOf(1f) }
     val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior(rememberTopAppBarState())
     val context = LocalContext.current
     Scaffold(
@@ -327,7 +281,7 @@ fun LogViewer(
                         onClick = {
                             val clipboard = context.getSystemService(ClipboardManager::class.java)
                             clipboard?.setPrimaryClip(
-                                ClipData.newPlainText("ANONERO Logs", viewModel.getLogsText())
+                                ClipData.newPlainText("ANONERO Logs", viewModel.logsTextForCopy())
                             )
                         }
                     ) {
@@ -344,120 +298,21 @@ fun LogViewer(
                 scrollBehavior = scrollBehavior
             )
         }
-    ) { innerPadding ->
-        BoxWithConstraints(
+    ) {
+        LazyColumn(
+            state = listState,
+            reverseLayout = true,
             modifier = Modifier
-                .padding(innerPadding)
-                .fillMaxSize()
-                .pointerInput(Unit) {
-                    awaitEachGesture {
-                        awaitFirstDown(
-                            requireUnconsumed = false,
-                            pass = PointerEventPass.Initial
-                        )
-                        var previousCentroidSize = 0f
-                        var multiTouchInProgress = false
-                        do {
-                            val event = awaitPointerEvent(PointerEventPass.Initial)
-                            val pressedCount = event.changes.count { it.pressed }
-
-                            if (pressedCount >= 2) {
-                                val currentCentroidSize =
-                                    event.averageTouchRadius(useCurrent = true)
-                                if (
-                                    multiTouchInProgress &&
-                                    previousCentroidSize > 0f &&
-                                    currentCentroidSize > 0f
-                                ) {
-                                    val zoomChange = currentCentroidSize / previousCentroidSize
-                                    if (zoomChange.isFinite() && kotlin.math.abs(zoomChange - 1f) > 0.002f) {
-                                        textScale = (textScale * zoomChange).coerceIn(0.75f, 2.5f)
-                                    }
-                                }
-                                multiTouchInProgress = true
-                                previousCentroidSize = currentCentroidSize
-                                // Take ownership of pinch events before text-selection gestures
-                                // see them, so zoom remains reliable even when starting on text.
-                                event.changes.forEach { change ->
-                                    if (change.pressed || change.previousPressed) change.consume()
-                                }
-                            } else if (multiTouchInProgress) {
-                                // Don't let the remaining finger turn the end of a pinch into
-                                // a long-press selection or horizontal scroll.
-                                event.changes.forEach { change ->
-                                    if (change.pressed || change.previousPressed) change.consume()
-                                }
-                                previousCentroidSize = 0f
-                            }
-                        } while (event.changes.any { it.pressed })
-                    }
-                }
-        ) {
-            val viewportWidth = maxWidth
-            // Measure the longest actual line instead of guessing its width from
-            // character count. This keeps log rows on one line while zooming and avoids
-            // accidental wrapping that pushes part of a row onto the next line.
-            val longestMessageLine = remember(logLines) {
-                logLines.asSequence()
-                    .flatMap { entry -> entry.message.lineSequence() }
-                    .maxByOrNull { it.length }
-                    .orEmpty()
-            }
-            val textMeasurer = androidx.compose.ui.text.rememberTextMeasurer()
-            val longestMessageWidth = textMeasurer.measure(
-                text = longestMessageLine,
-                style = androidx.compose.ui.text.TextStyle(
-                    fontSize = (8f * textScale).sp,
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.Light
-                ),
-                maxLines = 1,
-                softWrap = false,
-                overflow = TextOverflow.Clip
-            ).size.width
-            val density = LocalDensity.current
-            val logContentWidth = with(density) {
-                maxOf(
-                    viewportWidth,
-                    viewportWidth * textScale,
-                    (longestMessageWidth + (70f * textScale).dp.toPx() + 16.dp.toPx()).toDp()
+                .padding(it)
+                .padding(
+                    horizontal = 8.dp
                 )
-            }
-            if (logLines.isEmpty()) {
-                androidx.compose.foundation.layout.Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.TopStart
-                ) {
-                    Text(
-                        text = "暂无日志记录",
-                        color = Color.Gray,
-                        fontSize = 14.sp,
-                        modifier = Modifier.padding(16.dp)
-                    )
-                }
-            } else {
-                SelectionContainer(modifier = Modifier.fillMaxSize()) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .horizontalScroll(horizontalScrollState)
-                    ) {
-                        LazyColumn(
-                            state = listState,
-                            reverseLayout = true,
-                            modifier = Modifier
-                                .width(logContentWidth)
-                                .fillMaxHeight()
-                                .padding(horizontal = 8.dp),
-                            contentPadding = PaddingValues(0.dp),
-                            verticalArrangement = Arrangement.Top
-                        ) {
-                            items(logLines.size) { index ->
-                                LogLine(logLines[index], textScale)
-                            }
-                        }
-                    }
-                }
+                .fillMaxSize(),
+            contentPadding = PaddingValues(0.dp),
+            verticalArrangement = Arrangement.Top
+        ) {
+            items(logLines.size) { index ->
+                LogLine(logLines[index])
             }
         }
     }
@@ -465,13 +320,7 @@ fun LogViewer(
 }
 
 @Composable
-private fun LogLine(text: AnonLog, textScale: Float = 1f) {
-    // The parent SelectionContainer covers all rows so users can select across log lines.
-    LogLineContent(text, textScale)
-}
-
-@Composable
-private fun LogLineContent(text: AnonLog, textScale: Float = 1f) {
+private fun LogLine(text: AnonLog) {
 
     val color = when (text.priority) {
         Log.VERBOSE -> Color(0xFF4FC3F7)
@@ -498,22 +347,21 @@ private fun LogLineContent(text: AnonLog, textScale: Float = 1f) {
         Text(
             "${Formats.formatLogTime(text.date)}:  ",
             color = Color.Gray,
-            fontSize = (8f * textScale).sp,
+            fontSize = 8.sp,
             letterSpacing = 0.sp,
             modifier = Modifier
-                .width((70f * textScale).dp)
+                .width(70.dp)
                 .padding(0.dp)
         )
         Text(
             text.message,
-            fontSize = (8f * textScale).sp,
+            fontSize = 8.sp,
             color = color,
             fontFamily = FontFamily.Monospace,
             fontWeight = FontWeight.Light,
             maxLines = 30,
-            softWrap = false,
-            lineHeight = (12f * textScale).sp,
-            overflow = TextOverflow.Clip,
+            lineHeight = 12.sp,
+            overflow = TextOverflow.Ellipsis,
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(0.dp)
@@ -533,7 +381,7 @@ private fun LogViewerPrev() {
             topBar = {
                 TopAppBar(
                     title = {
-                        Text("Logs")
+                        Text(stringResource(R.string.logs))
                     },
                 )
             }
