@@ -29,9 +29,12 @@ fun rememberShakeController(): ShakeController {
 class ShakeController {
     var shakeConfig: ShakeConfig? by mutableStateOf(null)
         private set
+    private var triggerSequence = 0L
 
     fun shake(shakeConfig: ShakeConfig) {
-        this.shakeConfig = shakeConfig
+        // A unique trigger guarantees that the same error animation can replay.
+        triggerSequence += 1L
+        this.shakeConfig = shakeConfig.copy(trigger = triggerSequence)
     }
 
     suspend fun shake(view: View) {
