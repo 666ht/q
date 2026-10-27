@@ -370,8 +370,12 @@ private fun LogLine(text: AnonLog, textScale: Float = 1f) {
             "${Formats.formatLogTime(text.date)}:  ",
             color = Color.Gray,
             fontSize = (8f * textScale).sp,
+            fontFamily = FontFamily.Monospace,
+            fontWeight = FontWeight.Light,
+            lineHeight = (12f * textScale).sp,
             letterSpacing = 0.sp,
             modifier = Modifier
+                .alignByBaseline()
                 .width((70f * textScale).dp)
                 .padding(0.dp)
         )
@@ -385,6 +389,7 @@ private fun LogLine(text: AnonLog, textScale: Float = 1f) {
             lineHeight = (12f * textScale).sp,
             overflow = TextOverflow.Clip,
             modifier = Modifier
+                .alignByBaseline()
                 .fillMaxWidth()
                 .padding(0.dp)
                 .background(Color.Transparent),
