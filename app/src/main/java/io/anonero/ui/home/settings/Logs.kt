@@ -10,7 +10,8 @@ import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -20,6 +21,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ContentCopy
@@ -182,6 +184,7 @@ fun LogViewer(
     val viewModel = koinViewModel<LogViewModel>()
     val logLines by viewModel.logLines.collectAsState(emptyList())
     val listState = rememberLazyListState()
+    val horizontalScrollState = rememberScrollState()
     var textScale by remember { mutableStateOf(1f) }
     val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior(rememberTopAppBarState())
     val context = LocalContext.current
@@ -258,7 +261,7 @@ fun LogViewer(
             )
         }
     ) { innerPadding ->
-        Box(
+        BoxWithConstraints(
             modifier = Modifier
                 .padding(innerPadding)
                 .fillMaxSize()
@@ -304,21 +307,31 @@ fun LogViewer(
                                 previousCentroidSize = 0f
                             }
                         } while (event.changes.any { it.pressed })
-                    }
                 }
         ) {
+            // Keep the original viewport width at 1x; when zoomed, expand the
+            // log canvas proportionally so long lines can be inspected horizontally.
+            val logContentWidth = maxOf(maxWidth, maxWidth * textScale)
+
             SelectionContainer(modifier = Modifier.fillMaxSize()) {
-                LazyColumn(
-                    state = listState,
-                    reverseLayout = true,
+                Row(
                     modifier = Modifier
-                        .padding(horizontal = 8.dp)
-                        .fillMaxSize(),
-                    contentPadding = PaddingValues(0.dp),
-                    verticalArrangement = Arrangement.Top
+                        .fillMaxHeight()
+                        .horizontalScroll(horizontalScrollState)
                 ) {
-                    items(logLines.size) { index ->
-                        LogLine(logLines[index], textScale)
+                    LazyColumn(
+                        state = listState,
+                        reverseLayout = true,
+                        modifier = Modifier
+                            .width(logContentWidth)
+                            .fillMaxHeight()
+                            .padding(horizontal = 8.dp),
+                        contentPadding = PaddingValues(0.dp),
+                        verticalArrangement = Arrangement.Top
+                    ) {
+                        items(logLines.size) { index ->
+                            LogLine(logLines[index], textScale)
+                        }
                     }
                 }
             }
