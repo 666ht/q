@@ -180,7 +180,7 @@ fun PinSetup(
                                                 } else {
                                                     errorShake.shake(
                                                         ShakeConfig(
-                                                            iterations = 6, intensity = 2500f, translateX = 30f
+                                                            6, translateX = 5f
                                                         )
                                                     )
                                                     context.launch {
