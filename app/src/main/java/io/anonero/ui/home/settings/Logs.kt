@@ -281,7 +281,7 @@ fun LogViewer(
                         onClick = {
                             val clipboard = context.getSystemService(ClipboardManager::class.java)
                             clipboard?.setPrimaryClip(
-                                ClipData.newPlainText("ANONERO Logs", viewModel.logsTextForCopy())
+                                ClipData.newPlainText("ANONERO Logs", viewModel.getLogsText())
                             )
                         }
                     ) {
