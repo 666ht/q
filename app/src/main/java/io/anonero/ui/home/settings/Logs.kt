@@ -291,9 +291,9 @@ private fun LogLine(text: AnonLog) {
             color = color,
             fontFamily = FontFamily.Monospace,
             fontWeight = FontWeight.Light,
-            maxLines = 30,
+            softWrap = true,
             lineHeight = 12.sp,
-            overflow = TextOverflow.Ellipsis,
+            overflow = TextOverflow.Clip,
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(0.dp)
