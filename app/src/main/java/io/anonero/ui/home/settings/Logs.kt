@@ -8,6 +8,9 @@ import android.net.Uri
 import android.os.Build
 import android.util.Log
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -17,6 +20,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -31,9 +35,15 @@ import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.PointerEvent
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
@@ -148,6 +158,22 @@ class LogViewModel(private val logRepository: LogRepository) : ViewModel() {
     }
 }
 
+private fun PointerEvent.averageTouchRadius(useCurrent: Boolean): Float {
+    val points = changes
+        .filter { if (useCurrent) it.pressed else it.previousPressed }
+        .map { if (useCurrent) it.position else it.previousPosition }
+    if (points.size < 2) return 0f
+
+    val centerX = (points.sumOf { it.x.toDouble() } / points.size).toFloat()
+    val centerY = (points.sumOf { it.y.toDouble() } / points.size).toFloat()
+    val radiusTotal = points.sumOf { point ->
+        val dx = (point.x - centerX).toDouble()
+        val dy = (point.y - centerY).toDouble()
+        kotlin.math.sqrt(dx * dx + dy * dy)
+    }
+    return (radiusTotal / points.size).toFloat()
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LogViewer(
@@ -156,6 +182,7 @@ fun LogViewer(
     val viewModel = koinViewModel<LogViewModel>()
     val logLines by viewModel.logLines.collectAsState(emptyList())
     val listState = rememberLazyListState()
+    var textScale by remember { mutableStateOf(1f) }
     val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior(rememberTopAppBarState())
     val context = LocalContext.current
     Scaffold(
@@ -230,21 +257,70 @@ fun LogViewer(
                 scrollBehavior = scrollBehavior
             )
         }
-    ) {
-        LazyColumn(
-            state = listState,
-            reverseLayout = true,
+    ) { innerPadding ->
+        Box(
             modifier = Modifier
-                .padding(it)
-                .padding(
-                    horizontal = 8.dp
-                )
-                .fillMaxSize(),
-            contentPadding = PaddingValues(0.dp),
-            verticalArrangement = Arrangement.Top
+                .padding(innerPadding)
+                .fillMaxSize()
+                .pointerInput(Unit) {
+                    awaitEachGesture {
+                        awaitFirstDown(
+                            requireUnconsumed = false,
+                            pass = PointerEventPass.Initial
+                        )
+                        var previousCentroidSize = 0f
+                        var multiTouchInProgress = false
+                        do {
+                            val event = awaitPointerEvent(PointerEventPass.Initial)
+                            val pressedCount = event.changes.count { it.pressed }
+
+                            if (pressedCount >= 2) {
+                                val currentCentroidSize =
+                                    event.averageTouchRadius(useCurrent = true)
+                                if (
+                                    multiTouchInProgress &&
+                                    previousCentroidSize > 0f &&
+                                    currentCentroidSize > 0f
+                                ) {
+                                    val zoomChange = currentCentroidSize / previousCentroidSize
+                                    if (
+                                        zoomChange.isFinite() &&
+                                        kotlin.math.abs(zoomChange - 1f) > 0.002f
+                                    ) {
+                                        textScale = (textScale * zoomChange).coerceIn(0.75f, 2.5f)
+                                    }
+                                }
+                                multiTouchInProgress = true
+                                previousCentroidSize = currentCentroidSize
+                                // Consume pinch gestures before selection sees them.
+                                event.changes.forEach { change ->
+                                    if (change.pressed || change.previousPressed) change.consume()
+                                }
+                            } else if (multiTouchInProgress) {
+                                // Prevent the last finger from becoming a long-press selection.
+                                event.changes.forEach { change ->
+                                    if (change.pressed || change.previousPressed) change.consume()
+                                }
+                                previousCentroidSize = 0f
+                            }
+                        } while (event.changes.any { it.pressed })
+                    }
+                }
         ) {
-            items(logLines.size) { index ->
-                LogLine(logLines[index])
+            SelectionContainer(modifier = Modifier.fillMaxSize()) {
+                LazyColumn(
+                    state = listState,
+                    reverseLayout = true,
+                    modifier = Modifier
+                        .padding(horizontal = 8.dp)
+                        .fillMaxSize(),
+                    contentPadding = PaddingValues(0.dp),
+                    verticalArrangement = Arrangement.Top
+                ) {
+                    items(logLines.size) { index ->
+                        LogLine(logLines[index], textScale)
+                    }
+                }
             }
         }
     }
@@ -252,7 +328,7 @@ fun LogViewer(
 }
 
 @Composable
-private fun LogLine(text: AnonLog) {
+private fun LogLine(text: AnonLog, textScale: Float = 1f) {
 
     val color = when (text.priority) {
         Log.VERBOSE -> Color(0xFF4FC3F7)
@@ -279,20 +355,20 @@ private fun LogLine(text: AnonLog) {
         Text(
             "${Formats.formatLogTime(text.date)}:  ",
             color = Color.Gray,
-            fontSize = 8.sp,
+            fontSize = (8f * textScale).sp
             letterSpacing = 0.sp,
             modifier = Modifier
-                .width(70.dp)
+                .width((70f * textScale).dp)
                 .padding(0.dp)
         )
         Text(
             text.message,
-            fontSize = 8.sp,
+            fontSize = (8f * textScale).sp
             color = color,
             fontFamily = FontFamily.Monospace,
             fontWeight = FontWeight.Light,
             softWrap = true,
-            lineHeight = 12.sp,
+            lineHeight = (12f * textScale).sp
             overflow = TextOverflow.Clip,
             modifier = Modifier
                 .fillMaxWidth()
