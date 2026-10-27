@@ -134,7 +134,7 @@ fun LockScreen(
         if (!uiActive.get()) return
         errorShake.shake(
             ShakeConfig(
-                6, translateX = 5f
+                iterations = 6, intensity = 2500f, translateX = 30f
             )
         )
         scope.launch {
