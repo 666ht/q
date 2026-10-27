@@ -1697,15 +1697,16 @@ class WalletState(private val prefs: SharedPreferences) {
                 }
                 finishUserOperationTransition(operationId)
 
-                // The counter is now grounded in the selected start and a live tip.
-                // Return home after publishing it, then hand off to the native rescan.
-                onPrepared?.invoke()
+                // Keep the reset page active until the native custom-height rescan has
+                // been accepted. The inner method invokes onPrepared only after it has
+                // queued the rescan and started its progress poller, so failures remain
+                // visible here instead of clearing progress after navigation.
                 val result = resetSyncFromHeightInternal(
                     height,
                     effectiveEndHeight,
                     operationId,
                     onCompleted,
-                    null
+                    onPrepared
                 )
                 if (result.isFailure && operationId == userOperationGeneration.get()) {
                     cancelScanUiStateForLatestOperation()
@@ -1926,6 +1927,15 @@ class WalletState(private val prefs: SharedPreferences) {
                 "Reset wallet scan from custom height: requested=%d end=%d",
                 height, effectiveEnd
             )
+
+            // Leave the reset page only after the native request is accepted,
+            // refresh has resumed, and the custom progress poller owns this scan.
+            try {
+                onPrepared?.invoke()
+            } catch (callbackError: Exception) {
+                // A navigation callback failure must not cancel a rescan already queued.
+                Timber.tag(TAG).e(callbackError, "Failed to hand off UI after custom rescan started")
+            }
             return Result.success(true)
         } catch (e: Exception) {
             if (preparationStarted && operationId == userOperationGeneration.get()) {
