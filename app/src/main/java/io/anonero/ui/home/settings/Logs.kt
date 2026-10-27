@@ -307,6 +307,7 @@ fun LogViewer(
                                 previousCentroidSize = 0f
                             }
                         } while (event.changes.any { it.pressed })
+                    }
                 }
         ) {
             // Keep the original viewport width at 1x; when zoomed, expand the
