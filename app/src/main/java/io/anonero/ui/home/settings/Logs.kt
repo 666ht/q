@@ -18,8 +18,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -55,12 +55,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import org.koin.androidx.compose.koinViewModel
 import timber.log.Timber
 import java.time.Instant
@@ -72,96 +69,31 @@ import java.time.format.DateTimeFormatter
 private const val TAG = "Logs"
 
 class LogViewModel(private val logRepository: LogRepository) : ViewModel() {
-    private val fallbackFileLogs = MutableStateFlow<List<AnonLog>>(emptyList())
-    private val logsCleared = MutableStateFlow(false)
-
-    init {
-        // The rolling file is written synchronously by AnonLogTree. Use it as a
-        // fallback when DataStore is empty/corrupt so the diagnostics screen remains
-        // useful even if persisted log updates failed.
-        viewModelScope.launch(Dispatchers.IO) {
-            if (!logsCleared.value) {
-                fallbackFileLogs.value = readFallbackFileLogs()
-            }
+    val logLines: StateFlow<List<AnonLog>> = logRepository
+        .logFlow
+        .map {
+            it.reversed()
         }
-    }
-
-    val logLines: StateFlow<List<AnonLog>> = combine(
-        logRepository.logFlow,
-        fallbackFileLogs,
-        logsCleared
-    ) { stored, fallback, cleared ->
-        (when {
-            stored.isNotEmpty() -> stored
-            cleared -> emptyList()
-            else -> fallback
-        }).reversed()
-    }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.Lazily,
-        initialValue = emptyList()
-    )
-
-    private suspend fun readFallbackFileLogs(): List<AnonLog> = withContext(Dispatchers.IO) {
-        val context = AnonConfig.context ?: return@withContext emptyList()
-        val file = runCatching { AnonConfig.getLogFile(context) }.getOrNull()
-            ?: return@withContext emptyList()
-        if (!file.isFile) return@withContext emptyList()
-
-        val recordPattern = Regex(
-            """^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}) \| (-?\d+) \| ([^|]+) \| ?(.*)$"""
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.Lazily,
+            initialValue = emptyList()
         )
-        val parsed = mutableListOf<AnonLog>()
-        var recordDate = 0L
-        var recordPriority = Log.INFO
-        var recordTag = ""
-        var recordMessage = StringBuilder()
 
-        fun flushRecord() {
-            if (recordDate != 0L) {
-                parsed += AnonLog(
-                    date = recordDate,
-                    tag = recordTag,
-                    message = recordMessage.toString(),
-                    priority = recordPriority
-                )
-            }
-        }
 
-        runCatching {
-            file.forEachLine(Charsets.UTF_8) { line ->
-                val match = recordPattern.matchEntire(line)
-                if (match != null) {
-                    flushRecord()
-                    recordDate = runCatching {
-                        java.text.SimpleDateFormat(
-                            "yyyy-MM-dd HH:mm:ss.SSS",
-                            java.util.Locale.US
-                        ).parse(match.groupValues[1])?.time ?: 0L
-                    }.getOrDefault(0L)
-                    recordPriority = match.groupValues[2].toIntOrNull() ?: Log.INFO
-                    recordTag = match.groupValues[3].trim()
-                    recordMessage = StringBuilder(match.groupValues[4])
-                } else if (recordDate != 0L) {
-                    recordMessage.append('\n').append(line)
-                }
-            }
-            flushRecord()
+    fun clearLogs() {
+        viewModelScope.launch(Dispatchers.IO) {
+            logRepository.clear()
         }
-        parsed
     }
 
+    /**
+     * Copy only the log lines shown in the log viewer.
+     * Do not append device diagnostics or saved crash reports.
+     */
     fun logsTextForCopy(): String {
         return logLines.value.joinToString(separator = "\n") { entry ->
             "${Formats.formatLogTime(entry.date)}:  ${entry.message}"
-        }
-    }
-
-    fun clearLogs() {
-        logsCleared.value = true
-        fallbackFileLogs.value = emptyList()
-        viewModelScope.launch(Dispatchers.IO) {
-            logRepository.clear()
         }
     }
 
@@ -281,7 +213,7 @@ fun LogViewer(
                         onClick = {
                             val clipboard = context.getSystemService(ClipboardManager::class.java)
                             clipboard?.setPrimaryClip(
-                                ClipData.newPlainText("ANONERO Logs", viewModel.getLogsText())
+                                ClipData.newPlainText("ANONERO Logs", viewModel.logsTextForCopy())
                             )
                         }
                     ) {
