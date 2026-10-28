@@ -14,13 +14,15 @@ permissions:
 
 jobs:
   android-build-and-test:
-    name: Gradle tests and APK build
+    name: Native libraries, Gradle tests, and APK build
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 90
 
     steps:
-      - name: Checkout source
+      - name: Checkout source and pinned Monero submodule
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -38,10 +40,24 @@ jobs:
         run: |
           sdkmanager "platform-tools" "platforms;android-35" "build-tools;36.0.0" "cmake;3.22.1" "ndk;29.0.13599879"
 
+      - name: Build pinned Monero native libraries for both phone ABIs
+        run: |
+          docker --version
+          make -C external-libs android NPROC=4
+          test -s external-libs/arm64-v8a/monero/libwallet_api.a
+          test -s external-libs/armeabi-v7a/monero/libwallet_api.a
+
       - name: Run unit tests and build Anon release APK
         run: |
           chmod +x ./gradlew
           ./gradlew --no-daemon --stacktrace :app:testAnonDebugUnitTest :app:assembleAnonRelease
+
+      - name: Verify APK includes both phone architectures
+        run: |
+          APK="$(find app/build/outputs/apk/anon/release -maxdepth 1 -name '*.apk' -print -quit)"
+          test -n "$APK"
+          unzip -l "$APK" | grep -E 'lib/(arm64-v8a|armeabi-v7a)/libanonero.so'
+          echo "Built APK: $APK"
 
       - name: Upload APK
         if: success()
