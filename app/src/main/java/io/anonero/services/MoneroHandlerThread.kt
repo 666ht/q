@@ -189,7 +189,10 @@ class MoneroHandlerThread(
     
     }
 
-    private fun updateSyncProgress(@Suppress("UNUSED_PARAMETER") height: Long) {
+    private fun updateSyncProgress(
+        @Suppress("UNUSED_PARAMETER") height: Long,
+        daemonTargetHeight: Long = 0L
+    ) {
         // Custom rescans have a single progress publisher in WalletState's 400ms
         // cursor poller; normal callbacks must not overwrite it with a different height.
         if (walletState.customRescanPreparing ||
@@ -258,7 +261,19 @@ class MoneroHandlerThread(
             return
         }
 
-        val progress = calculateSyncProgress(progressStart, currentHeight, effectiveTarget)
+        // Use the daemon target for the progress fraction only. Remaining blocks
+        // still count to the live daemon tip, avoiding a misleading huge countdown.
+        val progressTarget = if (restoreActive) effectiveTarget else maxOf(effectiveTarget, daemonTargetHeight)
+        val calculatedProgress = calculateSyncProgress(progressStart, currentHeight, progressTarget)
+        val progress = if (!restoreActive && progressTarget > effectiveTarget) {
+            SyncProgress(
+                progress = calculatedProgress.progress.coerceAtMost(0.999f),
+                left = (effectiveTarget - syncHeight).coerceAtLeast(0L),
+                isComplete = false
+            )
+        } else {
+            calculatedProgress
+        }
         val left = progress.left
         if (restoreActive) {
             if (walletState.restoreProgressCompleted) return
@@ -462,22 +477,12 @@ class MoneroHandlerThread(
             walletState.waitForSyncHeights()
             return true
         }
-        if (scanHeight < daemonHeight) {
-            // A behind cursor is an active scan, not a completed refresh.
-            // Clear the stale synchronized flag and show real remaining blocks to the live tip.
+        if (scanHeight < daemonHeight || daemonTargetHeight > daemonHeight) {
+            // Keep the wallet unsynchronized until both its scan cursor and the daemon
+            // target are caught up. The counter tracks remaining blocks to the live tip;
+            // the progress fraction may follow the node target while the node is syncing.
             wallet.isSynchronized = false
-            updateSyncProgress(scanHeight)
-            return true
-        }
-        if (daemonTargetHeight > daemonHeight) {
-            // The wallet has reached this daemon's current tip, but the daemon itself
-            // is still catching up. Do not complete/restart the wallet refresh cycle yet.
-            wallet.isSynchronized = false
-            walletState.showOrdinaryCatchUpRefresh()
-            Timber.tag(name).d(
-                "Daemon still syncing: wallet=%d daemon=%d target=%d",
-                scanHeight, daemonHeight, daemonTargetHeight
-            )
+            updateSyncProgress(scanHeight, daemonTargetHeight)
             return true
         }
         return false
