@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - ci-test-main-20261028
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
