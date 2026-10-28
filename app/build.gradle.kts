@@ -13,8 +13,8 @@ android {
         applicationId = "io.anonero"
         minSdk = 26
         targetSdk = 35
-        versionCode = 3
-        versionName = "1.0.1"
+        versionCode = 4
+        versionName = "1.0.4"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
             useSupportLibrary = true
@@ -138,7 +138,6 @@ dependencies {
     implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.datastore.preferences)
 
-
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.ui)
     implementation(libs.androidx.ui.graphics)
@@ -162,7 +161,7 @@ dependencies {
 
     implementation(libs.org.boofcv.boofcv.core)
     implementation(libs.com.google.zxing.core)
-    implementation(libs.com.google.accompanist.permissions)
+    implementation(libs.com.accompanist.permissions)
 
     implementation(libs.com.jakewharton.timber)
     implementation(libs.org.bouncycastle.bcprov)
