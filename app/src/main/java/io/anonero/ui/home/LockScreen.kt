@@ -356,7 +356,7 @@ fun LockScreen(
                         if (currentPin.size == 0 && key == BackSpaceKey) {
                             return@items
                         }
-                        if (currentPin.size < 4 && key == ConfirmKey) {
+                        if (currentPin.size <= 4 && key == ConfirmKey) {
                             return@items
                         }
                         Column(
