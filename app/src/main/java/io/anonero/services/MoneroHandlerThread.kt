@@ -5,7 +5,13 @@ import io.anonero.model.Wallet
 import io.anonero.model.WalletListener
 import io.anonero.model.WalletManager
 import io.anonero.services.calculateSyncProgress
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import timber.log.Timber
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicLong
 
 /**
  * Handy class for starting a new thread that has a looper. The looper can then be
@@ -19,6 +25,16 @@ class MoneroHandlerThread(
     private val onRestoreCompleted: () -> Unit = {}
 ) :
     Thread(null, null, "MoneroHandler", THREAD_STACK_SIZE), WalletListener {
+
+    // Native WalletListener callbacks must return before JNI/history work is performed.
+    // Coalesce block callbacks so a fast scan cannot flood the IO dispatcher.
+    private val callbackScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val pendingBlockHeight = AtomicLong(-1L)
+    private val blockCallbackWorkerActive = AtomicBoolean(false)
+    private val walletUpdateCallbackPending = AtomicBoolean(false)
+    private val walletUpdateCallbackWorkerActive = AtomicBoolean(false)
+    private val refreshedCallbackPending = AtomicBoolean(false)
+    private val refreshedCallbackWorkerActive = AtomicBoolean(false)
 
 
 
@@ -44,6 +60,35 @@ class MoneroHandlerThread(
     override fun unconfirmedMoneyReceived(txId: String?, amount: Long) {}
 
     override fun newBlock(height: Long) {
+        if (walletState.isWiping()) return
+        pendingBlockHeight.accumulateAndGet(height) { pending, next -> maxOf(pending, next) }
+        scheduleBlockCallbackProcessing()
+    }
+
+    private fun scheduleBlockCallbackProcessing() {
+        if (!blockCallbackWorkerActive.compareAndSet(false, true)) return
+        callbackScope.launch {
+            try {
+                while (true) {
+                    val height = pendingBlockHeight.getAndSet(-1L)
+                    if (height < 0L) break
+                    if (WalletManager.instance?.wallet !== wallet || !wallet.isInitialized) break
+                    processNewBlock(height)
+                }
+            } catch (e: Exception) {
+                Timber.tag(name).w(e, "Deferred new-block processing failed")
+            } finally {
+                blockCallbackWorkerActive.set(false)
+                if (pendingBlockHeight.get() >= 0L &&
+                    WalletManager.instance?.wallet === wallet &&
+                    wallet.isInitialized &&
+                    !walletState.isWiping()
+                ) scheduleBlockCallbackProcessing()
+            }
+        }
+    }
+
+    private fun processNewBlock(height: Long) {
         if (walletState.isWiping()) return
         if (walletState.heightRefreshInProgress) {
             val status = runCatching { wallet.fullStatus.connectionStatus }.getOrNull()
@@ -138,6 +183,7 @@ class MoneroHandlerThread(
         if (!wallet.isSynchronized) {
             updateSyncProgress(height)
         }
+    
     }
 
     private fun updateSyncProgress(@Suppress("UNUSED_PARAMETER") height: Long) {
@@ -163,21 +209,6 @@ class MoneroHandlerThread(
         // estimate can be tens of thousands of blocks ahead and creates phantom
         // remaining counts, so never use getDaemonBlockChainTargetHeight() here.
         val effectiveTarget = daemonHeight
-
-        // Keep a small number of newly mined blocks on the normal refresh indicator.
-        // wallet2 still scans them; this only avoids reopening the full sync counter
-        // every time an already-synced wallet is reopened.
-        if (!restoreActive &&
-            effectiveTarget - syncHeight > 0L &&
-            !walletState.shouldShowNormalSyncProgress(syncHeight, effectiveTarget)
-        ) {
-            walletState.showOrdinaryCatchUpRefresh()
-            Timber.tag(name).d(
-                "Small normal catch-up: wallet=%d daemon=%d left=%d; keeping refresh indicator",
-                syncHeight, effectiveTarget, effectiveTarget - syncHeight
-            )
-            return
-        }
 
         // Restore progress has two distinct phases. Before the daemon itself has
         // reached the user-selected restore height, there is no wallet scan cursor
@@ -247,26 +278,70 @@ class MoneroHandlerThread(
 
     override fun updated() {
         if (walletState.isWiping()) return
-        if (walletState.userOperationTransitionInProgress) {
-            Timber.tag(name).d("updated() ignored during latest-operation handoff")
-            return
-        }
-        // During either finalization phase, wallet2 can emit an intermediate
-        // callback while history/coins are temporarily incomplete. Do not
-        // publish a transient snapshot or start another refresh loop.
-        if (walletState.customRescanPreparing ||
+        if (walletState.userOperationTransitionInProgress ||
+            walletState.customRescanPreparing ||
             walletState.restoreProgressFinalizing ||
             walletState.customRescanFinalizing
-        ) {
-            Timber.tag(name).i("updated() ignored during sync/reset transition")
-            return
+        ) return
+        walletUpdateCallbackPending.set(true)
+        scheduleWalletUpdateOutsideNativeCallback()
+    }
+
+    private fun scheduleWalletUpdateOutsideNativeCallback() {
+        if (!walletUpdateCallbackWorkerActive.compareAndSet(false, true)) return
+        callbackScope.launch {
+            try {
+                while (walletUpdateCallbackPending.getAndSet(false)) {
+                    if (WalletManager.instance?.wallet !== wallet || !wallet.isInitialized) break
+                    if (walletState.isWiping() ||
+                        walletState.userOperationTransitionInProgress ||
+                        walletState.customRescanPreparing ||
+                        walletState.restoreProgressFinalizing ||
+                        walletState.customRescanFinalizing
+                    ) continue
+                    refresh(false)
+                    Timber.tag(name).i("updated() processed outside native wallet callback")
+                }
+            } catch (e: Exception) {
+                Timber.tag(name).w(e, "Deferred wallet update failed")
+            } finally {
+                walletUpdateCallbackWorkerActive.set(false)
+                if (walletUpdateCallbackPending.get() &&
+                    WalletManager.instance?.wallet === wallet &&
+                    wallet.isInitialized &&
+                    !walletState.isWiping()
+                ) scheduleWalletUpdateOutsideNativeCallback()
+            }
         }
-        refresh(false)
-        Timber.tag(name).i("updated()")
-        walletState.update()
     }
 
     override fun refreshed() {
+        if (walletState.isWiping()) return
+        refreshedCallbackPending.set(true)
+        scheduleRefreshedProcessingOutsideNativeCallback()
+    }
+
+    private fun scheduleRefreshedProcessingOutsideNativeCallback() {
+        if (!refreshedCallbackWorkerActive.compareAndSet(false, true)) return
+        callbackScope.launch {
+            try {
+                while (refreshedCallbackPending.getAndSet(false)) {
+                    if (WalletManager.instance?.wallet !== wallet || !wallet.isInitialized) break
+                    processRefreshedCallback()
+                }
+            } catch (e: Exception) {
+                Timber.tag(name).w(e, "Deferred refreshed callback processing failed")
+            } finally {
+                refreshedCallbackWorkerActive.set(false)
+                if (refreshedCallbackPending.get() &&
+                    WalletManager.instance?.wallet === wallet &&
+                    wallet.isInitialized
+                ) scheduleRefreshedProcessingOutsideNativeCallback()
+            }
+        }
+    }
+
+    private fun processRefreshedCallback() {
         if (walletState.isWiping()) return
         val status = runCatching { wallet.fullStatus.connectionStatus }.getOrNull()
         val daemonHeight = runCatching { wallet.getDaemonBlockChainHeight() }.getOrDefault(0L)
@@ -345,12 +420,8 @@ class MoneroHandlerThread(
         if (status === Wallet.ConnectionStatus.ConnectionStatus_Disconnected || status == null) {
             tryRestartConnection()
         } else if (keepNormalSyncProgress(chainHeight, daemonHeight)) {
-            // The daemon is reachable but the wallet cursor is behind. Publish the
-            // real remaining-block count first, then resume the existing native scan.
-            // Re-running wallet.init() here resets the connection path and can leave
-            // the UI stuck showing ordinary refresh instead of scan progress.
-            runCatching { wallet.startRefresh() }
-                .onFailure { Timber.tag(name).e(it, "Failed to resume block synchronization") }
+            // The existing native refresh worker owns the scan. Do not start another
+            // refresh cycle from its completion callback.
         } else {
             if (!wallet.isSynchronized) {
                 updateSyncProgress(chainHeight)
@@ -363,6 +434,7 @@ class MoneroHandlerThread(
             walletState.finishSync()
         }
         walletState.update()
+    
     }
 
     /**
@@ -375,19 +447,11 @@ class MoneroHandlerThread(
             walletState.waitForSyncHeights()
             return true
         }
-        if (daemonHeight - scanHeight >= 2L) {
-            // Keep small catch-up scans on the ordinary refresh indicator, but show
-            // real remaining-block progress when the backlog exceeds the visibility
-            // threshold. Previously-synced wallets must not hide a large backlog forever.
-            if (walletState.shouldShowNormalSyncProgress(scanHeight, daemonHeight)) {
-                updateSyncProgress(scanHeight)
-            } else {
-                walletState.showOrdinaryCatchUpRefresh()
-                Timber.tag(name).d(
-                    "Normal catch-up below progress threshold or awaiting a stable cursor: wallet=%d daemon=%d left=%d",
-                    scanHeight, daemonHeight, daemonHeight - scanHeight
-                )
-            }
+        if (scanHeight < daemonHeight) {
+            // Match AN: a behind cursor is an active scan, not a completed refresh.
+            // Clear the stale synchronized flag and show the real remaining-block count.
+            wallet.isSynchronized = false
+            updateSyncProgress(scanHeight)
             return true
         }
         return false
