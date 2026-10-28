@@ -172,7 +172,10 @@ class MoneroHandlerThread(
             }
             val scanHeight = runCatching { wallet.getBlockChainHeight() }.getOrDefault(-1L)
             val daemonHeight = runCatching { wallet.getDaemonBlockChainHeight() }.getOrDefault(0L)
-            if (keepNormalSyncProgress(scanHeight, daemonHeight)) {
+            val daemonTargetHeight = runCatching {
+                wallet.getDaemonBlockChainTargetHeight()
+            }.getOrDefault(0L).coerceAtLeast(0L)
+            if (keepNormalSyncProgress(scanHeight, daemonHeight, daemonTargetHeight)) {
                 return
             }
             completeSynchronization()
@@ -417,9 +420,17 @@ class MoneroHandlerThread(
             }
         }
 
+        val daemonTargetHeight = if (
+            status == Wallet.ConnectionStatus.ConnectionStatus_Connected
+        ) {
+            runCatching { wallet.getDaemonBlockChainTargetHeight() }
+                .getOrDefault(0L).coerceAtLeast(0L)
+        } else {
+            0L
+        }
         if (status === Wallet.ConnectionStatus.ConnectionStatus_Disconnected || status == null) {
             tryRestartConnection()
-        } else if (keepNormalSyncProgress(chainHeight, daemonHeight)) {
+        } else if (keepNormalSyncProgress(chainHeight, daemonHeight, daemonTargetHeight)) {
             // The existing native refresh worker owns the scan. Do not start another
             // refresh cycle from its completion callback.
         } else {
@@ -442,16 +453,31 @@ class MoneroHandlerThread(
      * the wallet has not scanned yet. A missing daemon height is not proof of
      * synchronization; keep waiting for a valid height instead of finishing early.
      */
-    private fun keepNormalSyncProgress(scanHeight: Long, daemonHeight: Long): Boolean {
+    private fun keepNormalSyncProgress(
+        scanHeight: Long,
+        daemonHeight: Long,
+        daemonTargetHeight: Long
+    ): Boolean {
         if (daemonHeight <= 0L || scanHeight < 0L) {
             walletState.waitForSyncHeights()
             return true
         }
         if (scanHeight < daemonHeight) {
-            // Match AN: a behind cursor is an active scan, not a completed refresh.
-            // Clear the stale synchronized flag and show the real remaining-block count.
+            // A behind cursor is an active scan, not a completed refresh.
+            // Clear the stale synchronized flag and show real remaining blocks to the live tip.
             wallet.isSynchronized = false
             updateSyncProgress(scanHeight)
+            return true
+        }
+        if (daemonTargetHeight > daemonHeight) {
+            // The wallet has reached this daemon's current tip, but the daemon itself
+            // is still catching up. Do not complete/restart the wallet refresh cycle yet.
+            wallet.isSynchronized = false
+            walletState.showOrdinaryCatchUpRefresh()
+            Timber.tag(name).d(
+                "Daemon still syncing: wallet=%d daemon=%d target=%d",
+                scanHeight, daemonHeight, daemonTargetHeight
+            )
             return true
         }
         return false
