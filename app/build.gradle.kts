@@ -161,7 +161,7 @@ dependencies {
 
     implementation(libs.org.boofcv.boofcv.core)
     implementation(libs.com.google.zxing.core)
-    implementation(libs.com.accompanist.permissions)
+    implementation(libs.com.google.accompanist.permissions)
 
     implementation(libs.com.jakewharton.timber)
     implementation(libs.org.bouncycastle.bcprov)
