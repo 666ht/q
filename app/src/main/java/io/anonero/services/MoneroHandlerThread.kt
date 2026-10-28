@@ -184,7 +184,10 @@ class MoneroHandlerThread(
 
         // Do not recreate sync progress after synchronization has finished.
         if (!wallet.isSynchronized) {
-            updateSyncProgress(height)
+            val daemonTargetHeight = runCatching {
+                wallet.getDaemonBlockChainTargetHeight()
+            }.getOrDefault(0L).coerceAtLeast(0L)
+            updateSyncProgress(height, daemonTargetHeight)
         }
     
     }
@@ -211,9 +214,8 @@ class MoneroHandlerThread(
 
         val restoreActive = walletState.restoreProgressInProgress && restoreStart != null
 
-        // The daemon's current height is the only live target. Its target-height
-        // estimate can be tens of thousands of blocks ahead and creates phantom
-        // remaining counts, so never use getDaemonBlockChainTargetHeight() here.
+        // Count remaining blocks against the live daemon tip. The daemon target
+        // may be ahead; it is used only for the progress fraction, never the count.
         val effectiveTarget = daemonHeight
 
         // Restore progress has two distinct phases. Before the daemon itself has
