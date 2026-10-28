@@ -8,6 +8,7 @@ import io.anonero.services.calculateSyncProgress
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import java.util.concurrent.atomic.AtomicBoolean
@@ -35,6 +36,8 @@ class MoneroHandlerThread(
     private val walletUpdateCallbackWorkerActive = AtomicBoolean(false)
     private val refreshedCallbackPending = AtomicBoolean(false)
     private val refreshedCallbackWorkerActive = AtomicBoolean(false)
+    private val connectionRecoveryInFlight = AtomicBoolean(false)
+    private val lastConnectionRecoveryAtMillis = AtomicLong(0L)
 
 
 
@@ -54,7 +57,13 @@ class MoneroHandlerThread(
     override fun moneyReceived(txId: String?, amount: Long) {
         if (walletState.isWiping()) return
         Timber.tag(name).i("moneyReceived: %s", amount)
-        WalletManager.instance?.wallet?.store()
+        callbackScope.launch {
+            if (WalletManager.instance?.wallet !== wallet || !wallet.isInitialized ||
+                walletState.isWiping()
+            ) return@launch
+            runCatching { wallet.store() }
+                .onFailure { Timber.tag(name).w(it, "Wallet store after received transaction failed") }
+        }
     }
 
     override fun unconfirmedMoneyReceived(txId: String?, amount: Long) {}
@@ -567,11 +576,51 @@ class MoneroHandlerThread(
 
 
     private fun tryRestartConnection() {
-        // This callback is a reconnect/sync transition, not an active manual refresh.
+        // Release any explicit pull-to-refresh gesture, but do not let repeated native
+        // callbacks launch overlapping wallet initializations.
         walletState.finishManualRefreshIndicator()
-        wallet.init(0)
-        wallet.startRefresh()
-        walletState.update()
+        if (walletState.isWiping() ||
+            walletState.userOperationTransitionInProgress ||
+            walletState.customRescanPreparing ||
+            walletState.customRescanInProgress ||
+            walletState.customRescanFinalizing
+        ) return
+
+        val now = System.currentTimeMillis()
+        if (now - lastConnectionRecoveryAtMillis.get() < CONNECTION_RECOVERY_COOLDOWN_MILLIS) return
+        if (!connectionRecoveryInFlight.compareAndSet(false, true)) return
+        lastConnectionRecoveryAtMillis.set(now)
+
+        callbackScope.launch {
+            try {
+                // Let the native refreshed callback and its queued state processing settle.
+                delay(750L)
+                if (walletState.isWiping() ||
+                    walletState.userOperationTransitionInProgress ||
+                    walletState.customRescanPreparing ||
+                    walletState.customRescanInProgress ||
+                    walletState.customRescanFinalizing ||
+                    WalletManager.instance?.wallet !== wallet ||
+                    !wallet.isInitialized
+                ) return@launch
+
+                if (runCatching { wallet.fullStatus.connectionStatus }.getOrNull() ==
+                    Wallet.ConnectionStatus.ConnectionStatus_Connected
+                ) {
+                    walletState.update()
+                    return@launch
+                }
+
+                Timber.tag(name).w("Retrying daemon initialization with cooldown")
+                wallet.init(0)
+                if (wallet.isInitialized) wallet.startRefresh()
+                walletState.update()
+            } catch (e: Exception) {
+                Timber.tag(name).e(e, "Automatic daemon reconnect failed")
+            } finally {
+                connectionRecoveryInFlight.set(false)
+            }
+        }
     }
 
     private fun refresh(walletSynced: Boolean) {
@@ -593,6 +642,8 @@ class MoneroHandlerThread(
     }
 
     companion object {
+        private const val CONNECTION_RECOVERY_COOLDOWN_MILLIS = 15_000L
+
         // from src/cryptonote_config.h
         const val THREAD_STACK_SIZE = (5 * 1024 * 1024).toLong()
     }
