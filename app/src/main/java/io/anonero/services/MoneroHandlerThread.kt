@@ -267,9 +267,8 @@ class MoneroHandlerThread(
         val calculatedProgress = calculateSyncProgress(progressStart, currentHeight, progressTarget)
         val progress = if (!restoreActive && progressTarget > effectiveTarget) {
             SyncProgress(
-                progress = calculatedProgress.progress.coerceAtMost(0.999f),
-                left = (effectiveTarget - syncHeight).coerceAtLeast(0L),
-                isComplete = false
+                calculatedProgress.progress.coerceAtMost(0.999f),
+                (effectiveTarget - syncHeight).coerceAtLeast(0L)
             )
         } else {
             calculatedProgress
