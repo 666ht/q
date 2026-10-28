@@ -1182,6 +1182,8 @@ class WalletState(private val prefs: SharedPreferences) {
 
     fun syncUpdate(syncProgress: SyncProgress) {
         // A real synchronization cursor owns the progress UI from this point.
+        // Clear an earlier indeterminate catch-up spinner before publishing real progress.
+        ordinaryCatchUpInProgress = false
         _manualRefreshInProgress.value = false
         // Keep the terminal 100% / zero-remaining state visible until the final
         // history/output snapshot is ready for both recovery and custom rescans.
