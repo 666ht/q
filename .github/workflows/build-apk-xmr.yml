@@ -3,6 +3,8 @@ name: Build APK
 on:
   push:
     branches: ["main"]
+  pull_request:
+    branches: ["main"]
   workflow_dispatch:
   issue_comment:
     types: [created]
@@ -27,12 +29,6 @@ jobs:
         with:
           submodules: recursive
           fetch-depth: 1
-
-      - name: Pin XMR refresh-cancellation and stale-rescan fix
-        working-directory: external-libs/monero
-        run: |
-          git fetch --depth=1 origin e1584a43bf3b3d1aa041f82e10a01bca78e45363
-          git checkout e1584a43bf3b3d1aa041f82e10a01bca78e45363
 
       - name: Read XMR revision
         id: xmr
@@ -95,6 +91,4 @@ jobs:
           path: app/build/outputs/apk/anon/release/*.apk
           if-no-files-found: error
           retention-days: 7
-# Keep the Monero submodule pinned to the tested const-correct revision.
-
-# Rebuild APK after the sync-lifecycle fix.
+# Native library cache keys include the pinned XMR commit, so core updates rebuild the libraries.
