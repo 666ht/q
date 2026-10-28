@@ -2,6 +2,7 @@ package io.anonero.ui.home
 
 import AnonNeroTheme
 import android.content.SharedPreferences
+import android.os.SystemClock
 import android.util.Log
 import android.view.HapticFeedbackConstants
 import androidx.activity.compose.LocalActivity
@@ -36,7 +37,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
@@ -62,14 +62,14 @@ import io.anonero.icons.AnonIcons
 import io.anonero.services.WalletState
 import io.anonero.ui.MainActivity
 import io.anonero.ui.viewmodels.AppViewModel
-import io.anonero.util.CrazyPassEncoder
+import io.anonero.util.PinHash
+import io.anonero.util.PinThrottle
 import io.anonero.util.PREFS_PIN_HASH
 import io.anonero.util.ShakeConfig
 import io.anonero.util.WALLET_PREFERENCES
 import io.anonero.util.rememberShakeController
 import io.anonero.util.shake
 import io.anonero.util.shuffleExcept
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -79,7 +79,6 @@ import org.koin.androidx.compose.koinViewModel
 import org.koin.compose.koinInject
 import org.koin.core.qualifier.named
 import timber.log.Timber
-import java.util.concurrent.atomic.AtomicBoolean
 
 const val BackSpaceKey = -2
 const val ConfirmKey = -3
@@ -111,7 +110,6 @@ fun LockScreen(
     val prefs = koinInject<SharedPreferences>(named(WALLET_PREFERENCES))
     val currentPin = remember { mutableStateListOf<Int>() }
     var pinError by remember { mutableStateOf(false) }
-    var checkingPin by remember { mutableStateOf(false) }
     var pinKeys by remember { mutableStateOf(keys) }
     val walletState = koinInject<WalletState>()
     val errorColor: Color by animateColorAsState(
@@ -119,24 +117,30 @@ fun LockScreen(
     )
     val errorShake = rememberShakeController()
     val scope = rememberCoroutineScope()
-    val uiActive = remember { AtomicBoolean(true) }
-    DisposableEffect(Unit) {
-        uiActive.set(true)
-        onDispose { uiActive.set(false) }
-    }
     val appViewModel: AppViewModel = koinViewModel()
 
     LaunchedEffect(true) {
         pinKeys = keys.shuffleExcept(keys.indexOf(BackSpaceKey), keys.indexOf(ConfirmKey))
     }
 
+    // ms left on a PIN wait: read once (a wait outlives a restart; off the main thread, since a
+    // reboot makes it write), then counted down on the boot clock -- nothing runs without a wait
+    var lockedFor by remember { mutableStateOf(0L) }
+    LaunchedEffect(Unit) {
+        lockedFor = withContext(Dispatchers.IO) { PinThrottle.waitLeft(prefs) }
+    }
+    LaunchedEffect(lockedFor > 0) {
+        val until = SystemClock.elapsedRealtime() + lockedFor
+        while (lockedFor > 0) {
+            delay(1_000)
+            lockedFor = (until - SystemClock.elapsedRealtime()).coerceAtLeast(0)
+        }
+    }
+
     fun showError() {
-        if (!uiActive.get()) return
         errorShake.shake(
             ShakeConfig(
-                iterations = 6,
-                intensity = 2500f,
-                translateX = 30f
+                6, translateX = 5f
             )
         )
         scope.launch {
@@ -154,127 +158,87 @@ fun LockScreen(
 
     fun checkPin(shortCut: LockScreenShortCut) {
         val pin = currentPin.joinToString(separator = "")
-        if (pin.length < 4) {
-            showError()
-            return
-        }
-
-        // A previously started legacy/native verification must not swallow a later
-        // correct PIN. The saved local hash is authoritative for normal lock-screen
-        // unlocks, so resolve this path before the in-flight-operation guard.
-        if (mode == LockScreenMode.LOCK_SCREEN) {
-            val localPinHash = CrazyPassEncoder.encode(
-                pin.toByteArray().let { bytes ->
-                    if (bytes.size < 32) bytes + ByteArray(32 - bytes.size)
-                    else bytes
+        if (pin.length >= 4) {
+            scope.launch(Dispatchers.IO) {
+                // counted before the check: killing the app mid-check must not skip it
+                val wait = PinThrottle.tryAttempt(prefs)
+                if (wait > 0) {
+                    lockedFor = wait
+                    withContext(Dispatchers.Main) { showError() }
+                    return@launch
                 }
-            )
-            if (prefs.getString(PREFS_PIN_HASH, "") == localPinHash) {
-                Timber.tag(TAG).i("Saved PIN hash matched; releasing lock immediately")
-                walletState.setBackGroundSync(false)
-                onUnLocked(pin, shortCut)
-                appViewModel.launchPinOperation {
-                    runCatching { walletState.exitBackgroundSync(pin) }
-                        .onFailure {
-                            Timber.tag(TAG).e(it, "PIN accepted but background-sync teardown failed")
-                        }
-                }
-                return
-            }
-        }
-
-        if (checkingPin) return
-
-        // Prevent repeated taps from issuing concurrent native wallet-open calls.
-        checkingPin = true
-        appViewModel.launchPinOperation {
-            try {
-                val pinHash = CrazyPassEncoder.encode(
-                    pin.toByteArray().let { bytes ->
-                        if (bytes.size < 32) bytes + ByteArray(32 - bytes.size)
-                        else bytes
-                    }
-                )
-                val prefsHash = prefs.getString(PREFS_PIN_HASH, "")
-
-                when (mode) {
-                    LockScreenMode.VERYFY_PIN -> {
-                        withContext(Dispatchers.Main) {
-                            if (prefsHash == pinHash) {
-                                onUnLocked(pin, shortCut)
-                            } else {
-                                showError()
-                            }
-                        }
-                    }
-
-                    LockScreenMode.OPEN_WALLET -> {
-                        val opened = appViewModel.openWallet(pin)
-                        if (opened) {
-                            // Only save a PIN hash after the native wallet accepted it.
-                            prefs.edit(commit = true) {
-                                putString(PREFS_PIN_HASH, pinHash)
-                            }
-                            withContext(Dispatchers.Main) {
-                                appViewModel.startService()
-                                onUnLocked(pin, shortCut)
-                                (activity as? MainActivity)?.startNotificationService()
-                            }
-                        } else {
-                            withContext(Dispatchers.Main) {
-                                showError()
-                            }
-                        }
-                    }
-
-                    LockScreenMode.LOCK_SCREEN -> {
-                        val localHashMatches = prefsHash == pinHash
-                        // Older seed-restore builds did not persist the local PIN hash.
-                        // Only when no local hash exists, verify the wallet-file password
-                        // off the UI thread and repair the local hash for future instant unlocks.
-                        // A mismatch against an existing hash is a wrong PIN and should show
-                        // the existing error feedback without an unnecessary native check.
-                        val legacyPinMatches = prefsHash.isNullOrBlank() &&
-                            appViewModel.verifyLegacyWalletPin(pin)
-                        if (!localHashMatches && !legacyPinMatches) {
-                            withContext(Dispatchers.Main) {
-                                showError()
-                            }
-                        } else {
-                            if (legacyPinMatches) {
+                try {
+                    if (mode == LockScreenMode.VERYFY_PIN) {
+                        val prefsHash = prefs.getString(PREFS_PIN_HASH, "")
+                        if (PinHash.matches(pin, prefsHash)) {
+                            PinThrottle.reset(prefs)
+                            // a legacy value is the reversible encoding; replace it now,
+                            // while the PIN is in hand
+                            if (PinHash.isLegacy(prefsHash)) {
                                 prefs.edit(commit = true) {
-                                    putString(PREFS_PIN_HASH, pinHash)
+                                    putString(PREFS_PIN_HASH, PinHash.hash(pin))
                                 }
                             }
-                            // Unlock the existing UI immediately after the PIN hash matches.
-                            // Native background-sync teardown is separate cleanup and must not
-                            // delay the visible unlock transition.
+                            onUnLocked(pin, shortCut)
+                        } else {
                             withContext(Dispatchers.Main) {
-                                walletState.setBackGroundSync(false)
-                                onUnLocked(pin, shortCut)
-                            }
-                            val resumed = walletState.exitBackgroundSync(pin)
-                            if (!resumed) {
-                                Timber.tag(TAG).w(
-                                    "PIN accepted and UI unlocked; background-sync teardown deferred"
-                                )
+                                showError()
                             }
                         }
+                    } else if (mode == LockScreenMode.OPEN_WALLET) {
+                        val result = appViewModel.openWallet(pin)
+                        // persist the gate hash only for a PIN that actually opened --
+                        // writing it for a wrong PIN would corrupt it. Hashed here, off the
+                        // main thread: 210k PBKDF2 rounds would freeze the UI.
+                        if (result) {
+                            PinThrottle.reset(prefs)
+                            prefs.edit(commit = true) {
+                                putString(PREFS_PIN_HASH, PinHash.hash(pin))
+                            }
+                        }
+                        withContext(Dispatchers.Main) {
+                            if (result) {
+                                appViewModel.startService()
+                                withContext(Dispatchers.Main) {
+                                    onUnLocked(pin, shortCut)
+                                    (activity as MainActivity).startNotificationService()
+                                }
+                            } else {
+                                withContext(Dispatchers.Main) {
+                                    showError()
+                                }
+                            }
+                        }
+                    } else {
+                        //if wallet is already open, stop background sync from lock screen
+
+                        // Verify PIN locally against stored hash — instant, no network needed.
+                        val prefsHash = prefs.getString(PREFS_PIN_HASH, "")
+                        if (!PinHash.matches(pin, prefsHash)) {
+                            withContext(Dispatchers.Main) { showError() }
+                        } else {
+                            PinThrottle.reset(prefs)
+                            if (PinHash.isLegacy(prefsHash)) {
+                                prefs.edit(commit = true) {
+                                    putString(PREFS_PIN_HASH, PinHash.hash(pin))
+                                }
+                            }
+                            onUnLocked(pin, shortCut)
+                        }
                     }
-                }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                Timber.tag(TAG).e(e, "PIN verification/open wallet failed")
-                withContext(Dispatchers.Main) {
+                } catch (e: Exception) {
+                    Timber.tag(TAG).e(e)
+                    Timber.tag(TAG).i("checkPin: %s", e.message)
                     showError()
-                }
-            } finally {
-                withContext(Dispatchers.Main) {
-                    if (uiActive.get()) checkingPin = false
+                } finally {
+                    // a correct PIN has cleared the wait by now; a wrong one shows it at once
+                    lockedFor = PinThrottle.waitLeft(prefs)
                 }
             }
+        } else {
+            showError()
         }
+
     }
 
     Scaffold(modifier = modifier) { paddingValues ->
@@ -297,7 +261,7 @@ fun LockScreen(
                 ) {
                     Image(
                         painter = painterResource(R.drawable.ic_anon),
-                        contentDescription = stringResource(R.string.anon_icon),
+                        contentDescription = "Anon nero icon",
                         modifier = Modifier
                             .size(200.dp)
                     )
@@ -311,7 +275,10 @@ fun LockScreen(
             ) {
                 Spacer(modifier = Modifier.padding(top = 24.dp))
                 Text(
-                    if (mode == LockScreenMode.VERYFY_PIN)
+                    if (lockedFor > 0) {
+                        val seconds = (lockedFor + 999) / 1000
+                        stringResource(R.string.pin_try_again_in, seconds / 60, seconds % 60)
+                    } else if (mode == LockScreenMode.VERYFY_PIN)
                         stringResource(R.string.enter_current_pin)
                     else
                         stringResource(R.string.unlock_wallet)
@@ -340,7 +307,8 @@ fun LockScreen(
             Column(
                 modifier = Modifier
                     .weight(.8f)
-                    .wrapContentHeight(),
+                    .wrapContentHeight()
+                    .alpha(if (lockedFor > 0) 0.4f else 1f),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 LazyVerticalGrid(
@@ -367,6 +335,7 @@ fun LockScreen(
                                 .clip(shape = CircleShape)
                                 .combinedClickable(
                                     onClick = {
+                                        if (lockedFor > 0) return@combinedClickable
                                         if (key == BackSpaceKey && currentPin.isNotEmpty()) {
                                             currentPin.removeAt(currentPin.size - 1)
                                         } else if (key == ConfirmKey) {
@@ -400,7 +369,7 @@ fun LockScreen(
                                     imageVector =
                                         if (key == -2) AnonIcons.Backspace else Icons.TwoTone.Check,
                                     tint = Color.White,
-                                    contentDescription = stringResource(R.string.clear),
+                                    contentDescription = "clear pin",
                                     modifier = Modifier
                                         .size(28.dp)
                                 )
@@ -428,7 +397,7 @@ fun LockScreen(
                         }) {
                             Icon(
                                 AnonIcons.ArrowDownLeft,
-                                contentDescription = stringResource(R.string.receive),
+                                contentDescription = "Receive",
                                 modifier = Modifier.size(64.dp)
                             )
                         }
@@ -440,7 +409,7 @@ fun LockScreen(
                             Icon(
                                 AnonIcons.ArrowUpRight,
                                 tint = MaterialTheme.colorScheme.primary,
-                                contentDescription = stringResource(R.string.send),
+                                contentDescription = "Send",
                                 modifier = Modifier.size(64.dp)
                             )
                         }

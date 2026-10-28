@@ -67,6 +67,7 @@ val keys = listOf(
 @Composable
 fun PinSetup(
     changePin: Boolean = false,
+    enterLabel: String? = null,
     onNext: (pin: String) -> Unit = {},
 ) {
     val view = LocalView.current
@@ -103,7 +104,7 @@ fun PinSetup(
                 ) {
                     Image(
                         painter = painterResource(R.drawable.ic_anon),
-                        contentDescription = stringResource(R.string.anon_icon),
+                        contentDescription = "Anon nero icon",
                         modifier = Modifier
                             .size(200.dp)
                     )
@@ -116,7 +117,7 @@ fun PinSetup(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Spacer(modifier = Modifier.padding(top = 24.dp))
-                Text(if (confirming) stringResource(R.string.confirm_pin) else if (changePin) stringResource(R.string.enter_new_pin) else stringResource(
+                Text(if (confirming) stringResource(R.string.confirm_pin) else enterLabel ?: if (changePin) stringResource(R.string.enter_new_pin) else stringResource(
                     R.string.enter_pin
                 ))
                 Spacer(modifier = Modifier.padding(top = 12.dp))
@@ -231,7 +232,7 @@ fun PinSetup(
                                     imageVector =
                                         if (key == -2) AnonIcons.Backspace else Icons.TwoTone.Check,
                                     tint = Color.White,
-                                    contentDescription = stringResource(R.string.clear),
+                                    contentDescription = "clear pin",
                                     modifier = Modifier
                                         .size(28.dp)
                                 )
