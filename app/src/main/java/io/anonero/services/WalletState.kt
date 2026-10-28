@@ -10,6 +10,7 @@ import io.anonero.model.TransactionInfo
 import io.anonero.model.Wallet
 import io.anonero.model.WalletManager
 import io.anonero.util.RESTORE_HEIGHT
+import io.anonero.util.RESTORE_NEEDS_RESCAN
 import io.anonero.model.node.DaemonInfo
 import io.anonero.ui.util.getAllUsedSubAddresses
 import io.anonero.ui.util.getLatestSubAddress
@@ -380,6 +381,15 @@ class WalletState(private val prefs: SharedPreferences) {
         val restoreStart = restoreProgressStartHeight
         if (restoreProgressInProgress && restoreStart != null) {
             return restoreStart
+        }
+
+        // During mnemonic recovery, wallet2 can temporarily report height 1 while
+        // rebuilding its scan cursor. The saved user-selected restore height remains
+        // the correct wallet-height display until that one-shot rescan is completed.
+        if (prefs.getBoolean(RESTORE_NEEDS_RESCAN, false)) {
+            prefs.getLong(RESTORE_HEIGHT, 0L)
+                .takeIf { it > 0L }
+                ?.let { return it }
         }
 
         val selectedStart = customRescanStartHeight ?: heightRefreshStartHeight
