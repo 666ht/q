@@ -27,7 +27,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -58,9 +57,6 @@ import io.anonero.ui.home.graph.routes.SettingsViewSeedRoute
 import io.anonero.ui.onboard.PinSetup
 import io.anonero.util.CrazyPassEncoder
 import io.anonero.util.PREFS_PIN_HASH
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import timber.log.Timber
 
 typealias NavigateTo<T> = (to: T) -> Unit
@@ -84,8 +80,6 @@ fun SettingsPage(
     val errorChangingPinText = stringResource(R.string.error_changing_pin)
     var showLockScreen by remember { mutableStateOf(false) }
     var newPinDialog by remember { mutableStateOf(false) }
-    var changingPin by remember { mutableStateOf(false) }
-    val coroutineScope = rememberCoroutineScope()
 
     if (showLockScreen) {
         Dialog(
@@ -117,54 +111,28 @@ fun SettingsPage(
             onDismissRequest = { newPinDialog = false }) {
             PinSetup(
                 changePin = true,
-                onNext = { newPin ->
-                    // Password changes touch the native wallet file. Drain an active
-                    // refresh first, and never update the local PIN gate unless the
-                    // wallet confirms that its password was actually changed.
-                    if (!changingPin) {
-                        changingPin = true
-                        coroutineScope.launch {
-                            try {
-                                val wallet = WalletManager.instance?.wallet
-                                    ?: throw IllegalStateException("Wallet not open")
-                                val passwordChanged = withContext(Dispatchers.IO) {
-                                    wallet.pauseRefresh()
-                                    try {
-                                        wallet.setPassword(newPin)
-                                    } finally {
-                                        runCatching { wallet.startRefresh() }
-                                            .onFailure {
-                                                Timber.tag(TAG).e(
-                                                    it,
-                                                    "Failed to restart wallet refresh after PIN change"
-                                                )
-                                            }
+                onNext = {
+                    try {
+                        WalletManager.instance?.wallet?.setPassword(it)
+                        toastState.show(pinChangedSuccessfullyText, type = ToastType.Success)
+                        prefs.edit(commit = true) {
+                            putString(
+                                PREFS_PIN_HASH,
+                                CrazyPassEncoder.encode(
+                                    it.toByteArray().let { bytes ->
+                                        if (bytes.size < 32) bytes + ByteArray(32 - bytes.size) else bytes
                                     }
-                                }
-                                if (!passwordChanged) {
-                                    throw IllegalStateException(
-                                        "setPassword failed: ${wallet.status.errorString}"
-                                    )
-                                }
-                                prefs.edit(commit = true) {
-                                    putString(
-                                        PREFS_PIN_HASH,
-                                        CrazyPassEncoder.encode(
-                                            newPin.toByteArray().let { bytes ->
-                                                if (bytes.size < 32) bytes + ByteArray(32 - bytes.size) else bytes
-                                            }
-                                        )
-                                    )
-                                }
-                                toastState.show(pinChangedSuccessfullyText, type = ToastType.Success)
-                            } catch (e: Exception) {
-                                toastState.show(errorChangingPinText, type = ToastType.Error)
-                                Timber.tag(TAG).e(e, "Failed to change PIN")
-                            } finally {
-                                changingPin = false
-                                newPinDialog = false
-                            }
+                                )
+                            )
                         }
+                    } catch (e: Exception) {
+                        toastState.show(
+                            errorChangingPinText,
+                            type = ToastType.Error
+                        )
+                        Timber.tag(TAG).e(e)
+                    } finally {
+                        newPinDialog = false
                     }
                 }
             )
