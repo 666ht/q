@@ -1,0 +1,47 @@
+name: q CI validation
+
+on:
+  push:
+    branches:
+      - ci-test-main-20261028
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  android-build-and-test:
+    name: Gradle tests and APK build
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install required Android SDK components
+        run: |
+          sdkmanager "platform-tools" "platforms;android-35" "build-tools;36.0.0" "cmake;3.22.1" "ndk;29.0.13599879"
+
+      - name: Run unit tests and build Anon release APK
+        run: |
+          chmod +x ./gradlew
+          ./gradlew --no-daemon --stacktrace :app:testAnonDebugUnitTest :app:assembleAnonRelease
+
+      - name: Upload APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: q-anon-release-apk
+          path: app/build/outputs/apk/anon/release/*.apk
+          if-no-files-found: error
