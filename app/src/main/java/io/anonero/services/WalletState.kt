@@ -681,6 +681,11 @@ class WalletState(private val prefs: SharedPreferences) {
                     }
                 }
             }
+            // wallet2 background-sync mode rejects history notes and subaddress labels.
+            // Keep balance/status updates above, but defer history and address metadata reads
+            // until stopBackgroundSync completes; the exit path calls update() afterward.
+            if (nativeBackgroundSyncActive.get()) return
+
             val oldTransactions = _transactions.value
             val discoveredTxs = (wallet.history?.all?.sortedWith(comparator = { o1, o2 ->
                 o2.timestamp.compareTo(o1.timestamp)
