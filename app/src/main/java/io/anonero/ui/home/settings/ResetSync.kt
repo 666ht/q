@@ -91,8 +91,13 @@ fun ResetSyncPage(
     fun heightCacheKey(dateValue: String): String =
         "reset_sync_date_height_${dateCacheNamespace}_${dateValue}"
 
-    val savedRestoreHeight = preferences.getLong("MNEMONIC_SELECTED_RESTORE_HEIGHT", Long.MIN_VALUE)
+    // Keep the last chosen reset height separately from the mnemonic recovery
+    // height. Reopening this page must not silently revert to the original restore choice.
+    val resetHeightPreferenceKey = "RESET_SYNC_SELECTED_HEIGHT_${wallet?.networkType?.value ?: -1}"
+    val savedRestoreHeight = preferences.getLong(resetHeightPreferenceKey, Long.MIN_VALUE)
         .takeIf { it != Long.MIN_VALUE }
+        ?: preferences.getLong("MNEMONIC_SELECTED_RESTORE_HEIGHT", Long.MIN_VALUE)
+            .takeIf { it != Long.MIN_VALUE }
         ?: wallet?.getRestoreHeight()
     var height by remember(wallet) {
         mutableStateOf(savedRestoreHeight?.toString() ?: "")
@@ -229,9 +234,14 @@ fun ResetSyncPage(
                                 querying = false
                                 resetting = true
                                 error = null
+                                // Retain the reset-specific selection without changing
+                                // the original mnemonic-recovery preference.
+                                preferences.edit()
+                                    .putLong(resetHeightPreferenceKey, heightValue!!)
+                                    .apply()
                                 var returnedHome = false
                                 walletState.requestResetSyncFromHeight(
-                                    height = heightValue!!,
+                                    height = heightValue,
                                     onPrepared = {
                                         if (requestId == actionGeneration) {
                                             returnedHome = true
