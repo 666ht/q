@@ -1888,10 +1888,10 @@ class WalletState(private val prefs: SharedPreferences) {
                 // current height has not yet reached the selected start.
                 if (daemonHeight >= height) daemonHeight else maxOf(daemonHeight, daemonTargetHeight)
             }
-            val effectiveEnd = endHeightCandidate.takeIf { it >= height }
-                ?: throw IllegalArgumentException(
-                    "Invalid custom end height: node height is below selected start height $height"
-                )
+            // The selected start height is authoritative. A stale/lagging node
+            // height must not prevent the rescan request; use the selected height
+            // as the temporary progress end until the node reports a usable tip.
+            val effectiveEnd = endHeightCandidate.takeIf { it >= height } ?: height
 
             // This remains an in-wallet rescan, not wallet creation/recovery.
             // The selected reset height becomes the wallet's active refresh height
@@ -1926,9 +1926,9 @@ class WalletState(private val prefs: SharedPreferences) {
             customRescanStartHeight = null
             customRescanDayEndHeight = null
 
-            // A manual reset supersedes mnemonic-restore progress but does not
-            // change the wallet's stored restore height. Capture the incremental
-            // refresh so the reset can publish its intent before waiting for it.
+            // A manual reset supersedes mnemonic-restore progress and applies the
+            // selected height as the wallet's active restore/refresh height below.
+            // Capture the incremental refresh before waiting for it.
             val pendingRestoreRefresh = scanDataRefreshJob
             restoreProgressInProgress = false
             restoreProgressFinalizing = false
