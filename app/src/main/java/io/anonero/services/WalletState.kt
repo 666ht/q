@@ -980,9 +980,13 @@ class WalletState(private val prefs: SharedPreferences) {
         if (_isWiping.get()) return false
 
         // Atomically invalidate queued lock-entry work and release the PIN overlay.
-        synchronized(backgroundLockStateLock) {
+        // Capture the lock intent before clearing it: the local native-mode flag can
+        // lag the wallet2 state when the wallet was left in background-sync mode.
+        val wasBackgroundLockRequested = synchronized(backgroundLockStateLock) {
+            val wasLocked = _backgroundSync.value
             backgroundLockRequestGeneration.incrementAndGet()
             _backgroundSync.value = false
+            wasLocked
         }
 
         val wallet = getWallet
@@ -996,7 +1000,9 @@ class WalletState(private val prefs: SharedPreferences) {
         // Native wallet2 may still be holding its refresh lock. Never make the PIN UI
         // wait for bgSyncMutex or a JNI call; teardown is serialized separately.
         val nativeTransitionPending =
-            nativeBackgroundSyncActive.get() || backgroundLifecycleJob?.isActive == true
+            nativeBackgroundSyncActive.get() ||
+                backgroundLifecycleJob?.isActive == true ||
+                wasBackgroundLockRequested
         if (AnonConfig.viewOnly || !nativeTransitionPending) {
             Timber.tag(TAG).i(
                 "Released PIN lock immediately; no native background-sync teardown required"
@@ -1013,13 +1019,6 @@ class WalletState(private val prefs: SharedPreferences) {
                 bgSyncMutex.withLock {
                 if (_isWiping.get()) return@withLock
                 val currentWallet = getWallet ?: return@withLock
-                if (!nativeBackgroundSyncActive.get()) {
-                    Timber.tag(TAG).d(
-                        "Skipping deferred background-sync teardown; native mode was not entered"
-                    )
-                    return@withLock
-                }
-
                 _blockUpdates.set(true)
                 val exited = try {
                     currentWallet.stopBackgroundSync(pin)
@@ -1947,9 +1946,8 @@ class WalletState(private val prefs: SharedPreferences) {
                 runCatching { wallet.pauseRefresh() }
                 return Result.failure(IllegalStateException("重置已被更新操作取代"))
             }
-            // pauseRefresh() disables the native refresh loop. Start it only after
-            // the custom-height request is queued and still owns the newest generation.
-            wallet.startRefresh()
+            // rescanBlockchainAsyncFromHeight() already resumes the native refresh
+            // worker after the custom-height request has been accepted.
             if (operationId != userOperationGeneration.get()) {
                 runCatching { wallet.pauseRefresh() }
                 return Result.failure(IllegalStateException("重置已被更新操作取代"))
