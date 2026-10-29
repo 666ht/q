@@ -187,6 +187,23 @@ fun LockScreen(
             }
         }
 
+        // VERIFY_PIN only checks the saved local hash. Resolve it before the
+        // in-flight guard so a wrong PIN always receives the existing error feedback.
+        if (mode == LockScreenMode.VERYFY_PIN) {
+            val verifyPinHash = CrazyPassEncoder.encode(
+                pin.toByteArray().let { bytes ->
+                    if (bytes.size < 32) bytes + ByteArray(32 - bytes.size)
+                    else bytes
+                }
+            )
+            if (prefs.getString(PREFS_PIN_HASH, "") != verifyPinHash) {
+                showError()
+                return
+            }
+            onUnLocked(pin, shortCut)
+            return
+        }
+
         if (checkingPin) return
 
         // Prevent repeated taps from issuing concurrent native wallet-open calls.
