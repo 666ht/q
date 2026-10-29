@@ -1704,6 +1704,21 @@ class WalletState(private val prefs: SharedPreferences) {
                 backgroundLockRequestGeneration.incrementAndGet()
                 _backgroundSync.value = false
             }
+
+            // Cancel competing app jobs and claim the progress UI immediately. Let
+            // native background teardown finish before sending another JNI cancellation.
+            cancelScanUiStateForLatestOperation()
+            customRescanPreparing = true
+            beginOrdinaryHeightRefresh(height)
+            val backgroundExit = awaitBackgroundSyncExitBeforeReset()
+            if (backgroundExit.isFailure) {
+                cancelScanUiStateForLatestOperation()
+                return Result.failure(backgroundExit.exceptionOrNull()!!)
+            }
+            if (operationId != userOperationGeneration.get()) {
+                return Result.failure(IllegalStateException("重置已被更新操作取代"))
+            }
+
             wallet.cancelCurrentOperation(operationId)
             if (operationId != userOperationGeneration.get()) {
                 return Result.failure(IllegalStateException("重置已被更新操作取代"))
@@ -1711,20 +1726,6 @@ class WalletState(private val prefs: SharedPreferences) {
 
             userOperationMutex.lock()
             try {
-                if (operationId != userOperationGeneration.get()) {
-                    return Result.failure(IllegalStateException("重置已被更新操作取代"))
-                }
-
-                // Cancel every superseded wallet job before waiting for native background
-                // teardown. Do not start another ordinary refresh while reset owns the wallet.
-                cancelScanUiStateForLatestOperation()
-                customRescanPreparing = true
-                beginOrdinaryHeightRefresh(height)
-                val backgroundExit = awaitBackgroundSyncExitBeforeReset()
-                if (backgroundExit.isFailure) {
-                    cancelScanUiStateForLatestOperation()
-                    return Result.failure(backgroundExit.exceptionOrNull()!!)
-                }
                 if (operationId != userOperationGeneration.get()) {
                     return Result.failure(IllegalStateException("重置已被更新操作取代"))
                 }
