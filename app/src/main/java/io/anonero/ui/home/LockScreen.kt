@@ -131,7 +131,6 @@ fun LockScreen(
     }
 
     fun showError() {
-        if (!uiActive.get()) return
         errorShake.shake(
             ShakeConfig(
                 6, translateX = 5f
