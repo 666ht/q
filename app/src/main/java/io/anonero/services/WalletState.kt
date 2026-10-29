@@ -611,7 +611,9 @@ class WalletState(private val prefs: SharedPreferences) {
     val incomingTx = _incomingTx.asSharedFlow()
 
     fun update() {
-        if (_isWiping.get() || _blockUpdates.get()) return
+        // Native wallet2 background-sync mode rejects history notes and subaddress labels.
+        // Defer the entire snapshot read until exitBackgroundSync performs the final refresh.
+        if (_isWiping.get() || _blockUpdates.get() || nativeBackgroundSyncActive.get()) return
         getWallet?.let { wallet ->
             if (wallet.isInitialized) {
                 // wallet2 may temporarily report 0 while its scan is rebuilding
@@ -681,11 +683,6 @@ class WalletState(private val prefs: SharedPreferences) {
                     }
                 }
             }
-            // wallet2 background-sync mode rejects history notes and subaddress labels.
-            // Keep balance/status updates above, but defer history and address metadata reads
-            // until stopBackgroundSync completes; the exit path calls update() afterward.
-            if (nativeBackgroundSyncActive.get()) return
-
             val oldTransactions = _transactions.value
             val discoveredTxs = (wallet.history?.all?.sortedWith(comparator = { o1, o2 ->
                 o2.timestamp.compareTo(o1.timestamp)
