@@ -54,11 +54,6 @@ fun ResetSyncPage(
 ) {
     val walletState = koinInject<WalletState>()
     val wallet = WalletManager.instance?.wallet
-    // Observe refresh/sync state so the saved-height date lookup waits until
-    // the native wallet is available instead of racing a refresh callback.
-    val isLoading by walletState.isLoading.collectAsState(false)
-    val syncProgress by walletState.syncProgress.collectAsState(null)
-    val canQueryBlockDate = walletState.canQueryBlockDate() && !isLoading && syncProgress == null
     val dateFormat = remember {
         SimpleDateFormat("yyyy-MM-dd", Locale.US).apply {
             isLenient = false
@@ -163,10 +158,10 @@ fun ResetSyncPage(
 
     // Resolve the saved height's date in the background. Initialization must not
     // drive the button spinner or disable either input field.
-    LaunchedEffect(wallet, canQueryBlockDate) {
+    LaunchedEffect(wallet) {
         val initialHeight = height.toLongOrNull()
         val activeWallet = wallet
-        if (canQueryBlockDate && !querying &&
+        if (!querying &&
             activeWallet != null && initialHeight != null &&
             initialHeight >= 0L && date.isBlank()
         ) {
@@ -330,19 +325,11 @@ fun ResetSyncPage(
 
                                         val cachedDate = heightToDateCache[queryHeight]
                                             ?: preferences.getString(dateCacheKey(queryHeight), null)
-                                        val queryResult = walletState.executeLatestWalletQuery { queryWallet ->
-                                            cachedDate ?: run {
-                                                val timestamp = queryWallet.getBlockTimestamp(queryHeight)
-                                                if (timestamp > 0L) dateForTimestamp(timestamp) else null
-                                            }
+                                        val resolvedDate = cachedDate ?: withContext(Dispatchers.IO) {
+                                            val timestamp = activeWallet.getBlockTimestamp(queryHeight)
+                                            if (timestamp > 0L) dateForTimestamp(timestamp) else null
                                         }
                                         if (requestId != actionGeneration) return@launch
-                                        if (queryResult.isFailure) {
-                                            error = queryResult.exceptionOrNull()?.message
-                                                ?: "查询失败，请检查节点连接后重试"
-                                            return@launch
-                                        }
-                                        val resolvedDate = queryResult.getOrThrow()
 
                                         if (height != requestedHeight || !queryByHeight) return@launch
                                         if (resolvedDate == null) {
@@ -365,31 +352,21 @@ fun ResetSyncPage(
                                                 heightCacheKey(requestedDate),
                                                 Long.MIN_VALUE
                                             ).takeIf { it != Long.MIN_VALUE }
-                                        val queryResult = walletState.executeLatestWalletQuery { queryWallet ->
-                                            if (cachedHeight != null) {
-                                                cachedHeight
-                                            } else {
-                                                val calendar = java.util.Calendar.getInstance().apply {
-                                                    time = parsedDate
-                                                    set(java.util.Calendar.HOUR_OF_DAY, 0)
-                                                    set(java.util.Calendar.MINUTE, 0)
-                                                    set(java.util.Calendar.SECOND, 0)
-                                                    set(java.util.Calendar.MILLISECOND, 0)
-                                                }
-                                                queryWallet.getBlockChainHeightByDate(
-                                                    calendar.get(java.util.Calendar.YEAR),
-                                                    calendar.get(java.util.Calendar.MONTH) + 1,
-                                                    calendar.get(java.util.Calendar.DAY_OF_MONTH)
-                                                )
+                                        val resolvedHeight = cachedHeight ?: withContext(Dispatchers.IO) {
+                                            val calendar = java.util.Calendar.getInstance().apply {
+                                                time = parsedDate
+                                                set(java.util.Calendar.HOUR_OF_DAY, 0)
+                                                set(java.util.Calendar.MINUTE, 0)
+                                                set(java.util.Calendar.SECOND, 0)
+                                                set(java.util.Calendar.MILLISECOND, 0)
                                             }
+                                            activeWallet.getBlockChainHeightByDate(
+                                                calendar.get(java.util.Calendar.YEAR),
+                                                calendar.get(java.util.Calendar.MONTH) + 1,
+                                                calendar.get(java.util.Calendar.DAY_OF_MONTH)
+                                            )
                                         }
                                         if (requestId != actionGeneration) return@launch
-                                        if (queryResult.isFailure) {
-                                            error = queryResult.exceptionOrNull()?.message
-                                                ?: "查询失败，请检查节点连接后重试"
-                                            return@launch
-                                        }
-                                        val resolvedHeight = queryResult.getOrThrow()
 
                                         if (date != requestedDate || queryByHeight) return@launch
                                         if (resolvedHeight == null || resolvedHeight < 0L) {
