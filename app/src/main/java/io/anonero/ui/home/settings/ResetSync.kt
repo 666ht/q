@@ -23,7 +23,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -274,10 +273,8 @@ fun ResetSyncPage(
                                 else -> false
                             }
 
-                            // A cache hit is a display-only lookup. Resolve it synchronously
-                            // before showing the spinner or entering executeLatestWalletQuery(),
-                            // which intentionally pauses refresh and clears active scan UI state.
-                            // This lets cached queries return instantly without interrupting a scan.
+                            // Cache hits return immediately; misses run the read-only block
+                            // RPC on IO without pausing or clearing the active wallet scan.
                             if (queryHeightMode) {
                                 val queryHeight = requestedHeight.toLongOrNull()
                                 if (queryHeight != null && queryHeight >= 0L) {
