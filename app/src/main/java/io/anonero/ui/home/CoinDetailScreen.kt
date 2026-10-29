@@ -154,7 +154,7 @@ fun CoinDetailScreen(
                     Text("公钥", style = MaterialTheme.typography.titleMedium)
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        text = coin?.let { if (pubKeyState == 1) it.pub_key else abbreviatedValue(it.pub_key, 32) } ?: "____",
+                        text = coin?.let { if (pubKeyState == 1) it.pub_key else abbreviatedValue(it.pub_key, 33) } ?: "____",
                         modifier = Modifier.weight(1f),
                         textAlign = TextAlign.Right,
                         style = MaterialTheme.typography.titleMedium
@@ -173,7 +173,7 @@ fun CoinDetailScreen(
                     Text("哈希", style = MaterialTheme.typography.titleMedium)
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        text = coin?.let { if (hashState == 1) it.hash else abbreviatedValue(it.hash, 32) } ?: "____",
+                        text = coin?.let { if (hashState == 1) it.hash else abbreviatedValue(it.hash, 33) } ?: "____",
                         modifier = Modifier.weight(1f),
                         textAlign = TextAlign.Right,
                         style = MaterialTheme.typography.titleMedium
@@ -192,7 +192,7 @@ fun CoinDetailScreen(
                     Text("地址", style = MaterialTheme.typography.titleMedium)
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        text = outputAddress?.let { if (addressState == 1) it else abbreviatedValue(it, 32) } ?: "____",
+                        text = outputAddress?.let { if (addressState == 1) it else abbreviatedValue(it, 33) } ?: "____",
                         modifier = Modifier.weight(1f),
                         textAlign = TextAlign.Right,
                         style = MaterialTheme.typography.titleMedium
