@@ -169,7 +169,8 @@ fun LockScreen(
                     else bytes
                 }
             )
-            if (prefs.getString(PREFS_PIN_HASH, "") == localPinHash) {
+            val savedPinHash = prefs.getString(PREFS_PIN_HASH, "")
+            if (savedPinHash == localPinHash) {
                 Timber.tag(TAG).i("Saved PIN hash matched; releasing lock immediately")
                 walletState.setBackGroundSync(false)
                 onUnLocked(pin, shortCut)
@@ -179,6 +180,12 @@ fun LockScreen(
                             Timber.tag(TAG).e(it, "PIN accepted but background-sync teardown failed")
                         }
                 }
+                return
+            }
+            // A stored local hash is authoritative: a mismatch is a wrong PIN.
+            // Show feedback immediately, even while another PIN operation is in flight.
+            if (!savedPinHash.isNullOrBlank()) {
+                showError()
                 return
             }
         }
