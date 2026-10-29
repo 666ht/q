@@ -1037,14 +1037,23 @@ class WalletState(private val prefs: SharedPreferences) {
                 }
 
                 nativeBackgroundSyncActive.set(false)
-                runCatching { currentWallet.refreshHistory() }
-                    .onFailure { Timber.tag(TAG).e(it, "History refresh after background sync failed") }
-                runCatching { currentWallet.refreshCoins(force = true) }
-                    .onFailure { Timber.tag(TAG).e(it, "Output refresh after background sync failed") }
-                runCatching { update() }
-                    .onFailure { Timber.tag(TAG).e(it, "Wallet snapshot after background sync failed") }
-                runCatching { currentWallet.startRefresh() }
-                    .onFailure { Timber.tag(TAG).e(it, "Restart refresh after background sync failed") }
+                // A selected-height reset has already taken ownership. Its caller will
+                // perform the next wallet refresh after the rescan is accepted; an extra
+                // history/output refresh here would compete with the reset.
+                if (userOperationTransitionInProgress || customRescanPreparing ||
+                    customRescanRequesting.get()
+                ) {
+                    Timber.tag(TAG).i("Skipping post-background refresh because reset owns the wallet")
+                } else {
+                    runCatching { currentWallet.refreshHistory() }
+                        .onFailure { Timber.tag(TAG).e(it, "History refresh after background sync failed") }
+                    runCatching { currentWallet.refreshCoins(force = true) }
+                        .onFailure { Timber.tag(TAG).e(it, "Output refresh after background sync failed") }
+                    runCatching { update() }
+                        .onFailure { Timber.tag(TAG).e(it, "Wallet snapshot after background sync failed") }
+                    runCatching { currentWallet.startRefresh() }
+                        .onFailure { Timber.tag(TAG).e(it, "Restart refresh after background sync failed") }
+                }
                 Timber.tag(TAG).i("Deferred native background-sync teardown completed")
                 }
             }
@@ -1686,15 +1695,15 @@ class WalletState(private val prefs: SharedPreferences) {
             return Result.failure(IllegalArgumentException("Invalid restore height"))
         }
 
-        val backgroundExit = awaitBackgroundSyncExitBeforeReset()
-        if (backgroundExit.isFailure) return Result.failure(backgroundExit.exceptionOrNull()!!)
-
+        // Reset takes priority as soon as the user taps it. Mark a newer operation
+        // before waiting for background teardown so older refresh/scan callbacks cannot
+        // keep owning the wallet or its progress UI.
         val operationId = beginUserOperationTransition()
-        // Turn on the shared home progress area and gate stale callbacks before
-        // signalling native cancellation. The reset button may still be spinning,
-        // but leaving this screen must not hide the operation state.
-        beginOrdinaryHeightRefresh(height)
         return try {
+            synchronized(backgroundLockStateLock) {
+                backgroundLockRequestGeneration.incrementAndGet()
+                _backgroundSync.value = false
+            }
             wallet.cancelCurrentOperation(operationId)
             if (operationId != userOperationGeneration.get()) {
                 return Result.failure(IllegalStateException("重置已被更新操作取代"))
@@ -1702,6 +1711,20 @@ class WalletState(private val prefs: SharedPreferences) {
 
             userOperationMutex.lock()
             try {
+                if (operationId != userOperationGeneration.get()) {
+                    return Result.failure(IllegalStateException("重置已被更新操作取代"))
+                }
+
+                // Cancel every superseded wallet job before waiting for native background
+                // teardown. Do not start another ordinary refresh while reset owns the wallet.
+                cancelScanUiStateForLatestOperation()
+                customRescanPreparing = true
+                beginOrdinaryHeightRefresh(height)
+                val backgroundExit = awaitBackgroundSyncExitBeforeReset()
+                if (backgroundExit.isFailure) {
+                    cancelScanUiStateForLatestOperation()
+                    return Result.failure(backgroundExit.exceptionOrNull()!!)
+                }
                 if (operationId != userOperationGeneration.get()) {
                     return Result.failure(IllegalStateException("重置已被更新操作取代"))
                 }
