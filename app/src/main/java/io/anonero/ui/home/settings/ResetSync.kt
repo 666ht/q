@@ -241,7 +241,7 @@ fun ResetSyncPage(
                                     .apply()
                                 var returnedHome = false
                                 walletState.requestResetSyncFromHeight(
-                                    height = heightValue,
+                                    height = heightValue!!,
                                     onPrepared = {
                                         if (requestId == actionGeneration) {
                                             returnedHome = true
