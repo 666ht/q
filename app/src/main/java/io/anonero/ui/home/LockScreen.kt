@@ -169,14 +169,10 @@ fun LockScreen(
             val savedPinHash = prefs.getString(PREFS_PIN_HASH, "")
             if (savedPinHash == localPinHash) {
                 Timber.tag(TAG).i("Saved PIN hash matched; releasing lock immediately")
-                walletState.setBackGroundSync(false)
+                // Queue native teardown before navigation so an immediate wallet reset
+                // can await it rather than racing while wallet2 is still background syncing.
+                walletState.requestExitBackgroundSync(pin)
                 onUnLocked(pin, shortCut)
-                appViewModel.launchPinOperation {
-                    runCatching { walletState.exitBackgroundSync(pin) }
-                        .onFailure {
-                            Timber.tag(TAG).e(it, "PIN accepted but background-sync teardown failed")
-                        }
-                }
                 return
             }
             // A stored local hash is authoritative: a mismatch is a wrong PIN.
@@ -267,14 +263,12 @@ fun LockScreen(
                                     putString(PREFS_PIN_HASH, pinHash)
                                 }
                             }
-                            // Unlock the existing UI immediately after the PIN hash matches.
-                            // Native background-sync teardown is separate cleanup and must not
-                            // delay the visible unlock transition.
+                            // Queue native teardown before navigation. The UI transition remains
+                            // immediate, while a subsequent reset can await the teardown job.
+                            val resumed = walletState.requestExitBackgroundSync(pin)
                             withContext(Dispatchers.Main) {
-                                walletState.setBackGroundSync(false)
                                 onUnLocked(pin, shortCut)
                             }
-                            val resumed = walletState.exitBackgroundSync(pin)
                             if (!resumed) {
                                 Timber.tag(TAG).w(
                                     "PIN accepted and UI unlocked; background-sync teardown deferred"
