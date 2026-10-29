@@ -125,6 +125,11 @@ class WalletState(private val prefs: SharedPreferences) {
     // while native wallet2 is switching refresh modes.
     private val backgroundLifecycleScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var backgroundLifecycleJob: Job? = null
+    // Track deferred native background-sync teardown so a custom rescan cannot start
+    // until wallet2 has actually left background mode and its post-exit refresh is done.
+    private val backgroundSyncExitLock = Any()
+    @Volatile
+    private var backgroundSyncExitJob: Job? = null
     // Distinguish the UI PIN lock from native wallet2 background-sync mode.
     // Switching the native wallet while a foreground scan is active can race its refresh worker.
     private val nativeBackgroundSyncActive = AtomicBoolean(false)
@@ -962,7 +967,13 @@ class WalletState(private val prefs: SharedPreferences) {
         }
     }
 
-    suspend fun exitBackgroundSync(pin: String): Boolean {
+    fun requestExitBackgroundSync(pin: String): Boolean =
+        exitBackgroundSyncInternal(pin)
+
+    suspend fun exitBackgroundSync(pin: String): Boolean =
+        exitBackgroundSyncInternal(pin)
+
+    private fun exitBackgroundSyncInternal(pin: String): Boolean {
         if (_isWiping.get()) return false
 
         // Atomically invalidate queued lock-entry work and release the PIN overlay.
@@ -990,8 +1001,13 @@ class WalletState(private val prefs: SharedPreferences) {
             return true
         }
 
-        backgroundLifecycleScope.launch {
-            bgSyncMutex.withLock {
+        synchronized(backgroundSyncExitLock) {
+            if (backgroundSyncExitJob?.isActive == true) {
+                Timber.tag(TAG).d("Native background-sync teardown is already queued")
+                return true
+            }
+            backgroundSyncExitJob = backgroundLifecycleScope.launch {
+                bgSyncMutex.withLock {
                 if (_isWiping.get()) return@withLock
                 val currentWallet = getWallet ?: return@withLock
                 if (!nativeBackgroundSyncActive.get()) {
@@ -1028,6 +1044,7 @@ class WalletState(private val prefs: SharedPreferences) {
                 runCatching { currentWallet.startRefresh() }
                     .onFailure { Timber.tag(TAG).e(it, "Restart refresh after background sync failed") }
                 Timber.tag(TAG).i("Deferred native background-sync teardown completed")
+                }
             }
         }
 
@@ -1035,6 +1052,29 @@ class WalletState(private val prefs: SharedPreferences) {
             "PIN unlock accepted immediately; native background-sync teardown queued in IO"
         )
         return true
+    }
+
+    private suspend fun awaitBackgroundSyncExitBeforeReset(): Result<Unit> {
+        val exitJob = synchronized(backgroundSyncExitLock) { backgroundSyncExitJob }
+        if (exitJob?.isActive == true) {
+            Timber.tag(TAG).i("Waiting for native background-sync teardown before wallet reset")
+            try {
+                withTimeoutOrNull(30_000L) {
+                    exitJob.join()
+                    true
+                } ?: return Result.failure(
+                    IllegalStateException("Timed out waiting for background sync to stop; please retry reset")
+                )
+            } catch (e: CancellationException) {
+                throw e
+            }
+        }
+        if (nativeBackgroundSyncActive.get()) {
+            return Result.failure(
+                IllegalStateException("Native background sync is still active; unlock the wallet and retry reset")
+            )
+        }
+        return Result.success(Unit)
     }
 
     fun setConnectionStatus(status: Wallet.ConnectionStatus) {
@@ -1643,6 +1683,9 @@ class WalletState(private val prefs: SharedPreferences) {
         if (height < 0L) {
             return Result.failure(IllegalArgumentException("Invalid restore height"))
         }
+
+        val backgroundExit = awaitBackgroundSyncExitBeforeReset()
+        if (backgroundExit.isFailure) return Result.failure(backgroundExit.exceptionOrNull()!!)
 
         val operationId = beginUserOperationTransition()
         // Turn on the shared home progress area and gate stale callbacks before
