@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.material.icons.Icons
@@ -123,13 +124,23 @@ fun CoinDetailScreen(
                         Spacer(modifier = Modifier.size(28.dp))
                     }
                 }
-                Text(
-                    text = "全局索引  " + (coin?.globalOutputIndex ?: "____"),
+                androidx.compose.foundation.layout.Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 12.dp),
-                    style = MaterialTheme.typography.titleMedium
-                )
+                    verticalAlignment = Alignment.Top
+                ) {
+                    Text(
+                        "全局索引",
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = coin?.globalOutputIndex?.toString() ?: "____",
+                        modifier = Modifier.weight(1f),
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                }
                 androidx.compose.foundation.layout.Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -140,11 +151,12 @@ fun CoinDetailScreen(
                     ),
                     verticalAlignment = Alignment.Top
                 ) {
-                    Text("公钥", modifier = Modifier.size(width = 40.dp, height = 24.dp), style = MaterialTheme.typography.titleMedium)
+                    Text("公钥", style = MaterialTheme.typography.titleMedium)
+                    Spacer(Modifier.width(8.dp))
                     Text(
                         text = coin?.let { if (pubKeyState == 1) it.pub_key else abbreviatedValue(it.pub_key, 32) } ?: "____",
                         modifier = Modifier.weight(1f),
-                        textAlign = TextAlign.End,
+                        textAlign = TextAlign.Start,
                         style = MaterialTheme.typography.titleMedium
                     )
                 }
@@ -158,11 +170,12 @@ fun CoinDetailScreen(
                     ),
                     verticalAlignment = Alignment.Top
                 ) {
-                    Text("哈希", modifier = Modifier.size(width = 40.dp, height = 24.dp), style = MaterialTheme.typography.titleMedium)
+                    Text("哈希", style = MaterialTheme.typography.titleMedium)
+                    Spacer(Modifier.width(8.dp))
                     Text(
                         text = coin?.let { if (hashState == 1) it.hash else abbreviatedValue(it.hash, 32) } ?: "____",
                         modifier = Modifier.weight(1f),
-                        textAlign = TextAlign.End,
+                        textAlign = TextAlign.Start,
                         style = MaterialTheme.typography.titleMedium
                     )
                 }
@@ -176,11 +189,12 @@ fun CoinDetailScreen(
                     ),
                     verticalAlignment = Alignment.Top
                 ) {
-                    Text("地址", modifier = Modifier.size(width = 40.dp, height = 24.dp), style = MaterialTheme.typography.titleMedium)
+                    Text("地址", style = MaterialTheme.typography.titleMedium)
+                    Spacer(Modifier.width(8.dp))
                     Text(
                         text = outputAddress?.let { if (addressState == 1) it else abbreviatedValue(it, 32) } ?: "____",
                         modifier = Modifier.weight(1f),
-                        textAlign = TextAlign.End,
+                        textAlign = TextAlign.Start,
                         style = MaterialTheme.typography.titleMedium
                     )
                 }
