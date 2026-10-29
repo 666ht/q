@@ -1709,7 +1709,6 @@ class WalletState(private val prefs: SharedPreferences) {
             // native background teardown finish before sending another JNI cancellation.
             cancelScanUiStateForLatestOperation()
             customRescanPreparing = true
-            beginOrdinaryHeightRefresh(height)
             val backgroundExit = awaitBackgroundSyncExitBeforeReset()
             if (backgroundExit.isFailure) {
                 cancelScanUiStateForLatestOperation()
@@ -1738,27 +1737,30 @@ class WalletState(private val prefs: SharedPreferences) {
                     return Result.failure(IllegalStateException("重置已被更新操作取代"))
                 }
 
-                // A connected wallet can usually provide its actual current daemon
-                // height immediately. Do not run another full refresh merely to read it.
-                // Only fall back to the fresh listener callback when the native value is 0.
-                val liveDaemonHeight = withContext(Dispatchers.IO) {
-                    runCatching { wallet.getDaemonBlockChainHeight() }.getOrDefault(0L)
-                }
-                val refreshedDaemonHeight = if (liveDaemonHeight > 0L) {
-                    liveDaemonHeight
-                } else {
-                    armOrdinaryHeightRefresh()
-                    wallet.startRefresh()
-                    awaitOrdinaryRefreshHeight()
+                // Read the node's current and target heights directly. A reset only
+                // needs the selected start and a progress endpoint; do not resume a
+                // normal refresh and wait for a listener callback just to learn the tip.
+                val (liveDaemonHeight, targetDaemonHeight) = withContext(Dispatchers.IO) {
+                    val current = runCatching {
+                        wallet.getDaemonBlockChainHeight()
+                    }.getOrDefault(0L)
+                    val target = runCatching {
+                        wallet.getDaemonBlockChainTargetHeight()
+                    }.getOrDefault(0L)
+                    current to target
                 }
                 if (operationId != userOperationGeneration.get()) {
                     return Result.failure(IllegalStateException("重置已被更新操作取代"))
                 }
 
-                val effectiveEndHeight = dayEndHeight ?: refreshedDaemonHeight
+                // The chosen start height is authoritative. Prefer whichever node
+                // height is furthest along, but never let a stale/zero report reject
+                // the user's selected height or trigger an extra refresh cycle.
+                val availableNodeHeight = maxOf(liveDaemonHeight, targetDaemonHeight)
+                val effectiveEndHeight = dayEndHeight ?: maxOf(height, availableNodeHeight)
                 if (effectiveEndHeight < height) {
                     throw IllegalArgumentException(
-                        "节点最新高度 $effectiveEndHeight 低于所选起始高度 $height"
+                        "目标高度 $effectiveEndHeight 低于所选起始高度 $height"
                     )
                 }
                 if (!publishInitialHeightSyncProgress(height, effectiveEndHeight)) {
