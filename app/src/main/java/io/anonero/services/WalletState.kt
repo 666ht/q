@@ -1863,6 +1863,8 @@ class WalletState(private val prefs: SharedPreferences) {
         updateScanPreparationIndicator()
         var preparationStarted = false
         var refreshPaused = false
+        var previousRestoreHeight: Long? = null
+        var rescanAccepted = false
         try {
             if (wallet.fullStatus.connectionStatus != Wallet.ConnectionStatus.ConnectionStatus_Connected) {
                 throw IllegalStateException("Please connect to daemon for resync")
@@ -1963,9 +1965,21 @@ class WalletState(private val prefs: SharedPreferences) {
                 wallet.getBlockChainHeight()
             }.getOrNull()?.takeIf { it >= 0L }
 
+            // Make the selected reset height the wallet's active refresh height before
+            // queuing the native rescan. Otherwise the native layer restores the old
+            // mnemonic-recovery height after its temporary custom-height refresh.
+            previousRestoreHeight = wallet.getRestoreHeight()
+            if (!wallet.setRestoreHeight(height)) {
+                throw IllegalStateException("无法设置所选重置高度：$height")
+            }
+
             if (!wallet.rescanBlockchainAsyncFromHeight(height)) {
+                previousRestoreHeight?.let { oldHeight ->
+                    runCatching { wallet.setRestoreHeight(oldHeight) }
+                }
                 throw IllegalStateException("Blockchain rescan was not started")
             }
+            rescanAccepted = true
             if (operationId != userOperationGeneration.get()) {
                 runCatching { wallet.pauseRefresh() }
                 return Result.failure(IllegalStateException("重置已被更新操作取代"))
@@ -2006,6 +2020,12 @@ class WalletState(private val prefs: SharedPreferences) {
             }
             return Result.success(true)
         } catch (e: Exception) {
+            if (!rescanAccepted) {
+                previousRestoreHeight?.let { oldHeight ->
+                    runCatching { wallet.setRestoreHeight(oldHeight) }
+                        .onFailure { Timber.tag(TAG).w(it, "Could not restore saved wallet height after reset failure") }
+                }
+            }
             if (preparationStarted && operationId == userOperationGeneration.get()) {
                 // Keep callback suppression enabled while state is reset and the
                 // existing refresh loop is resumed after a failed request.
