@@ -1895,9 +1895,10 @@ class WalletState(private val prefs: SharedPreferences) {
                     "Invalid custom end height: node height is below selected start height $height"
                 )
 
-            // This is an in-wallet rescan, not wallet creation/recovery. The height
-            // entered here belongs only to this rescan operation. The wallet's
-            // original recovery height is never read or overwritten by this path.
+            // This remains an in-wallet rescan, not wallet creation/recovery.
+            // The selected reset height becomes the wallet's active refresh height
+            // so later refreshes and reopening the reset page do not revert to the
+            // original mnemonic-recovery height. On failure, the old height is restored.
             //
             // Set the preparation gate before pausing/waiting for native wallet locks:
             // callbacks from the old sync must not be mistaken for this new scan.
