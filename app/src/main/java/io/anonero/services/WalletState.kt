@@ -16,6 +16,7 @@ import io.anonero.ui.util.getLatestSubAddress
 import io.anonero.ui.home.LockScreenShortCut
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
