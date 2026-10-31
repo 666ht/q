@@ -36,6 +36,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -88,6 +89,10 @@ fun RestorePreview(
     oNextPressed: () -> Unit = {},
     navigateTo: (route: Any) -> Unit = {}
 ) {
+
+    DisposableEffect(Unit) {
+        onDispose { BackupHelper.cleanCacheDir() }
+    }
 
     var passPhrase by remember { mutableStateOf<String>("") }
     var loadingMessage by remember { mutableStateOf<String>("") }

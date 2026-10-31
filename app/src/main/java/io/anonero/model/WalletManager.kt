@@ -97,6 +97,18 @@ class WalletManager {
         return Wallet(walletHandle).also { manageWallet(it) }
     }
 
+    /**
+     * Opens a wallet copy without replacing the live wallet managed by this instance.
+     * Used only to prepare portable backup copies while the real wallet is paused.
+     */
+    fun openWalletUnmanaged(path: String, password: String): Wallet {
+        val handle = openWalletJ(path, password, networkType.value, AnonConfig.viewOnly)
+        if (handle == 0L) throw IllegalStateException("Native wallet copy open failed")
+        return Wallet(handle)
+    }
+
+    fun closeUnmanaged(wallet: Wallet): Boolean = closeJ(wallet)
+
     private external fun openWalletJ(
         path: String,
         password: String,

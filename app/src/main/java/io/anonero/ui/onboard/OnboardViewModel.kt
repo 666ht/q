@@ -8,10 +8,12 @@ import io.anonero.R
 import io.anonero.model.NeroKeyPayload
 import io.anonero.model.Wallet
 import io.anonero.model.WalletManager
-import io.anonero.util.CrazyPassEncoder
+import io.anonero.util.PinHash
+import io.anonero.util.WalletKey
 import io.anonero.util.KeyStoreHelper
 import io.anonero.util.PREFS_PASSPHRASE_HASH
 import io.anonero.util.PREFS_PIN_HASH
+import io.anonero.util.PREFS_PIN_SETUP_PENDING
 import io.anonero.util.RESTORE_HEIGHT
 import io.anonero.util.RESTORE_NEEDS_RESCAN
 import kotlinx.coroutines.CancellationException
@@ -42,17 +44,6 @@ class OnboardViewModel(private val prefs: SharedPreferences) : ViewModel() {
 
     fun getSeed() = walllet?.getSeed(passPhrase) ?: ""
 
-    /**
-     * Must use the same PIN hash in every wallet-creation path because LockScreen
-     * validates this value without consulting the native wallet.
-     */
-    private fun encodePinHash(pin: String): String =
-        CrazyPassEncoder.encode(
-            pin.toByteArray().let { bytes ->
-                if (bytes.size < 32) bytes + ByteArray(32 - bytes.size) else bytes
-            }
-        )
-
     suspend fun create(pin: String) {
         if (AnonConfig.context == null) return
         withContext(Dispatchers.IO) {
@@ -60,17 +51,36 @@ class OnboardViewModel(private val prefs: SharedPreferences) : ViewModel() {
             val walletFile = AnonConfig.getDefaultWalletFile(context)
             AnonConfig.getDefaultWalletDir(context).deleteRecursively()
             AnonConfig.getDefaultWalletDir(context).mkdirs()
-            val anonWallet = WalletManager.instance?.createWallet(
-                walletFile,
-                pin,
-                passPhrase,
-                "English",
-                1,
-            )
+            val pinVerifier = PinHash.hash(pin)
+            check(prefs.edit()
+                .putString(PREFS_PIN_HASH, pinVerifier)
+                .remove(PREFS_PIN_SETUP_PENDING)
+                .commit()) {
+                "Unable to save PIN verifier"
+            }
+            val walletKey = WalletKey.newSecret()
+            val anonWallet = try {
+                WalletKey.removeRestoreSource(context, walletFile.name)
+                WalletKey.remove(context, walletFile.name)
+                WalletKey.store(context, walletFile.name, walletKey)
+                WalletManager.instance?.createWallet(
+                    walletFile,
+                    walletKey,
+                    passPhrase,
+                    "English",
+                    1,
+                )
+            } catch (e: Exception) {
+                WalletKey.remove(context, walletFile.name)
+                prefs.edit(commit = true) { remove(PREFS_PIN_HASH) }
+                throw e
+            }
             anonWallet?.store()
             delay(100)
             if (anonWallet?.status?.isOk != true) {
                 walletFile.delete()
+                WalletKey.remove(context, walletFile.name)
+                prefs.edit(commit = true) { remove(PREFS_PIN_HASH) }
                 throw CancellationException(context.getString(R.string.unable_to_create_wallet))
             }
             val crazyPass: String = KeyStoreHelper.getCrazyPass(AnonConfig.context, passPhrase)
@@ -79,9 +89,6 @@ class OnboardViewModel(private val prefs: SharedPreferences) : ViewModel() {
                 remove("MNEMONIC_SELECTED_RESTORE_HEIGHT")
             }
 
-            prefs.edit(commit = true) {
-                putString(PREFS_PIN_HASH, encodePinHash(pin))
-            }
             walllet = anonWallet
             delay(500)
         }
@@ -96,15 +103,32 @@ class OnboardViewModel(private val prefs: SharedPreferences) : ViewModel() {
             val walletFile = AnonConfig.getDefaultWalletFile(context)
             AnonConfig.getDefaultWalletDir(context).deleteRecursively()
             AnonConfig.getDefaultWalletDir(context).mkdirs()
-            val anonWallet = WalletManager.instance?.createWalletWithKeys(
-                walletFile,
-                pin,
-                language = "English",
-                restoreHeight = neroKeyPayload!!.restoreHeight,
-                viewKeyString = neroKeyPayload!!.privateViewKey,
-                addressString = neroKeyPayload!!.primaryAddress,
-                spendKeyString = ""
-            )
+            val pinVerifier = PinHash.hash(pin)
+            check(prefs.edit()
+                .putString(PREFS_PIN_HASH, pinVerifier)
+                .remove(PREFS_PIN_SETUP_PENDING)
+                .commit()) {
+                "Unable to save PIN verifier"
+            }
+            val walletKey = WalletKey.newSecret()
+            val anonWallet = try {
+                WalletKey.removeRestoreSource(context, walletFile.name)
+                WalletKey.remove(context, walletFile.name)
+                WalletKey.store(context, walletFile.name, walletKey)
+                WalletManager.instance?.createWalletWithKeys(
+                    walletFile,
+                    walletKey,
+                    language = "English",
+                    restoreHeight = neroKeyPayload!!.restoreHeight,
+                    viewKeyString = neroKeyPayload!!.privateViewKey,
+                    addressString = neroKeyPayload!!.primaryAddress,
+                    spendKeyString = ""
+                )
+            } catch (e: Exception) {
+                WalletKey.remove(context, walletFile.name)
+                prefs.edit(commit = true) { remove(PREFS_PIN_HASH) }
+                throw e
+            }
             neroKeyPayload?.restoreHeight?.let {
                 anonWallet?.setRestoreHeight(it)
             }
@@ -113,12 +137,13 @@ class OnboardViewModel(private val prefs: SharedPreferences) : ViewModel() {
             delay(100)
             if (anonWallet?.status?.isOk != true) {
                 walletFile.delete()
+                WalletKey.remove(context, walletFile.name)
+                prefs.edit(commit = true) { remove(PREFS_PIN_HASH) }
                 throw CancellationException(context.getString(R.string.unable_to_create_wallet))
             }
             val crazyPass: String = KeyStoreHelper.getCrazyPass(AnonConfig.context, passPhrase)
             prefs.edit(commit = true) {
                 putString("passPhraseHash", crazyPass)
-                putString(PREFS_PIN_HASH, encodePinHash(pin))
             }
             walllet = anonWallet
             delay(500)
@@ -149,26 +174,45 @@ class OnboardViewModel(private val prefs: SharedPreferences) : ViewModel() {
         AnonConfig.getDefaultWalletDir(context).deleteRecursively()
         AnonConfig.getDefaultWalletDir(context).mkdirs()
         delay(100)
-        val anonWallet = if (restorePayload!!.seed.size == 25) {
-            WalletManager.instance?.recoveryWallet(
-                walletFile,
-                pin,
+        val pinVerifier = PinHash.hash(pin)
+        check(prefs.edit()
+                .putString(PREFS_PIN_HASH, pinVerifier)
+                .remove(PREFS_PIN_SETUP_PENDING)
+                .commit()) {
+            "Unable to save PIN verifier"
+        }
+        val walletKey = WalletKey.newSecret()
+        val anonWallet = try {
+            WalletKey.removeRestoreSource(context, walletFile.name)
+                WalletKey.remove(context, walletFile.name)
+                WalletKey.store(context, walletFile.name, walletKey)
+            if (restorePayload!!.seed.size == 25) {
+                WalletManager.instance?.recoveryWallet(
+                    walletFile,
+                    walletKey,
+                    restorePayload!!.seed.joinToString(" "),
+                    passPhrase,
+                    restorePayload!!.restoreHeight ?: 0
+            )
+            } else if (restorePayload!!.seed.size == 16) {
+                WalletManager.instance?.recoveryWalletPolyseed(
+                    walletFile,
+                    walletKey,
                 restorePayload!!.seed.joinToString(" "),
                 passPhrase,
                 restorePayload!!.restoreHeight ?: 0
             )
-        } else if (restorePayload!!.seed.size == 16) {
-            WalletManager.instance?.recoveryWalletPolyseed(
-                walletFile,
-                pin,
-                restorePayload!!.seed.joinToString(" "),
-                passPhrase,
-                restorePayload!!.restoreHeight ?: 0
-            )
-        } else {
-            null
+            } else {
+                null
+            }
+        } catch (e: Exception) {
+            WalletKey.remove(context, walletFile.name)
+            prefs.edit(commit = true) { remove(PREFS_PIN_HASH) }
+            throw e
         }
         if (anonWallet == null) {
+            WalletKey.remove(context, walletFile.name)
+            prefs.edit(commit = true) { remove(PREFS_PIN_HASH) }
             throw Exception("unable to create wallet from seed, invalid seed length ${restorePayload!!.seed.size}")
         }
         delay(1000)
@@ -183,12 +227,13 @@ class OnboardViewModel(private val prefs: SharedPreferences) : ViewModel() {
         delay(100)
         if (anonWallet?.status?.isOk != true) {
             walletFile.delete()
+            WalletKey.remove(context, walletFile.name)
+            prefs.edit(commit = true) { remove(PREFS_PIN_HASH) }
             throw CancellationException("unable to create wallet ${anonWallet?.status?.errorString}")
         }
         val crazyPass: String = KeyStoreHelper.getCrazyPass(AnonConfig.context, passPhrase)
         prefs.edit(commit = true) {
             putString(PREFS_PASSPHRASE_HASH, crazyPass)
-            putString(PREFS_PIN_HASH, encodePinHash(pin))
             // Remove stale one-shot heights when none was selected. Native
             // recovery must retain its own default (Polyseed birthday or legacy seed).
             val selectedRestoreHeight = restorePayload?.restoreHeight?.takeIf { it > 0L }
