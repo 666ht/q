@@ -164,7 +164,7 @@
     <string name="label_cannot_be_empty">标签不能为空</string>
     <string name="update">更新</string>
     <string name="broadcast_transaction_confirm">确定要广播交易吗？</string>
-    <string name="exit_app_confirm">确定要退出 %1$s 吗？</string>
+    <string name="exit_app_confirm">确定要退出%1$s吗？</string>
     <string name="key_images_imported">密钥映像已导入</string>
     <string name="tor_status">Tor 状态</string>
     <string name="backup_created">备份已创建：%1$s</string>
