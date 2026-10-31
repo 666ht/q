@@ -132,23 +132,86 @@ class AnonWalletHandler(
         val walletName = walletFile.name
 
         WalletKey.recoverInterruptedMigration(context, walletFile.path, walletName)
-        val anonWallet = if (WalletKey.exists(context, walletName)) {
-            val pinSetupPending = prefs.getBoolean(PREFS_PIN_SETUP_PENDING, false)
+        val hasWalletSecret = WalletKey.exists(context, walletName)
+        val hasRestoreSource = WalletKey.restoreSourceExists(context, walletName)
+
+        val anonWallet = if (hasWalletSecret || hasRestoreSource) {
+            // A restore-source wrapper marks a portable-backup rekey that may have
+            // been interrupted by process death. It also acts as the recovery source
+            // if the wallet was not yet re-keyed to its device secret.
+            val pinSetupPending = prefs.getBoolean(PREFS_PIN_SETUP_PENDING, false) ||
+                hasRestoreSource
             val storedPinHash = prefs.getString(PREFS_PIN_HASH, "")
             if (!pinSetupPending && !PinHash.matches(pin, storedPinHash)) throw InvalidPin()
             if (!pinSetupPending && PinHash.isLegacy(storedPinHash)) {
-                prefs.edit(commit = true) { putString(PREFS_PIN_HASH, PinHash.hash(pin)) }
+                if (!prefs.edit(commit = true) {
+                        putString(PREFS_PIN_HASH, PinHash.hash(pin))
+                    }) {
+                    throw IllegalStateException("Unable to upgrade stored PIN verifier")
+                }
             }
-            val walletPassword = try {
-                WalletKey.load(context, walletName)
-            } catch (e: Exception) {
-                Timber.tag(TAG).e(e, "Keystore wallet password is unavailable")
-                throw InvalidPin()
-            }
+
             val manager = WalletManager.instance
                 ?: throw IllegalStateException("Wallet manager is unavailable")
-            val opened = manager.openWallet(walletFile.path, walletPassword)
-            if (opened.status.isOk && pinSetupPending) {
+            var opened: io.anonero.model.Wallet? = null
+
+            if (hasWalletSecret) {
+                val walletPassword = runCatching {
+                    WalletKey.load(context, walletName)
+                }.getOrNull()
+                if (walletPassword != null) {
+                    val candidate = runCatching {
+                        manager.openWallet(walletFile.path, walletPassword)
+                    }.getOrNull()
+                    if (candidate?.status?.isOk == true) {
+                        opened = candidate
+                        if (hasRestoreSource) {
+                            WalletKey.removeRestoreSource(context, walletName)
+                        }
+                    } else {
+                        candidate?.let { runCatching { manager.close(it) } }
+                        if (!hasRestoreSource) throw InvalidPin()
+                        WalletKey.remove(context, walletName)
+                    }
+                } else if (hasRestoreSource) {
+                    WalletKey.remove(context, walletName)
+                } else {
+                    throw InvalidPin()
+                }
+            }
+
+            if (opened == null && WalletKey.restoreSourceExists(context, walletName)) {
+                val sourcePassword = try {
+                    WalletKey.loadRestoreSource(context, walletName)
+                } catch (e: Exception) {
+                    Timber.tag(TAG).e(e, "Portable backup recovery password is unavailable")
+                    throw InvalidPin()
+                }
+                val sourceWallet = manager.openWallet(walletFile.path, sourcePassword)
+                try {
+                    if (!sourceWallet.status.isOk) {
+                        throw InvalidPin()
+                    }
+                    val walletPassword = if (WalletKey.exists(context, walletName)) {
+                        WalletKey.load(context, walletName)
+                    } else {
+                        WalletKey.newSecret().also {
+                            WalletKey.store(context, walletName, it)
+                        }
+                    }
+                    if (!sourceWallet.setPassword(walletPassword) || !sourceWallet.store()) {
+                        throw IllegalStateException("Unable to finish portable backup wallet re-key")
+                    }
+                    WalletKey.removeRestoreSource(context, walletName)
+                    opened = sourceWallet
+                } catch (e: Exception) {
+                    runCatching { manager.close(sourceWallet) }
+                    throw e
+                }
+            }
+
+            val readyWallet = opened ?: throw InvalidPin()
+            if (readyWallet.status.isOk && pinSetupPending) {
                 // A portable v3 backup is already bound to this device's Keystore.
                 // The existing first wallet-open PIN becomes the local PIN; no extra
                 // onboarding screen or change to the current PIN UI is required.
@@ -157,14 +220,14 @@ class AnonWalletHandler(
                     .remove(PREFS_PIN_SETUP_PENDING)
                     .commit()
                 if (!saved) {
-                    manager.close(opened)
+                    manager.close(readyWallet)
                     throw IllegalStateException("Unable to save the new wallet PIN")
                 }
             }
-            opened
+            readyWallet
         } else {
-            // Existing installs keep opening with their old PIN until the first
-            // successful unlock migrates both password-keyed wallet files.
+            // Existing installs and older PIN-keyed backups keep opening with their
+            // old PIN until the first successful unlock migrates both wallet files.
             val opened = WalletManager.instance?.openWallet(walletFile.path, pin)
             if (opened?.status?.isOk == true) {
                 migrateToKeystore(walletFile, walletName, opened, pin)

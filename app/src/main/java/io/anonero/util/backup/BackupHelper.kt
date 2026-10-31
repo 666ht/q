@@ -232,7 +232,7 @@ object BackupHelper {
         val walletName = walletFile.name
         val manager = WalletManager.instance ?: return false
         var opened: io.anonero.model.Wallet? = null
-        var rekeyed = false
+        var passwordChangeAttempted = false
         try {
             val restoredWallet = manager.openWallet(walletFile.path, passPhrase)
             opened = restoredWallet
@@ -242,29 +242,39 @@ object BackupHelper {
                 )
             }
 
+            // Keep the source password recoverable through Android Keystore until the
+            // replacement wallet password is stored. This lets the first unlock finish
+            // the operation after a process death at any point in this transition.
+            WalletKey.storeRestoreSource(context, walletName, passPhrase)
+            val pending = walletPrefs.edit()
+                .putBoolean(PREFS_PIN_SETUP_PENDING, true)
+                .remove(PREFS_PIN_HASH)
+                .commit()
+            if (!pending) throw IllegalStateException("Unable to save restored wallet PIN state")
+
             val deviceSecret = WalletKey.newSecret()
+            WalletKey.store(context, walletName, deviceSecret)
+            passwordChangeAttempted = true
             if (!restoredWallet.setPassword(deviceSecret)) {
                 throw IllegalStateException(
                     "Restored wallet could not be bound to this device: ${restoredWallet.status.errorString}"
                 )
             }
-            rekeyed = true
             if (!restoredWallet.store()) {
                 throw IllegalStateException("Restored wallet cache could not be persisted")
             }
-            WalletKey.store(context, walletName, deviceSecret)
-
-            val bound = walletPrefs.edit()
-                .putBoolean(PREFS_PIN_SETUP_PENDING, true)
-                .remove(PREFS_PIN_HASH)
-                .commit()
-            if (!bound) throw IllegalStateException("Unable to save restored wallet PIN state")
+            WalletKey.removeRestoreSource(context, walletName)
             return true
         } catch (e: Exception) {
             Timber.tag(TAG).e(e, "restore: failed to bind wallet to device")
             WalletKey.remove(context, walletName)
+            WalletKey.removeRestoreSource(context, walletName)
+            walletPrefs.edit(commit = true) {
+                remove(PREFS_PIN_SETUP_PENDING)
+                remove(PREFS_PIN_HASH)
+            }
             val walletToRollback = opened
-            if (rekeyed && walletToRollback != null) {
+            if (passwordChangeAttempted && walletToRollback != null) {
                 runCatching {
                     if (!walletToRollback.setPassword(passPhrase) || !walletToRollback.store()) {
                         throw IllegalStateException("Restored wallet password rollback did not persist")
@@ -324,7 +334,32 @@ object BackupHelper {
                 return false
             }
 
-            val anonDir = AnonConfig.getDefaultWalletDir(AnonConfig.context!!)
+            val context = AnonConfig.context!!.applicationContext
+            val anonDir = AnonConfig.getDefaultWalletDir(context)
+            val walletFile = AnonConfig.getDefaultWalletFile(context)
+            val walletName = walletFile.name
+
+            // Persist a Keystore-wrapped source password before touching the wallet
+            // files. If the process dies during extraction/copy/re-key, the next
+            // wallet unlock can finish the migration without another backup prompt.
+            WalletKey.remove(context, walletName)
+            WalletKey.removeRestoreSource(context, walletName)
+            WalletKey.migrationSnapshots(walletFile.path).forEach { (snapshot, _) ->
+                snapshot.delete()
+            }
+            if (backupPayload.version >= BACKUP_VERSION) {
+                WalletKey.storeRestoreSource(context, walletName, passPhrase)
+                val pending = walletPrefs.edit()
+                    .putBoolean(PREFS_PIN_SETUP_PENDING, true)
+                    .remove(PREFS_PIN_HASH)
+                    .commit()
+                if (!pending) throw IllegalStateException("Unable to save pending restore credentials")
+            } else {
+                walletPrefs.edit(commit = true) {
+                    remove(PREFS_PIN_HASH)
+                    remove(PREFS_PIN_SETUP_PENDING)
+                }
+            }
 
             val v1Node = backupPayload.backup.node
             walletPrefs.edit(commit = true) {
@@ -366,13 +401,7 @@ object BackupHelper {
                 }
             }
 
-            walletPrefs.edit(commit = true) {
-                remove(PREFS_PIN_HASH)
-                remove(PREFS_PIN_SETUP_PENDING)
-            }
-
             if (backupPayload.version >= BACKUP_VERSION) {
-                val walletFile = AnonConfig.getDefaultWalletFile(AnonConfig.context!!)
                 if (bindRestoredWallet(walletFile, passPhrase)) return true
                 anonDir.deleteRecursively()
                 return false
@@ -382,6 +411,18 @@ object BackupHelper {
             return true
         } catch (e: Exception) {
             Timber.tag(TAG).e(e)
+            if (backupPayload.version >= BACKUP_VERSION) {
+                val context = AnonConfig.context?.applicationContext
+                val walletName = context?.let { AnonConfig.getDefaultWalletFile(it).name }
+                if (context != null && walletName != null) {
+                    WalletKey.remove(context, walletName)
+                    WalletKey.removeRestoreSource(context, walletName)
+                    walletPrefs.edit(commit = true) {
+                        remove(PREFS_PIN_SETUP_PENDING)
+                        remove(PREFS_PIN_HASH)
+                    }
+                }
+            }
             return false
         }
     }

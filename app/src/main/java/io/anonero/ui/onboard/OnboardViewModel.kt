@@ -60,6 +60,7 @@ class OnboardViewModel(private val prefs: SharedPreferences) : ViewModel() {
             }
             val walletKey = WalletKey.newSecret()
             val anonWallet = try {
+                WalletKey.removeRestoreSource(context, walletFile.name)
                 WalletKey.store(context, walletFile.name, walletKey)
                 WalletManager.instance?.createWallet(
                     walletFile,
@@ -110,6 +111,7 @@ class OnboardViewModel(private val prefs: SharedPreferences) : ViewModel() {
             }
             val walletKey = WalletKey.newSecret()
             val anonWallet = try {
+                WalletKey.removeRestoreSource(context, walletFile.name)
                 WalletKey.store(context, walletFile.name, walletKey)
                 WalletManager.instance?.createWalletWithKeys(
                     walletFile,
@@ -179,7 +181,8 @@ class OnboardViewModel(private val prefs: SharedPreferences) : ViewModel() {
         }
         val walletKey = WalletKey.newSecret()
         val anonWallet = try {
-            WalletKey.store(context, walletFile.name, walletKey)
+            WalletKey.removeRestoreSource(context, walletFile.name)
+                WalletKey.store(context, walletFile.name, walletKey)
             if (restorePayload!!.seed.size == 25) {
                 WalletManager.instance?.recoveryWallet(
                     walletFile,

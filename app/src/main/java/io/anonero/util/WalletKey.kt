@@ -32,6 +32,25 @@ object WalletKey {
     fun remove(context: Context, wallet: String) =
         KeyStoreHelper.removeWalletSecret(context, wallet)
 
+    private fun restoreSourceName(wallet: String) = "restore-source-$wallet"
+
+    /**
+     * Temporarily keeps the portable backup's wallet password wrapped by Android
+     * Keystore while the restored wallet is re-keyed to its device-bound secret.
+     * It is removed immediately after the new wallet password has been persisted.
+     */
+    fun storeRestoreSource(context: Context, wallet: String, password: String) =
+        KeyStoreHelper.saveWalletSecret(context, restoreSourceName(wallet), password)
+
+    fun loadRestoreSource(context: Context, wallet: String): String =
+        KeyStoreHelper.loadWalletSecret(context, restoreSourceName(wallet))
+
+    fun restoreSourceExists(context: Context, wallet: String): Boolean =
+        KeyStoreHelper.walletSecretExists(context, restoreSourceName(wallet))
+
+    fun removeRestoreSource(context: Context, wallet: String) =
+        KeyStoreHelper.removeWalletSecret(context, restoreSourceName(wallet))
+
     /**
      * Recover an interrupted password migration. Both wallet2 files are password-keyed,
      * so the keys file and cache must be restored together when the wrapped key is absent
