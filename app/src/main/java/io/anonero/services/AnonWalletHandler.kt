@@ -236,7 +236,9 @@ class AnonWalletHandler(
             if (!wallet.setPassword(walletPassword)) {
                 throw Exception("setPassword failed: ${wallet.status.errorString}")
             }
-            wallet.store()
+            if (!wallet.store()) {
+                throw Exception("Wallet cache could not be persisted after password migration")
+            }
             WalletKey.store(context, walletName, walletPassword)
             snapshots.forEach { (snapshot, _) -> snapshot.delete() }
             Timber.tag(TAG).i("Legacy wallet migrated to a Keystore-bound password")
@@ -249,9 +251,7 @@ class AnonWalletHandler(
                 true
             } else {
                 runCatching {
-                    val restored = wallet.setPassword(pin)
-                    if (restored) wallet.store()
-                    restored
+                    wallet.setPassword(pin) && wallet.store()
                 }.getOrDefault(false)
             }
 

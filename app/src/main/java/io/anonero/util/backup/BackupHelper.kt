@@ -117,8 +117,10 @@ object BackupHelper {
         try {
             // Keep the live wallet stable while its portable copy is prepared.
             wallet.pauseRefresh()
-            wallet.store()
             try {
+                if (!wallet.store()) {
+                    throw IllegalStateException("Live wallet could not be stored before backup")
+                }
                 walletDir.copyRecursively(tmpBackupDir, true)
                 if (deviceWalletSecret != null) {
                     val manager = WalletManager.instance
@@ -138,7 +140,9 @@ object BackupHelper {
                                 "Backup copy could not be re-keyed: ${copy.status.errorString}"
                             )
                         }
-                        copy.store()
+                        if (!copy.store()) {
+                            throw IllegalStateException("Portable backup wallet copy could not be stored")
+                        }
                     } finally {
                         manager.closeUnmanaged(copy)
                     }
@@ -245,7 +249,9 @@ object BackupHelper {
                 )
             }
             rekeyed = true
-            restoredWallet.store()
+            if (!restoredWallet.store()) {
+                throw IllegalStateException("Restored wallet cache could not be persisted")
+            }
             WalletKey.store(context, walletName, deviceSecret)
 
             val bound = walletPrefs.edit()
@@ -260,7 +266,9 @@ object BackupHelper {
             val walletToRollback = opened
             if (rekeyed && walletToRollback != null) {
                 runCatching {
-                    if (walletToRollback.setPassword(passPhrase)) walletToRollback.store()
+                    if (!walletToRollback.setPassword(passPhrase) || !walletToRollback.store()) {
+                        throw IllegalStateException("Restored wallet password rollback did not persist")
+                    }
                 }.onFailure {
                     Timber.tag(TAG).e(it, "Unable to roll back portable backup wallet password")
                 }
