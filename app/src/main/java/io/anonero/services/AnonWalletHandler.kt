@@ -144,9 +144,8 @@ class AnonWalletHandler(
             val storedPinHash = prefs.getString(PREFS_PIN_HASH, "")
             if (!pinSetupPending && !PinHash.matches(pin, storedPinHash)) throw InvalidPin()
             if (!pinSetupPending && PinHash.isLegacy(storedPinHash)) {
-                if (!prefs.edit(commit = true) {
-                        putString(PREFS_PIN_HASH, PinHash.hash(pin))
-                    }) {
+                val upgradedPinHash = PinHash.hash(pin)
+                if (!prefs.edit().putString(PREFS_PIN_HASH, upgradedPinHash).commit()) {
                     throw IllegalStateException("Unable to upgrade stored PIN verifier")
                 }
             }
