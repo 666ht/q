@@ -62,7 +62,7 @@ import io.anonero.icons.AnonIcons
 import io.anonero.services.WalletState
 import io.anonero.ui.MainActivity
 import io.anonero.ui.viewmodels.AppViewModel
-import io.anonero.util.CrazyPassEncoder
+import io.anonero.util.PinHash
 import io.anonero.util.PREFS_PIN_HASH
 import io.anonero.util.ShakeConfig
 import io.anonero.util.WALLET_PREFERENCES
@@ -160,43 +160,73 @@ fun LockScreen(
         // correct PIN. The saved local hash is authoritative for normal lock-screen
         // unlocks, so resolve this path before the in-flight-operation guard.
         if (mode == LockScreenMode.LOCK_SCREEN) {
-            val localPinHash = CrazyPassEncoder.encode(
-                pin.toByteArray().let { bytes ->
-                    if (bytes.size < 32) bytes + ByteArray(32 - bytes.size)
-                    else bytes
-                }
-            )
+            if (checkingPin) return
+            checkingPin = true
             val savedPinHash = prefs.getString(PREFS_PIN_HASH, "")
-            if (savedPinHash == localPinHash) {
-                Timber.tag(TAG).i("Saved PIN hash matched; releasing lock immediately")
-                // Queue native teardown before navigation so an immediate wallet reset
-                // can await it rather than racing while wallet2 is still background syncing.
-                walletState.requestExitBackgroundSync(pin)
-                onUnLocked(pin, shortCut)
-                return
+            appViewModel.launchPinOperation {
+                try {
+                    val localPinMatches = PinHash.matches(pin, savedPinHash)
+                    val legacyPinMatches = savedPinHash.isNullOrBlank() &&
+                        appViewModel.verifyLegacyWalletPin(pin)
+                    if (!localPinMatches && !legacyPinMatches) {
+                        withContext(Dispatchers.Main) { showError() }
+                        return@launchPinOperation
+                    }
+
+                    if (PinHash.isLegacy(savedPinHash) || savedPinHash.isNullOrBlank()) {
+                        prefs.edit(commit = true) {
+                            putString(PREFS_PIN_HASH, PinHash.hash(pin))
+                        }
+                    }
+
+                    // Queue native teardown before navigating. Rekeying the wallet is
+                    // attempted separately and waits until wallet2 is idle.
+                    walletState.requestExitBackgroundSync(pin)
+                    withContext(Dispatchers.Main) { onUnLocked(pin, shortCut) }
+                    appViewModel.migrateActiveWalletToKeystore(pin)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Timber.tag(TAG).e(e, "PIN verification failed")
+                    withContext(Dispatchers.Main) { showError() }
+                } finally {
+                    withContext(Dispatchers.Main) {
+                        if (uiActive.get()) checkingPin = false
+                    }
+                }
             }
-            // A stored local hash is authoritative: a mismatch is a wrong PIN.
-            // Show feedback immediately, even while another PIN operation is in flight.
-            if (!savedPinHash.isNullOrBlank()) {
-                showError()
-                return
-            }
+            return
         }
 
         // VERIFY_PIN only checks the saved local hash. Resolve it before the
         // in-flight guard so a wrong PIN always receives the existing error feedback.
         if (mode == LockScreenMode.VERYFY_PIN) {
-            val verifyPinHash = CrazyPassEncoder.encode(
-                pin.toByteArray().let { bytes ->
-                    if (bytes.size < 32) bytes + ByteArray(32 - bytes.size)
-                    else bytes
+            if (checkingPin) return
+            checkingPin = true
+            val savedPinHash = prefs.getString(PREFS_PIN_HASH, "")
+            appViewModel.launchPinOperation {
+                try {
+                    if (PinHash.matches(pin, savedPinHash)) {
+                        if (PinHash.isLegacy(savedPinHash)) {
+                            prefs.edit(commit = true) {
+                                putString(PREFS_PIN_HASH, PinHash.hash(pin))
+                            }
+                        }
+                        withContext(Dispatchers.Main) { onUnLocked(pin, shortCut) }
+                    } else {
+                        withContext(Dispatchers.Main) { showError() }
+                    }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Timber.tag(TAG).e(e, "PIN verification failed")
+                    withContext(Dispatchers.Main) { showError() }
+                } finally {
+                    withContext(Dispatchers.Main) {
+                        if (uiActive.get()) checkingPin = false
+                    }
                 }
-            )
-            if (prefs.getString(PREFS_PIN_HASH, "") != verifyPinHash) {
-                showError()
-                return
             }
-            onUnLocked(pin, shortCut)
             return
         }
 
@@ -206,18 +236,13 @@ fun LockScreen(
         checkingPin = true
         appViewModel.launchPinOperation {
             try {
-                val pinHash = CrazyPassEncoder.encode(
-                    pin.toByteArray().let { bytes ->
-                        if (bytes.size < 32) bytes + ByteArray(32 - bytes.size)
-                        else bytes
-                    }
-                )
+                val pinHash = PinHash.hash(pin)
                 val prefsHash = prefs.getString(PREFS_PIN_HASH, "")
 
                 when (mode) {
                     LockScreenMode.VERYFY_PIN -> {
                         withContext(Dispatchers.Main) {
-                            if (prefsHash == pinHash) {
+                            if (PinHash.matches(pin, prefsHash)) {
                                 onUnLocked(pin, shortCut)
                             } else {
                                 showError()
@@ -245,7 +270,7 @@ fun LockScreen(
                     }
 
                     LockScreenMode.LOCK_SCREEN -> {
-                        val localHashMatches = prefsHash == pinHash
+                        val localHashMatches = PinHash.matches(pin, prefsHash)
                         // Older seed-restore builds did not persist the local PIN hash.
                         // Only when no local hash exists, verify the wallet-file password
                         // off the UI thread and repair the local hash for future instant unlocks.

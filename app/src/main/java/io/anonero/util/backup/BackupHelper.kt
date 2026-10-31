@@ -20,6 +20,9 @@ import io.anonero.model.node.NodeFields
 import io.anonero.store.NodesRepository
 import io.anonero.util.KeyStoreHelper
 import io.anonero.util.PREFS_PASSPHRASE_HASH
+import io.anonero.util.PREFS_PIN_HASH
+import io.anonero.util.PREFS_PIN_SETUP_PENDING
+import io.anonero.util.WalletKey
 import io.anonero.util.RESTORE_HEIGHT
 import io.anonero.util.WALLET_PREFERENCES
 import kotlinx.serialization.encodeToString
@@ -40,7 +43,8 @@ import java.util.zip.ZipOutputStream
 
 class NetworkMismatchException : Exception()
 object BackupHelper {
-    private const val BACKUP_VERSION = 2
+    private const val BACKUP_VERSION = 3
+    private const val BACKUP_VERSION_PIN_KEYED = 2
     const val BUFFER = 2048
     private const val TAG = "BackUpHelper"
     val walletPrefs: SharedPreferences by inject(
@@ -83,8 +87,15 @@ object BackupHelper {
             nodes = nodeRepository.getAll()
         )
 
+        val walletName = AnonConfig.getDefaultWalletFile(context).name
+        val deviceWalletSecret = if (WalletKey.exists(context, walletName)) {
+            WalletKey.load(context, walletName)
+        } else {
+            null
+        }
         val backUpPayload = BackupPayload(
-            version = BACKUP_VERSION, backup = backup
+            version = if (deviceWalletSecret != null) BACKUP_VERSION else BACKUP_VERSION_PIN_KEYED,
+            backup = backup
         )
         val json = Json.encodeToString(backUpPayload)
 
@@ -102,23 +113,58 @@ object BackupHelper {
         val tmpBackupFile = File(tmpBackupDir, "anon.json")
         tmpBackupFile.writeText(json)
         val walletDir = File(context.filesDir, "wallets")
-        walletDir.copyRecursively(tmpBackupDir, true)
-        val list = tmpBackupDir.listFiles()
-        val files = list?.map { it.absolutePath }?.toTypedArray()
-        val backupCacheDir = File(context.cacheDir, "backup")
-        if (!backupCacheDir.exists()) {
-            backupCacheDir.mkdirs()
-        }
-        val backupFileEncrypted =
-            File(backupCacheDir, "${R.string.app_name}_backup_$timeStamp.anon")
+        val backupFileEncrypted: File
+        try {
+            // Keep the live wallet stable while its portable copy is prepared.
+            wallet.pauseRefresh()
+            wallet.store()
+            try {
+                walletDir.copyRecursively(tmpBackupDir, true)
+                if (deviceWalletSecret != null) {
+                    val manager = WalletManager.instance
+                        ?: throw IllegalStateException("Wallet manager is unavailable")
+                    val copy = manager.openWalletUnmanaged(
+                        File(tmpBackupDir, walletName).path,
+                        deviceWalletSecret
+                    )
+                    try {
+                        if (!copy.status.isOk) {
+                            throw IllegalStateException(
+                                "Backup copy did not open: ${copy.status.errorString}"
+                            )
+                        }
+                        if (!copy.setPassword(seedPassphrase)) {
+                            throw IllegalStateException(
+                                "Backup copy could not be re-keyed: ${copy.status.errorString}"
+                            )
+                        }
+                        copy.store()
+                    } finally {
+                        manager.closeUnmanaged(copy)
+                    }
+                }
+            } finally {
+                if (wallet.isInitialized) wallet.startRefresh()
+            }
 
-        if (files != null) {
-            zip(files, backupFile.absolutePath)
-            EncryptUtil.encryptFile(seedPassphrase, backupFile, backupFileEncrypted)
+            val list = tmpBackupDir.listFiles()
+            val files = list?.map { it.absolutePath }?.toTypedArray()
+            val backupCacheDir = File(context.cacheDir, "backup")
+            if (!backupCacheDir.exists()) {
+                backupCacheDir.mkdirs()
+            }
+            backupFileEncrypted =
+                File(backupCacheDir, "${R.string.app_name}_backup_$timeStamp.anon")
+
+            if (files != null) {
+                zip(files, backupFile.absolutePath)
+                EncryptUtil.encryptFile(seedPassphrase, backupFile, backupFileEncrypted)
+            }
+            return backupFileEncrypted.absolutePath
+        } finally {
             tmpBackupDir.deleteRecursively()
             backupFile.delete()
         }
-        return backupFileEncrypted.absolutePath
     }
 
     fun testBackUp(destinationDir: File): Boolean {
@@ -177,30 +223,89 @@ object BackupHelper {
         }
     }
 
-    fun extractBackUp(backupPath: String, passPhrase: String): BackupPayload? {
-        val destFile = File(AnonConfig.context?.cacheDir, "backup.anon").apply { createNewFile() }
-        val decryptedDestFile =
-            File(AnonConfig.context?.cacheDir, "backup.zip").apply { createNewFile() }
-        val extractDestination = File(AnonConfig.context?.cacheDir, "tmp_extract")
-        val inPutStream = AnonConfig.context?.contentResolver?.openInputStream(backupPath.toUri())
-        inPutStream?.copyTo(destFile.outputStream())
-        inPutStream?.close()
-        val backup: BackupPayload
+    private fun bindRestoredWallet(walletFile: File, passPhrase: String): Boolean {
+        val context = AnonConfig.context ?: return false
+        val walletName = walletFile.name
+        val manager = WalletManager.instance ?: return false
+        var opened: io.anonero.model.Wallet? = null
+        var rekeyed = false
         try {
+            val restoredWallet = manager.openWallet(walletFile.path, passPhrase)
+            opened = restoredWallet
+            if (!restoredWallet.status.isOk) {
+                throw IllegalStateException(
+                    "Portable backup wallet did not open: ${restoredWallet.status.errorString}"
+                )
+            }
+
+            val deviceSecret = WalletKey.newSecret()
+            if (!restoredWallet.setPassword(deviceSecret)) {
+                throw IllegalStateException(
+                    "Restored wallet could not be bound to this device: ${restoredWallet.status.errorString}"
+                )
+            }
+            rekeyed = true
+            restoredWallet.store()
+            WalletKey.store(context, walletName, deviceSecret)
+
+            val bound = walletPrefs.edit()
+                .putBoolean(PREFS_PIN_SETUP_PENDING, true)
+                .remove(PREFS_PIN_HASH)
+                .commit()
+            if (!bound) throw IllegalStateException("Unable to save restored wallet PIN state")
+            return true
+        } catch (e: Exception) {
+            Timber.tag(TAG).e(e, "restore: failed to bind wallet to device")
+            WalletKey.remove(context, walletName)
+            val walletToRollback = opened
+            if (rekeyed && walletToRollback != null) {
+                runCatching {
+                    if (walletToRollback.setPassword(passPhrase)) walletToRollback.store()
+                }.onFailure {
+                    Timber.tag(TAG).e(it, "Unable to roll back portable backup wallet password")
+                }
+            }
+            return false
+        } finally {
+            opened?.let {
+                runCatching { manager.close(it) }
+                    .onFailure { error -> Timber.tag(TAG).e(error, "Unable to close restored wallet") }
+            }
+        }
+    }
+
+    fun extractBackUp(backupPath: String, passPhrase: String): BackupPayload? {
+        val context = AnonConfig.context
+            ?: throw IllegalStateException("Application context is unavailable")
+        val destFile = File(context.cacheDir, "backup.anon")
+        val decryptedDestFile = File(context.cacheDir, "backup.zip")
+        val extractDestination = File(context.cacheDir, "tmp_extract")
+
+        try {
+            val input = context.contentResolver.openInputStream(backupPath.toUri())
+                ?: throw IllegalStateException("Unable to open backup file")
+            input.use { source ->
+                destFile.outputStream().use { target -> source.copyTo(target) }
+            }
+
             EncryptUtil.decryptFile(passPhrase, destFile, decryptedDestFile)
             unZip(decryptedDestFile, extractDestination)
 
             val anonJson = File(extractDestination, "anon.json")
             val json = anonJson.readText()
-            backup = Json.decodeFromString<BackupPayload>(json)
-            if(backup.backup.meta.network != AnonConfig.getNetworkType().toStringForBackUp()){
-                 throw NetworkMismatchException()
+            val backup = Json.decodeFromString<BackupPayload>(json)
+            if (backup.backup.meta.network != AnonConfig.getNetworkType().toStringForBackUp()) {
+                throw NetworkMismatchException()
             }
+            return backup
         } catch (e: Exception) {
             Timber.tag(TAG).e(e)
-            throw e;
+            throw e
+        } finally {
+            // The decrypted archive and the encrypted staging copy are no longer needed.
+            destFile.delete()
+            decryptedDestFile.delete()
         }
-        return backup;
     }
 
     suspend fun restoreBackUp(backupPayload: BackupPayload, passPhrase: String): Boolean {
@@ -252,6 +357,20 @@ object BackupHelper {
                     entry.copyTo(File(anonDir, entry.name), true)
                 }
             }
+
+            walletPrefs.edit(commit = true) {
+                remove(PREFS_PIN_HASH)
+                remove(PREFS_PIN_SETUP_PENDING)
+            }
+
+            if (backupPayload.version >= BACKUP_VERSION) {
+                val walletFile = AnonConfig.getDefaultWalletFile(AnonConfig.context!!)
+                if (bindRestoredWallet(walletFile, passPhrase)) return true
+                anonDir.deleteRecursively()
+                return false
+            }
+            // Version 2 and older backups are still encrypted with the original wallet
+            // PIN. The first successful old-PIN unlock will migrate them to Keystore.
             return true
         } catch (e: Exception) {
             Timber.tag(TAG).e(e)

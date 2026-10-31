@@ -6,7 +6,11 @@ import io.anonero.model.WalletManager
 import io.anonero.model.node.Node
 import io.anonero.model.node.NodeFields
 import org.json.JSONObject
+import io.anonero.util.PREFS_PIN_HASH
+import io.anonero.util.PREFS_PIN_SETUP_PENDING
+import io.anonero.util.PinHash
 import io.anonero.util.RESTORE_HEIGHT
+import io.anonero.util.WalletKey
 import io.anonero.util.RESTORE_NEEDS_RESCAN
 import io.anonero.util.WALLET_PROXY
 import io.anonero.util.WALLET_PROXY_PORT
@@ -123,15 +127,148 @@ class AnonWalletHandler(
 
     fun openWallet(pin: String): Boolean {
         if (secureWipePriorityActive()) return false
-        val walletFile = AnonConfig.getDefaultWalletFile(AnonConfig.context!!)
-        val anonWallet = WalletManager.instance?.openWallet(
-            walletFile.path,
-            pin,
-        )
+        val context = AnonConfig.context!!.applicationContext
+        val walletFile = AnonConfig.getDefaultWalletFile(context)
+        val walletName = walletFile.name
+
+        WalletKey.recoverInterruptedMigration(context, walletFile.path, walletName)
+        val anonWallet = if (WalletKey.exists(context, walletName)) {
+            val pinSetupPending = prefs.getBoolean(PREFS_PIN_SETUP_PENDING, false)
+            val storedPinHash = prefs.getString(PREFS_PIN_HASH, "")
+            if (!pinSetupPending && !PinHash.matches(pin, storedPinHash)) throw InvalidPin()
+            if (!pinSetupPending && PinHash.isLegacy(storedPinHash)) {
+                prefs.edit(commit = true) { putString(PREFS_PIN_HASH, PinHash.hash(pin)) }
+            }
+            val walletPassword = try {
+                WalletKey.load(context, walletName)
+            } catch (e: Exception) {
+                Timber.tag(TAG).e(e, "Keystore wallet password is unavailable")
+                throw InvalidPin()
+            }
+            val manager = WalletManager.instance
+                ?: throw IllegalStateException("Wallet manager is unavailable")
+            val opened = manager.openWallet(walletFile.path, walletPassword)
+            if (opened.status.isOk && pinSetupPending) {
+                // A portable v3 backup is already bound to this device's Keystore.
+                // The existing first wallet-open PIN becomes the local PIN; no extra
+                // onboarding screen or change to the current PIN UI is required.
+                val saved = prefs.edit()
+                    .putString(PREFS_PIN_HASH, PinHash.hash(pin))
+                    .remove(PREFS_PIN_SETUP_PENDING)
+                    .commit()
+                if (!saved) {
+                    manager.close(opened)
+                    throw IllegalStateException("Unable to save the new wallet PIN")
+                }
+            }
+            opened
+        } else {
+            // Existing installs keep opening with their old PIN until the first
+            // successful unlock migrates both password-keyed wallet files.
+            val opened = WalletManager.instance?.openWallet(walletFile.path, pin)
+            if (opened?.status?.isOk == true) {
+                migrateToKeystore(walletFile, walletName, opened, pin)
+            }
+            opened
+        }
+
         if (anonWallet?.status?.isOk != true) {
             Timber.tag(TAG).e("openWallet error: %s", anonWallet?.status?.errorString)
         }
         return anonWallet?.status?.isOk ?: throw InvalidPin()
+    }
+
+    /**
+     * Upgrade a live legacy wallet after its PIN was verified by the app lock screen.
+     * This is deferred while wallet2 is scanning; cold wallet opens migrate before
+     * the service starts and do not need this idle check.
+     */
+    suspend fun migrateActiveWalletToKeystore(pin: String): Boolean {
+        if (secureWipePriorityActive()) return false
+        val context = AnonConfig.context?.applicationContext ?: return false
+        val walletFile = AnonConfig.getDefaultWalletFile(context)
+        val walletName = walletFile.name
+        WalletKey.recoverInterruptedMigration(context, walletFile.path, walletName)
+        if (WalletKey.exists(context, walletName)) return true
+        if (!walletState.waitUntilWalletIdleForKeyMigration()) {
+            Timber.tag(TAG).i("Wallet-key migration deferred until wallet2 is idle")
+            return false
+        }
+        if (secureWipePriorityActive()) return false
+        val wallet = WalletManager.instance?.wallet ?: return false
+        return migrateToKeystore(walletFile, walletName, wallet, pin)
+    }
+
+    private fun migrateToKeystore(
+        walletFile: File,
+        walletName: String,
+        wallet: io.anonero.model.Wallet,
+        pin: String
+    ): Boolean {
+        val context = AnonConfig.context!!.applicationContext
+        val snapshots = WalletKey.migrationSnapshots(walletFile.path)
+            .filter { (_, live) -> live.exists() }
+        if (snapshots.none { (_, live) -> live.name.endsWith(".keys") }) {
+            Timber.tag(TAG).e("Cannot migrate wallet: wallet keys file is missing")
+            return false
+        }
+
+        var rekeyed = false
+        try {
+            snapshots.forEach { (snapshot, live) ->
+                val partial = File(snapshot.path + ".tmp")
+                live.copyTo(partial, overwrite = true)
+                if (!partial.renameTo(snapshot)) throw Exception("Wallet snapshot failed: ${snapshot.name}")
+            }
+
+            // Persist the PIN verifier before changing the wallet password. If the
+            // process dies after the Keystore wrapper is written, the same PIN remains usable.
+            val pinVerifier = PinHash.hash(pin)
+            if (!prefs.edit()
+                    .putString(PREFS_PIN_HASH, pinVerifier)
+                    .remove(PREFS_PIN_SETUP_PENDING)
+                    .commit()) {
+                throw Exception("PIN verifier was not committed")
+            }
+
+            val walletPassword = WalletKey.newSecret()
+            rekeyed = true
+            if (!wallet.setPassword(walletPassword)) {
+                throw Exception("setPassword failed: ${wallet.status.errorString}")
+            }
+            wallet.store()
+            WalletKey.store(context, walletName, walletPassword)
+            snapshots.forEach { (snapshot, _) -> snapshot.delete() }
+            Timber.tag(TAG).i("Legacy wallet migrated to a Keystore-bound password")
+            return true
+        } catch (e: Exception) {
+            Timber.tag(TAG).e(e, "Keystore wallet migration failed; rolling back")
+            WalletKey.remove(context, walletName)
+
+            val restoredInMemory = if (!rekeyed) {
+                true
+            } else {
+                runCatching {
+                    val restored = wallet.setPassword(pin)
+                    if (restored) wallet.store()
+                    restored
+                }.getOrDefault(false)
+            }
+
+            if (restoredInMemory) {
+                snapshots.forEach { (snapshot, _) -> snapshot.delete() }
+            } else {
+                // The live wallet may still hold the random password. Restore both disk
+                // files and retain any failed snapshot so startup recovery can retry.
+                runCatching {
+                    snapshots.forEach { (snapshot, live) ->
+                        if (snapshot.exists()) snapshot.copyTo(live, overwrite = true)
+                    }
+                    snapshots.forEach { (snapshot, _) -> snapshot.delete() }
+                }.onFailure { Timber.tag(TAG).e(it, "Unable to restore legacy wallet snapshot") }
+            }
+            return false
+        }
     }
 
     suspend fun startService() {

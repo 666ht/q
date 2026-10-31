@@ -31,6 +31,7 @@ import java.io.IOException;
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import java.security.InvalidAlgorithmParameterException;
+import java.security.GeneralSecurityException;
 import java.security.InvalidKeyException;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
@@ -47,13 +48,17 @@ import java.security.cert.CertificateException;
 import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.List;
+import java.util.Arrays;
 import java.util.Calendar;
 import java.util.GregorianCalendar;
 
 import javax.crypto.BadPaddingException;
 import javax.crypto.Cipher;
+import javax.crypto.KeyGenerator;
+import javax.crypto.SecretKey;
 import javax.crypto.IllegalBlockSizeException;
 import javax.crypto.NoSuchPaddingException;
+import javax.crypto.spec.GCMParameterSpec;
 import javax.security.auth.x500.X500Principal;
 
 import timber.log.Timber;
@@ -69,6 +74,10 @@ public class KeyStoreHelper {
     public static native byte[] slowHash(byte[] data, int brokenVariant);
 
     static final private String RSA_ALIAS = "MonerujoRSA";
+    private static final String WALLET_SECRET_PREFIX = "walletSecret-";
+    private static final String AES_GCM = "AES/GCM/NoPadding";
+    private static final int GCM_TAG_BITS = 128;
+    private static final int GCM_IV_BYTES = 12;
 
     private static String getCrazyPass(Context context, String password, int brokenVariant) {
         byte[] data = password.getBytes(StandardCharsets.UTF_8);
@@ -168,6 +177,131 @@ public class KeyStoreHelper {
                 .remove(wallet).apply();
     }
 
+
+    // --- Random wallet password wrapped by a per-wallet Android Keystore AES key ---
+
+    private static SecretKey generateWalletSecretKey(String alias, boolean strongBox)
+            throws GeneralSecurityException {
+        KeyGenParameterSpec.Builder builder = new KeyGenParameterSpec.Builder(
+                alias, KeyProperties.PURPOSE_ENCRYPT | KeyProperties.PURPOSE_DECRYPT)
+                .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+                .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+                .setKeySize(256);
+        if (strongBox) builder.setIsStrongBoxBacked(true);
+        KeyGenerator generator = KeyGenerator.getInstance(
+                KeyProperties.KEY_ALGORITHM_AES,
+                SecurityConstants.KEYSTORE_PROVIDER_ANDROID_KEYSTORE);
+        generator.init(builder.build());
+        return generator.generateKey();
+    }
+
+    private static SecretKey getOrCreateWalletSecretKey(String alias)
+            throws GeneralSecurityException {
+        KeyStore keyStore = KeyStore.getInstance(SecurityConstants.KEYSTORE_PROVIDER_ANDROID_KEYSTORE);
+        try {
+            keyStore.load(null);
+        } catch (Exception e) {
+            throw new GeneralSecurityException("Unable to load Android Keystore", e);
+        }
+        if (keyStore.containsAlias(alias)) {
+            java.security.Key existing = keyStore.getKey(alias, null);
+            if (existing instanceof SecretKey) return (SecretKey) existing;
+            throw new GeneralSecurityException("Wallet secret alias is not an AES secret key");
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            try {
+                return generateWalletSecretKey(alias, true);
+            } catch (Exception strongBoxUnavailable) {
+                Timber.tag(TAG).i("StrongBox unavailable for wallet secret; falling back to device Keystore");
+                try {
+                    keyStore.deleteEntry(alias);
+                } catch (Exception ignored) {
+                    // A subsequent generation attempt reports the definitive failure.
+                }
+            }
+        }
+        return generateWalletSecretKey(alias, false);
+    }
+
+    public static void saveWalletSecret(Context context, String wallet, String secret)
+            throws GeneralSecurityException {
+        String alias = WALLET_SECRET_PREFIX + wallet;
+        SecretKey key = getOrCreateWalletSecretKey(alias);
+        Cipher cipher = Cipher.getInstance(AES_GCM);
+        cipher.init(Cipher.ENCRYPT_MODE, key);
+        byte[] iv = cipher.getIV();
+        if (iv == null || iv.length != GCM_IV_BYTES) {
+            throw new GeneralSecurityException("Android Keystore returned an invalid AES-GCM IV");
+        }
+        byte[] ciphertext = cipher.doFinal(secret.getBytes(StandardCharsets.UTF_8));
+        byte[] wrapped = new byte[iv.length + ciphertext.length];
+        System.arraycopy(iv, 0, wrapped, 0, iv.length);
+        System.arraycopy(ciphertext, 0, wrapped, iv.length, ciphertext.length);
+
+        boolean saved = context.getSharedPreferences(
+                SecurityConstants.WALLET_PASS_PREFS_NAME, Context.MODE_PRIVATE)
+                .edit()
+                .putString(WALLET_SECRET_PREFIX + wallet, Base64.encodeToString(wrapped, Base64.NO_WRAP))
+                .commit();
+        if (!saved) throw new GeneralSecurityException("Wrapped wallet secret was not committed");
+    }
+
+    public static String loadWalletSecret(Context context, String wallet)
+            throws GeneralSecurityException {
+        String encoded = context.getSharedPreferences(
+                SecurityConstants.WALLET_PASS_PREFS_NAME, Context.MODE_PRIVATE)
+                .getString(WALLET_SECRET_PREFIX + wallet, "");
+        if (encoded == null || encoded.isEmpty()) {
+            throw new GeneralSecurityException("No wrapped wallet secret is stored");
+        }
+        byte[] wrapped;
+        try {
+            wrapped = Base64.decode(encoded, Base64.NO_WRAP);
+        } catch (IllegalArgumentException e) {
+            throw new GeneralSecurityException("Wrapped wallet secret is malformed", e);
+        }
+        if (wrapped.length < GCM_IV_BYTES + 16) {
+            throw new GeneralSecurityException("Wrapped wallet secret is truncated");
+        }
+
+        byte[] iv = Arrays.copyOfRange(wrapped, 0, GCM_IV_BYTES);
+        byte[] ciphertext = Arrays.copyOfRange(wrapped, GCM_IV_BYTES, wrapped.length);
+        KeyStore keyStore = KeyStore.getInstance(SecurityConstants.KEYSTORE_PROVIDER_ANDROID_KEYSTORE);
+        try {
+            keyStore.load(null);
+        } catch (Exception e) {
+            throw new GeneralSecurityException("Unable to load Android Keystore", e);
+        }
+        java.security.Key storedKey = keyStore.getKey(WALLET_SECRET_PREFIX + wallet, null);
+        if (!(storedKey instanceof SecretKey)) {
+            throw new GeneralSecurityException("Wallet Keystore key is missing");
+        }
+        Cipher cipher = Cipher.getInstance(AES_GCM);
+        cipher.init(Cipher.DECRYPT_MODE, (SecretKey) storedKey, new GCMParameterSpec(GCM_TAG_BITS, iv));
+        return new String(cipher.doFinal(ciphertext), StandardCharsets.UTF_8);
+    }
+
+    public static boolean walletSecretExists(Context context, String wallet) {
+        String encoded = context.getSharedPreferences(
+                SecurityConstants.WALLET_PASS_PREFS_NAME, Context.MODE_PRIVATE)
+                .getString(WALLET_SECRET_PREFIX + wallet, "");
+        return encoded != null && !encoded.isEmpty();
+    }
+
+    public static void removeWalletSecret(Context context, String wallet) {
+        try {
+            KeyStore keyStore = KeyStore.getInstance(SecurityConstants.KEYSTORE_PROVIDER_ANDROID_KEYSTORE);
+            keyStore.load(null);
+            keyStore.deleteEntry(WALLET_SECRET_PREFIX + wallet);
+        } catch (Exception e) {
+            Timber.tag(TAG).e(e, "Unable to remove wallet Keystore key");
+        }
+        context.getSharedPreferences(
+                SecurityConstants.WALLET_PASS_PREFS_NAME, Context.MODE_PRIVATE)
+                .edit().remove(WALLET_SECRET_PREFIX + wallet).commit();
+    }
+
     public static void copyWalletUserPass(Context context, String srcWallet, String dstWallet) throws BrokenPasswordStoreException {
         final String pass = loadWalletUserPass(context, srcWallet);
         saveWalletUserPass(context, dstWallet, pass);
@@ -216,6 +350,7 @@ public class KeyStoreHelper {
         SharedPreferences passwordPreferences = context.getSharedPreferences(
                 SecurityConstants.WALLET_PASS_PREFS_NAME, Context.MODE_PRIVATE);
         String walletKeyAlias = SecurityConstants.WALLET_PASS_KEY_PREFIX + wallet;
+        String walletSecretAlias = WALLET_SECRET_PREFIX + wallet;
         List<String> aliasesToDelete = new ArrayList<>();
 
         // Discover all wallet password keys, including keys left behind by older
@@ -227,7 +362,8 @@ public class KeyStoreHelper {
             while (aliases.hasMoreElements()) {
                 String alias = aliases.nextElement();
                 if (RSA_ALIAS.equals(alias) ||
-                        alias.startsWith(SecurityConstants.WALLET_PASS_KEY_PREFIX)) {
+                        alias.startsWith(SecurityConstants.WALLET_PASS_KEY_PREFIX) ||
+                        alias.startsWith(WALLET_SECRET_PREFIX)) {
                     aliasesToDelete.add(alias);
                 }
             }
@@ -236,10 +372,16 @@ public class KeyStoreHelper {
         }
 
         if (!aliasesToDelete.contains(walletKeyAlias)) aliasesToDelete.add(walletKeyAlias);
+        if (!aliasesToDelete.contains(walletSecretAlias)) aliasesToDelete.add(walletSecretAlias);
         if (!aliasesToDelete.contains(RSA_ALIAS)) aliasesToDelete.add(RSA_ALIAS);
-        for (String walletName : passwordPreferences.getAll().keySet()) {
-            String alias = SecurityConstants.WALLET_PASS_KEY_PREFIX + walletName;
-            if (!aliasesToDelete.contains(alias)) aliasesToDelete.add(alias);
+        for (String preferenceName : passwordPreferences.getAll().keySet()) {
+            if (preferenceName.startsWith(SecurityConstants.WALLET_PASS_KEY_PREFIX) ||
+                    preferenceName.startsWith(WALLET_SECRET_PREFIX)) {
+                if (!aliasesToDelete.contains(preferenceName)) aliasesToDelete.add(preferenceName);
+            } else {
+                String alias = SecurityConstants.WALLET_PASS_KEY_PREFIX + preferenceName;
+                if (!aliasesToDelete.contains(alias)) aliasesToDelete.add(alias);
+            }
         }
 
         // Attempt every key independently. One failed alias must not prevent
@@ -262,12 +404,15 @@ public class KeyStoreHelper {
             while (aliases.hasMoreElements()) {
                 String alias = aliases.nextElement();
                 if (RSA_ALIAS.equals(alias) ||
-                        alias.startsWith(SecurityConstants.WALLET_PASS_KEY_PREFIX)) {
+                        alias.startsWith(SecurityConstants.WALLET_PASS_KEY_PREFIX) ||
+                        alias.startsWith(WALLET_SECRET_PREFIX)) {
                     throw new IllegalStateException(
                             "Android Keystore wallet key remains after secure deletion");
                 }
             }
-            if (keyStore.containsAlias(walletKeyAlias) || keyStore.containsAlias(RSA_ALIAS)) {
+            if (keyStore.containsAlias(walletKeyAlias) ||
+                    keyStore.containsAlias(walletSecretAlias) ||
+                    keyStore.containsAlias(RSA_ALIAS)) {
                 throw new IllegalStateException(
                         "Android Keystore wallet key remains after secure deletion");
             }
