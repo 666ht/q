@@ -56,13 +56,15 @@ object PinHash {
     )
 
     private fun derive(pin: String, salt: ByteArray, iterations: Int): ByteArray {
-        val spec = PBEKeySpec(pin.toCharArray(), salt, iterations, KEY_BITS)
+        val passwordChars = pin.toCharArray()
+        val spec = PBEKeySpec(passwordChars, salt, iterations, KEY_BITS)
         return try {
             SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
                 .generateSecret(spec)
                 .encoded
         } finally {
             spec.clearPassword()
+            passwordChars.fill('\u0000')
         }
     }
 
