@@ -17,7 +17,19 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.keyframes
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -391,7 +403,7 @@ fun ResetSyncPage(
                             contentAlignment = androidx.compose.ui.Alignment.Center
                         ) {
                             if (querying || resetting) {
-                                CircularProgressIndicator(
+                                TwoRotationCircularProgressIndicator(
                                     modifier = Modifier.size(28.dp),
                                     strokeWidth = 2.dp
                                 )
@@ -469,6 +481,61 @@ fun ResetSyncPage(
                     modifier = Modifier.padding(top = 16.dp)
                 )
             }
+        }
+    }
+}
+
+private const val CIRCULAR_PROGRESS_CYCLE_DURATION_MS = 6_000
+
+@Composable
+private fun TwoRotationCircularProgressIndicator(
+    modifier: Modifier = Modifier,
+    strokeWidth: androidx.compose.ui.unit.Dp = 2.dp
+) {
+    val infiniteTransition = rememberInfiniteTransition(label = "two-rotation-progress")
+    val rotation by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 720f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(
+                durationMillis = CIRCULAR_PROGRESS_CYCLE_DURATION_MS,
+                easing = LinearEasing
+            )
+        ),
+        label = "two-full-rotations"
+    )
+    val arcProgress by infiniteTransition.animateFloat(
+        initialValue = 0.1f,
+        targetValue = 0.1f,
+        animationSpec = infiniteRepeatable(
+            animation = keyframes {
+                durationMillis = CIRCULAR_PROGRESS_CYCLE_DURATION_MS
+                0.87f at (CIRCULAR_PROGRESS_CYCLE_DURATION_MS / 2) using
+                    CubicBezierEasing(0.2f, 0f, 0f, 1f)
+                0.1f at CIRCULAR_PROGRESS_CYCLE_DURATION_MS
+            }
+        ),
+        label = "arc-length"
+    )
+    val indicatorColor = MaterialTheme.colorScheme.primary
+
+    Canvas(modifier) {
+        val strokePx = strokeWidth.toPx()
+        val diameter = size.minDimension - strokePx
+        val topLeft = Offset(
+            x = (size.width - diameter) / 2f,
+            y = (size.height - diameter) / 2f
+        )
+        rotate(degrees = rotation) {
+            drawArc(
+                color = indicatorColor,
+                startAngle = -90f,
+                sweepAngle = arcProgress * 360f,
+                useCenter = false,
+                topLeft = topLeft,
+                size = Size(diameter, diameter),
+                style = Stroke(width = strokePx, cap = StrokeCap.Round)
+            )
         }
     }
 }
