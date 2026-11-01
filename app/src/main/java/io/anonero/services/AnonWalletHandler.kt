@@ -164,18 +164,52 @@ class AnonWalletHandler(
                     }.getOrNull()
                     if (candidate?.status?.isOk == true) {
                         opened = candidate
+                        // This is the first point at which the new password is proven
+                        // against the real wallet files. Only now discard the rollback.
+                        WalletKey.completeMigration(walletFile.path)
                         if (hasRestoreSource) {
                             WalletKey.removeRestoreSource(context, walletName)
                         }
                     } else {
                         candidate?.let { runCatching { manager.close(it) } }
-                        if (!hasRestoreSource) throw InvalidPin()
-                        WalletKey.remove(context, walletName)
+                        if (!hasRestoreSource) {
+                            val rolledBack = WalletKey.rollbackMigration(
+                                context, walletFile.path, walletName
+                            )
+                            if (!rolledBack) throw InvalidPin()
+
+                            // The PIN verifier was already checked above. Use the PIN
+                            // only against the restored pre-migration wallet files.
+                            val legacyCandidate = runCatching {
+                                manager.openWallet(walletFile.path, pin)
+                            }.getOrNull()
+                            if (legacyCandidate?.status?.isOk == true) {
+                                opened = legacyCandidate
+                            } else {
+                                legacyCandidate?.let { runCatching { manager.close(it) } }
+                                throw InvalidPin()
+                            }
+                        } else {
+                            WalletKey.remove(context, walletName)
+                        }
                     }
                 } else if (hasRestoreSource) {
                     WalletKey.remove(context, walletName)
                 } else {
-                    throw InvalidPin()
+                    val rolledBack = WalletKey.rollbackMigration(
+                        context, walletFile.path, walletName
+                    )
+                    if (!rolledBack) throw InvalidPin()
+
+                    val legacyCandidate = runCatching {
+                        manager.openWallet(walletFile.path, pin)
+                    }.getOrNull()
+                    if (legacyCandidate?.status?.isOk == true) {
+                        opened = legacyCandidate
+                    } else {
+                        legacyCandidate?.let { runCatching { manager.close(it) } }
+                        throw InvalidPin()
+                    }
                 }
             }
 
@@ -302,8 +336,9 @@ class AnonWalletHandler(
                 throw Exception("Wallet cache could not be persisted after password migration")
             }
             WalletKey.store(context, walletName, walletPassword)
-            snapshots.forEach { (snapshot, _) -> snapshot.delete() }
-            Timber.tag(TAG).i("Legacy wallet migrated to a Keystore-bound password")
+            // Keep the PIN-encrypted snapshot until the next cold wallet open
+            // confirms that both wallet files accept the Keystore-wrapped secret.
+            Timber.tag(TAG).i("Legacy wallet migrated; rollback snapshot retained for cold-open verification")
             return true
         } catch (e: Exception) {
             Timber.tag(TAG).e(e, "Keystore wallet migration failed; rolling back")

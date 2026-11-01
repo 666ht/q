@@ -1,5 +1,6 @@
 package io.anonero.util
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
@@ -28,6 +29,41 @@ class PinHashTest {
         assertTrue(PinHash.isLegacy(legacy))
         assertTrue(PinHash.matches(pin, legacy))
         assertFalse(PinHash.matches("482610", legacy))
+    }
+
+    @Test
+    fun migrationRollbackRestoresWalletAndKeysFilesTogether() {
+        val directory = java.nio.file.Files.createTempDirectory("wallet-key-migration").toFile()
+        try {
+            val walletPath = java.io.File(directory, "anon")
+            val keysFile = java.io.File("${walletPath.path}.keys")
+            val walletSnapshot = java.io.File("${walletPath.path}.premigrate")
+            val keysSnapshot = java.io.File("${keysFile.path}.premigrate")
+
+            walletPath.writeText("new-password-wallet")
+            keysFile.writeText("new-password-keys")
+            walletSnapshot.writeText("pin-password-wallet")
+            keysSnapshot.writeText("pin-password-keys")
+
+            assertTrue(WalletKey.restoreMigrationSnapshots(walletPath.path))
+            assertEquals("pin-password-wallet", walletPath.readText())
+            assertEquals("pin-password-keys", keysFile.readText())
+            assertFalse(walletSnapshot.exists())
+            assertFalse(keysSnapshot.exists())
+        } finally {
+            directory.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun missingMigrationSnapshotsDoNotClaimRollback() {
+        val directory = java.nio.file.Files.createTempDirectory("wallet-key-no-snapshot").toFile()
+        try {
+            val walletPath = java.io.File(directory, "anon")
+            assertFalse(WalletKey.restoreMigrationSnapshots(walletPath.path))
+        } finally {
+            directory.deleteRecursively()
+        }
     }
 
     @Test

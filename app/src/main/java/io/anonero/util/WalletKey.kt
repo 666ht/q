@@ -64,22 +64,60 @@ object WalletKey {
             runCatching { load(context, wallet) }.isSuccess
 
         if (wrappedSecretUsable) {
-            snapshots.forEach { (snapshot, _) -> snapshot.delete() }
-            Timber.tag(TAG).i("Completed wallet-key migration snapshot cleanup")
+            // Keep the PIN-encrypted rollback copy until a cold open with the wrapped
+            // password succeeds. A readable Keystore blob alone does not prove that
+            // wallet2 can open both password-protected wallet files with that secret.
+            Timber.tag(TAG).i("Wallet-key migration snapshot retained for first cold-open verification")
             return
         }
 
-        remove(context, wallet)
-        try {
-            snapshots.forEach { (snapshot, live) ->
-                snapshot.copyTo(live, overwrite = true)
+        rollbackMigration(context, walletBasePath, wallet)
+        Timber.tag(TAG).w("Interrupted wallet-key migration rolled back to PIN encryption")
+    }
+
+    /**
+     * Remove the rollback copies only after the new Keystore password has opened
+     * the wallet successfully in a fresh process.
+     */
+    fun completeMigration(walletBasePath: String) {
+        migrationSnapshots(walletBasePath).forEach { (snapshot, _) ->
+            if (snapshot.exists() && !snapshot.delete()) {
+                Timber.tag(TAG).w("Unable to remove wallet migration snapshot: ${snapshot.name}")
             }
-            snapshots.forEach { (snapshot, _) -> snapshot.delete() }
-            Timber.tag(TAG).w("Interrupted wallet-key migration rolled back to PIN encryption")
-        } catch (e: Exception) {
-            Timber.tag(TAG).e(e, "Unable to restore wallet files after interrupted migration")
-            throw e
         }
+    }
+
+    /**
+     * Restore the wallet files captured before password migration. The copy is
+     * completed for every available snapshot before any snapshot is deleted.
+     * Exposed internally so the file-level rollback can be regression-tested.
+     */
+    internal fun restoreMigrationSnapshots(walletBasePath: String): Boolean {
+        val snapshots = migrationSnapshots(walletBasePath).filter { (snapshot, _) -> snapshot.exists() }
+        if (snapshots.isEmpty()) return false
+
+        snapshots.forEach { (snapshot, live) ->
+            live.parentFile?.let { parent ->
+                if (!parent.exists() && !parent.mkdirs()) {
+                    throw IllegalStateException("Unable to create wallet directory for migration rollback")
+                }
+            }
+            snapshot.copyTo(live, overwrite = true)
+        }
+        snapshots.forEach { (snapshot, _) ->
+            if (snapshot.exists() && !snapshot.delete()) {
+                throw IllegalStateException("Unable to remove restored wallet migration snapshot")
+            }
+        }
+        return true
+    }
+
+    fun rollbackMigration(context: Context, walletBasePath: String, wallet: String): Boolean {
+        val hasSnapshots = migrationSnapshots(walletBasePath).any { (snapshot, _) -> snapshot.exists() }
+        if (!hasSnapshots) return false
+
+        remove(context, wallet)
+        return restoreMigrationSnapshots(walletBasePath)
     }
 
     fun migrationSnapshots(walletBasePath: String): List<Pair<File, File>> = listOf(
