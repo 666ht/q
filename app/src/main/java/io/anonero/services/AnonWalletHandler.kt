@@ -158,57 +158,44 @@ class AnonWalletHandler(
                 val walletPassword = runCatching {
                     WalletKey.load(context, walletName)
                 }.getOrNull()
-                if (walletPassword != null) {
-                    val candidate = runCatching {
-                        manager.openWallet(walletFile.path, walletPassword)
+                val candidate = walletPassword?.let { password ->
+                    runCatching {
+                        manager.openWallet(walletFile.path, password)
                     }.getOrNull()
-                    if (candidate?.status?.isOk == true) {
-                        opened = candidate
-                        // This is the first point at which the new password is proven
-                        // against the real wallet files. Only now discard the rollback.
-                        WalletKey.completeMigration(walletFile.path)
-                        if (hasRestoreSource) {
-                            WalletKey.removeRestoreSource(context, walletName)
-                        }
-                    } else {
-                        candidate?.let { runCatching { manager.close(it) } }
-                        if (!hasRestoreSource) {
-                            val rolledBack = WalletKey.rollbackMigration(
-                                context, walletFile.path, walletName
-                            )
-                            if (!rolledBack) throw InvalidPin()
-
-                            // The PIN verifier was already checked above. Use the PIN
-                            // only against the restored pre-migration wallet files.
-                            val legacyCandidate = runCatching {
-                                manager.openWallet(walletFile.path, pin)
-                            }.getOrNull()
-                            if (legacyCandidate?.status?.isOk == true) {
-                                opened = legacyCandidate
-                            } else {
-                                legacyCandidate?.let { runCatching { manager.close(it) } }
-                                throw InvalidPin()
-                            }
-                        } else {
-                            WalletKey.remove(context, walletName)
-                        }
+                }
+                if (candidate?.status?.isOk == true) {
+                    opened = candidate
+                    // This is the first point at which the new password is proven
+                    // against the real wallet files. Only now discard the rollback.
+                    WalletKey.completeMigration(walletFile.path)
+                    if (hasRestoreSource) {
+                        WalletKey.removeRestoreSource(context, walletName)
                     }
                 } else if (hasRestoreSource) {
+                    candidate?.let { runCatching { manager.close(it) } }
                     WalletKey.remove(context, walletName)
                 } else {
-                    val rolledBack = WalletKey.rollbackMigration(
-                        context, walletFile.path, walletName
-                    )
-                    if (!rolledBack) throw InvalidPin()
+                    candidate?.let { runCatching { manager.close(it) } }
 
+                    // Prefer the pre-migration snapshot when one exists. If no
+                    // snapshot remains, still try the PIN against the current wallet:
+                    // it may never have completed the password change.
+                    WalletKey.rollbackMigration(context, walletFile.path, walletName)
                     val legacyCandidate = runCatching {
                         manager.openWallet(walletFile.path, pin)
                     }.getOrNull()
                     if (legacyCandidate?.status?.isOk == true) {
+                        // The native wallet has now proved that this file is still
+                        // PIN-encrypted. It is safe to discard the unusable wrapper
+                        // and create a fresh Keystore key for the same wallet secret.
+                        WalletKey.remove(context, walletName)
+                        migrateToKeystore(walletFile, walletName, legacyCandidate, pin)
                         opened = legacyCandidate
                     } else {
                         legacyCandidate?.let { runCatching { manager.close(it) } }
-                        throw InvalidPin()
+                        throw IllegalStateException(
+                            "The stored wallet key cannot be opened and the wallet files are not PIN-encrypted. Restore the wallet from a backup."
+                        )
                     }
                 }
             }
@@ -263,6 +250,9 @@ class AnonWalletHandler(
             // old PIN until the first successful unlock migrates both wallet files.
             val opened = WalletManager.instance?.openWallet(walletFile.path, pin)
             if (opened?.status?.isOk == true) {
+                // This path is reached only after wallet2 accepted the PIN, so any
+                // stale/unwrappable Keystore record can now be safely replaced.
+                WalletKey.remove(context, walletName)
                 migrateToKeystore(walletFile, walletName, opened, pin)
             }
             opened
@@ -285,6 +275,9 @@ class AnonWalletHandler(
         val walletFile = AnonConfig.getDefaultWalletFile(context)
         val walletName = walletFile.name
         WalletKey.recoverInterruptedMigration(context, walletFile.path, walletName)
+        // Do not trust the presence of a preference blob alone. WalletKey.exists()
+        // verifies that Android Keystore can unwrap it; a stale wrapper must be
+        // repaired while the already-open native wallet is still available.
         if (WalletKey.exists(context, walletName)) return true
         if (!walletState.waitUntilWalletIdleForKeyMigration()) {
             Timber.tag(TAG).i("Wallet-key migration deferred until wallet2 is idle")
@@ -292,6 +285,7 @@ class AnonWalletHandler(
         }
         if (secureWipePriorityActive()) return false
         val wallet = WalletManager.instance?.wallet ?: return false
+        WalletKey.remove(context, walletName)
         return migrateToKeystore(walletFile, walletName, wallet, pin)
     }
 

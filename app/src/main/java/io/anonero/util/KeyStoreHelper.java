@@ -286,7 +286,18 @@ public class KeyStoreHelper {
         String encoded = context.getSharedPreferences(
                 SecurityConstants.WALLET_PASS_PREFS_NAME, Context.MODE_PRIVATE)
                 .getString(WALLET_SECRET_PREFIX + wallet, "");
-        return encoded != null && !encoded.isEmpty();
+        if (encoded == null || encoded.isEmpty()) return false;
+
+        // A preference value alone is not proof that the Android Keystore key
+        // still exists or can authenticate this AES-GCM ciphertext. Verify the
+        // complete unwrap before treating the wallet as Keystore-backed.
+        try {
+            loadWalletSecret(context, wallet);
+            return true;
+        } catch (Exception e) {
+            Timber.tag(TAG).w(e, "Stored wallet secret is not usable");
+            return false;
+        }
     }
 
     public static void removeWalletSecret(Context context, String wallet) {
