@@ -105,6 +105,16 @@ class AppViewModel(private val walletState: WalletState, private val torService:
         return false
     }
 
+    /**
+     * Complete legacy wallet password migration off the UI thread after a PIN unlock.
+     * The handler defers it automatically if wallet2 is still scanning.
+     */
+    fun migrateActiveWalletToKeystore(pin: String): Job =
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching { walletHandler.migrateActiveWalletToKeystore(pin) }
+                .onFailure { Timber.tag(TAG).e(it, "Deferred wallet-key migration failed") }
+        }
+
     @Synchronized
     fun startService() {
         walletHandler.scope.launch {

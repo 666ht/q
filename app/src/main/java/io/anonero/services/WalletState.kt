@@ -1065,6 +1065,19 @@ class WalletState(private val prefs: SharedPreferences) {
         return true
     }
 
+    /**
+     * Password rekeying rewrites wallet2's keys and cache files. Wait for any queued
+     * background-sync teardown, then refuse the operation while a foreground wallet
+     * operation is still using the native wallet.
+     */
+    suspend fun waitUntilWalletIdleForKeyMigration(): Boolean {
+        if (_isWiping.get()) return false
+        val exit = awaitBackgroundSyncExitBeforeReset()
+        if (exit.isFailure || _isWiping.get()) return false
+        val wallet = getWallet ?: return false
+        return !nativeBackgroundSyncActive.get() && !foregroundWalletOperationActive(wallet)
+    }
+
     private suspend fun awaitBackgroundSyncExitBeforeReset(): Result<Unit> {
         val exitJob = synchronized(backgroundSyncExitLock) { backgroundSyncExitJob }
         if (exitJob?.isActive == true) {
