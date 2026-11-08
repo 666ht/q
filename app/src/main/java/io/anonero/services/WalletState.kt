@@ -67,6 +67,11 @@ fun calculateSyncProgress(startHeight: Long, currentHeight: Long, targetHeight: 
     return SyncProgress(progress, left)
 }
 
+internal fun requiresNativeBackgroundSyncTeardown(
+    nativeBackgroundSyncActive: Boolean,
+    backgroundTransitionPending: Boolean = false
+): Boolean = nativeBackgroundSyncActive || backgroundTransitionPending
+
 private const val TAG = "WalletState"
 private const val PREF_WALLET_HAS_COMPLETED_SYNC = "walletHasCompletedSync"
 private const val PREF_LAST_COMPLETED_SCAN_HEIGHT = "lastCompletedScanHeight"
@@ -980,13 +985,10 @@ class WalletState(private val prefs: SharedPreferences) {
         if (_isWiping.get()) return false
 
         // Atomically invalidate queued lock-entry work and release the PIN overlay.
-        // Capture the lock intent before clearing it: the local native-mode flag can
-        // lag the wallet2 state when the wallet was left in background-sync mode.
-        val wasBackgroundLockRequested = synchronized(backgroundLockStateLock) {
-            val wasLocked = _backgroundSync.value
+        // A UI lock request alone does not prove wallet2 entered native background mode.
+        synchronized(backgroundLockStateLock) {
             backgroundLockRequestGeneration.incrementAndGet()
             _backgroundSync.value = false
-            wasLocked
         }
 
         val wallet = getWallet
@@ -999,10 +1001,10 @@ class WalletState(private val prefs: SharedPreferences) {
 
         // Native wallet2 may still be holding its refresh lock. Never make the PIN UI
         // wait for bgSyncMutex or a JNI call; teardown is serialized separately.
-        val nativeTransitionPending =
-            nativeBackgroundSyncActive.get() ||
-                backgroundLifecycleJob?.isActive == true ||
-                wasBackgroundLockRequested
+        val nativeTransitionPending = requiresNativeBackgroundSyncTeardown(
+            nativeBackgroundSyncActive = nativeBackgroundSyncActive.get(),
+            backgroundTransitionPending = backgroundLifecycleJob?.isActive == true
+        )
         if (AnonConfig.viewOnly || !nativeTransitionPending) {
             Timber.tag(TAG).i(
                 "Released PIN lock immediately; no native background-sync teardown required"
@@ -1019,6 +1021,14 @@ class WalletState(private val prefs: SharedPreferences) {
                 bgSyncMutex.withLock {
                 if (_isWiping.get()) return@withLock
                 val currentWallet = getWallet ?: return@withLock
+                // The lifecycle job may have completed by keeping the scan in the
+                // foreground. Re-check native mode after acquiring the same mutex.
+                if (!requiresNativeBackgroundSyncTeardown(nativeBackgroundSyncActive.get())) {
+                    Timber.tag(TAG).i(
+                        "Skipped native background-sync teardown; wallet remained in foreground mode"
+                    )
+                    return@withLock
+                }
                 _blockUpdates.set(true)
                 val exited = try {
                     currentWallet.stopBackgroundSync(pin)
