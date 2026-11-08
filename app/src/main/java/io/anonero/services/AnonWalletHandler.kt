@@ -284,6 +284,13 @@ class AnonWalletHandler(
                         // Keep RESTORE_NEEDS_RESCAN so the next startup can retry.
                     }
                 }
+
+                // wallet.init() configures the daemon but does not resume wallet2's
+                // refresh worker after updateDaemon() paused it. A selected-height
+                // restore already resumes the worker through its rescan request.
+                if (effectiveRestoreHeight == null || wallet.nativeSynchronized) {
+                    wallet.startRefresh()
+                }
                 walletState.update()
             }
         } catch (e: Exception) {
