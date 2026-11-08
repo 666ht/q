@@ -47,7 +47,7 @@ class MoneroHandlerThread(
         if (walletState.isWiping()) return
         if (walletState.heightRefreshInProgress) {
             val status = runCatching { wallet.fullStatus.connectionStatus }.getOrNull()
-            val daemonHeight = runCatching { wallet.getDaemonBlockChainHeight() }.getOrDefault(0L)
+            val daemonHeight = runCatching { readLiveDaemonHeight() }.getOrDefault(0L)
             walletState.recordOrdinaryRefreshHeight(
                 daemonHeight,
                 status == Wallet.ConnectionStatus.ConnectionStatus_Connected
@@ -126,7 +126,7 @@ class MoneroHandlerThread(
                 return
             }
             val scanHeight = runCatching { wallet.getBlockChainHeight() }.getOrDefault(-1L)
-            val daemonHeight = runCatching { wallet.getDaemonBlockChainHeight() }.getOrDefault(0L)
+            val daemonHeight = runCatching { readLiveDaemonHeight() }.getOrDefault(0L)
             if (keepNormalSyncProgress(scanHeight, daemonHeight)) {
                 return
             }
@@ -149,7 +149,7 @@ class MoneroHandlerThread(
         ) return
 
         val syncHeight = wallet.getBlockChainHeight()
-        val daemonHeight = wallet.getDaemonBlockChainHeight()
+        val daemonHeight = readLiveDaemonHeight()
         val restoreStart = walletState.restoreProgressStartHeight
 
         if (daemonHeight < 0L || syncHeight < 0L) {
@@ -269,7 +269,7 @@ class MoneroHandlerThread(
     override fun refreshed() {
         if (walletState.isWiping()) return
         val status = runCatching { wallet.fullStatus.connectionStatus }.getOrNull()
-        val daemonHeight = runCatching { wallet.getDaemonBlockChainHeight() }.getOrDefault(0L)
+        val daemonHeight = runCatching { readLiveDaemonHeight() }.getOrDefault(0L)
         if (walletState.heightRefreshInProgress) {
             walletState.recordOrdinaryRefreshHeight(
                 daemonHeight,
@@ -363,6 +363,20 @@ class MoneroHandlerThread(
             walletState.finishSync()
         }
         walletState.update()
+    }
+
+    /**
+     * Read the daemon tip from the same manager API used by NodeSettings.
+     * The wallet-level JNI getter can lag behind that value and falsely make
+     * the refresh worker conclude that the wallet has caught up.
+     */
+    private fun readLiveDaemonHeight(): Long {
+        val managerHeight = runCatching {
+            WalletManager.instance?.getBlockchainHeight() ?: 0L
+        }.getOrDefault(0L)
+        if (managerHeight > 0L) return managerHeight
+
+        return runCatching { wallet.getDaemonBlockChainHeight() }.getOrDefault(0L)
     }
 
     /**
